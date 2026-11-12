@@ -1,0 +1,25 @@
+--- a/world/city.js
++++ b/world/city.js
+@@ -46,6 +46,7 @@
+ setK(4, 5, -2, -1, 'H'); setK(4, 5, 0, 0, 'L');
+ setK(-8, -6, -3, -1, 'T');
+ setK(-5, 6, 3, 8, 's'); setK(-1, -1, 5, 5, 'p'); setK(3, 3, 7, 7, 'p'); setK(-9, -6, 4, 7, 'r');
++  // HOTKEY 2 (city/overlay/adapt.py): the playtest map's own block kinds
+ setK(7, 7, 4, 4, 'G'); setK(7, 7, 5, 5, 'M'); setK(7, 8, -12, -10, 'K'); setK(-8, -6, 0, 2, 'A');   // the jail sits alone on Iron Island in the bay; the dead mall out west
+ export const kindAt = (i, j) => (i < -KO || i >= KO || j < -KO || j >= KO) ? (j <= -9 ? '~' : '.') : String.fromCharCode(KIND[(i + KO) * KN + (j + KO)]);
+ export const distOf = k => KD[k] || 'forest';
+@@ -63,9 +64,12 @@
+ //   hw  the road's half-width, centre line to kerb (side street 2 → 3 at SPREAD 4, avenue 4, Route 9 7)
+ //   sw  the sidewalk, kerb to lot line (rw − hw: side street 2 → 3, avenue and Route 9 2 → 4)
+ //   ave the CLASS: an avenue (aveX / aveZ); Route 9 is L === HWY on the x lines; everything else a side street (one-way)
+-const rw0X = L => L === HWY ? 9 : XAVE.has(L) ? 6 : 4, rw0Z = L => ZAVE.has(L) ? 6 : 4;   // today's right-of-way (the remap's street bands)
++// HOTKEY 2 (city/overlay/adapt.py): the playtest map's street plan. WIDE: an avenue's right-of-way with a side street's road (5 m
++// sidewalks; the blocks beside it lose 2 m). WALK4: the right-of-way unchanged and a 4 m road, so a 4 m sidewalk and no block changed.
++const WIDEX = new Set([]), WIDEZ = new Set([]), WALK4X = new Set([-3, -2]), WALK4Z = new Set([1]);
++const rw0X = L => L === HWY ? 9 : XAVE.has(L) || WIDEX.has(L) ? 6 : 4, rw0Z = L => ZAVE.has(L) || WIDEZ.has(L) ? 6 : 4;   // today's right-of-way (the remap's street bands)
+ export const rwX = L => rw0X(L) + HS, rwZ = L => rw0Z(L) + HS;
+-export const hwX = L => L === HWY ? 7 : XAVE.has(L) ? 4 : 2 + SPREAD / 4, hwZ = L => ZAVE.has(L) ? 4 : 2 + SPREAD / 4;
++export const hwX = L => L === HWY ? 7 : XAVE.has(L) ? 4 : WALK4X.has(L) ? 2 : 2 + SPREAD / 4, hwZ = L => ZAVE.has(L) ? 4 : WALK4Z.has(L) ? 2 : 2 + SPREAD / 4;
+ export const swX = L => rwX(L) - hwX(L), swZ = L => rwZ(L) - hwZ(L);
+ export const aveX = L => XAVE.has(L), aveZ = L => ZAVE.has(L);
+ function edge(ka, kb) { if (ka === '~' || kb === '~') return false; if (!urban(ka) && !urban(kb)) return false; if (ka === kb && MERGE.has(ka)) return false; return true; }

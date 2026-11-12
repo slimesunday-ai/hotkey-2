@@ -1,0 +1,6776 @@
+{
+ "note": "THE PLACE TABLE: where the game's ten places are in the real city, read from the city's own data. Made by demo/tools/place-table.mjs (its header says from what): re-run it when the pinned city changes. Not edited by hand.",
+ "generated": "2026-11-12T17:08:05.972Z",
+ "pin": "8b0b8dfd2e6fa56916cb4dcf566635869233ef93",
+ "places": {
+  "projects": {
+   "cityPlace": "trailer",
+   "name": "Sunny Acres trailer park",
+   "place": "the swap-meet lane through the middle of the park; the ten pads are the ten trailers nearest it",
+   "at": [
+    -234,
+    -55
+   ],
+   "spots": {
+    "street": [
+     -234,
+     -55
+    ]
+   },
+   "fixtures": {},
+   "look": null,
+   "reach": 12,
+   "ways": {
+    "walk": {
+     "x": -234,
+     "z": -103.8,
+     "metres": 48.8
+    },
+    "kerb": {
+     "x": -234,
+     "z": -3.12,
+     "heading": -1.57,
+     "metres": 54
+    },
+    "subway": {
+     "id": "subway-elm",
+     "name": "ELM ST",
+     "x": -189.5,
+     "z": -41.3,
+     "face": "+x",
+     "lines": [
+      "harbor",
+      "union"
+     ],
+     "metres": 46.56
+    }
+   },
+   "missing": [],
+   "blocks": [
+    [
+     -7,
+     -2
+    ],
+    [
+     -8,
+     -2
+    ],
+    [
+     -6,
+     -2
+    ]
+   ],
+   "stands": [
+    {
+     "x": -235,
+     "z": -54.5,
+     "ry": 1.842,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 1.12,
+     "src": "published"
+    },
+    {
+     "x": -233.5,
+     "z": -56,
+     "ry": -0.566,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 1.12,
+     "src": "published",
+     "pace": [
+      -233.5,
+      -56,
+      1.571
+     ]
+    },
+    {
+     "x": -235,
+     "z": -56,
+     "ry": 0.319,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 1.41,
+     "src": "published",
+     "pace": [
+      -236.15,
+      -56,
+      1.571
+     ],
+     "beat": [
+      [
+       -239.5,
+       -56
+      ]
+     ]
+    },
+    {
+     "x": -232,
+     "z": -55,
+     "ry": -1.891,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 2,
+     "src": "published"
+    },
+    {
+     "x": -236.5,
+     "z": -55,
+     "ry": 1.716,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 2.5,
+     "src": "published"
+    },
+    {
+     "x": -236,
+     "z": -53.5,
+     "ry": 2.077,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 2.5,
+     "src": "published",
+     "pace": [
+      -236,
+      -52.95,
+      -3.142
+     ]
+    },
+    {
+     "x": -234,
+     "z": -57.5,
+     "ry": 0.124,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 2.5,
+     "src": "published",
+     "pace": [
+      -234.55,
+      -57.5,
+      1.571
+     ]
+    },
+    {
+     "x": -232.5,
+     "z": -57,
+     "ry": -0.854,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 2.5,
+     "src": "published",
+     "pace": [
+      -232.5,
+      -57,
+      1.571
+     ],
+     "beat": [
+      [
+       -228,
+       -57
+      ]
+     ]
+    },
+    {
+     "x": -236,
+     "z": -57,
+     "ry": 1.283,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 2.83,
+     "src": "published",
+     "pace": [
+      -236.55,
+      -57,
+      1.571
+     ],
+     "beat": [
+      [
+       -240.5,
+       -57
+      ]
+     ]
+    },
+    {
+     "x": -231,
+     "z": -56,
+     "ry": -0.979,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 3.16,
+     "src": "published"
+    },
+    {
+     "x": -235.5,
+     "z": -52,
+     "ry": 2.482,
+     "st": 0,
+     "kind": "open",
+     "entry": null,
+     "far": 3.35,
+     "src": "published",
+     "pace": [
+      -235.5,
+      -52,
+      -1.571
+     ],
+     "beat": [
+      [
+       -238.5,
+       -52
+      ]
+     ]
+    },
+    {
+     "x": -230.5,
+     "z": -54.5,
+     "ry": -2.025,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 3.54,
+     "src": "published"
+    },
+    {
+     "x": -237.5,
+     "z": -56,
+     "ry": 1.228,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 3.64,
+     "src": "made",
+     "pace": [
+      -237.5,
+      -54.85,
+      -3.142
+     ]
+    },
+    {
+     "x": -237.5,
+     "z": -54,
+     "ry": 1.672,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 3.64,
+     "src": "made",
+     "pace": [
+      -237.5,
+      -52.85,
+      -3.142
+     ]
+    },
+    {
+     "x": -230.5,
+     "z": -57.5,
+     "ry": -1.013,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 4.3,
+     "src": "made"
+    },
+    {
+     "x": -237.5,
+     "z": -57.5,
+     "ry": 1.358,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 4.3,
+     "src": "made",
+     "beat": [
+      [
+       -237.5,
+       -59.5
+      ]
+     ]
+    },
+    {
+     "x": -234,
+     "z": -59.5,
+     "ry": 0.254,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 4.5,
+     "src": "made",
+     "pace": [
+      -234.55,
+      -59.5,
+      1.571
+     ]
+    },
+    {
+     "x": -231,
+     "z": -51.5,
+     "ry": -2.355,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 4.61,
+     "src": "made",
+     "pace": [
+      -231,
+      -52.05,
+      0
+     ]
+    },
+    {
+     "x": -230,
+     "z": -52.5,
+     "ry": -2.442,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 4.72,
+     "src": "made",
+     "pace": [
+      -230,
+      -52.5,
+      0
+     ],
+     "beat": [
+      [
+       -230,
+       -48
+      ]
+     ]
+    },
+    {
+     "x": -238,
+     "z": -52.5,
+     "ry": 2.231,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 4.72,
+     "src": "made"
+    },
+    {
+     "x": -236.5,
+     "z": -51,
+     "ry": 2.824,
+     "st": 0,
+     "kind": "open",
+     "entry": null,
+     "far": 4.72,
+     "src": "made",
+     "pace": [
+      -235.95,
+      -51,
+      -1.571
+     ]
+    },
+    {
+     "x": -229.5,
+     "z": -56.5,
+     "ry": -0.949,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 4.74,
+     "src": "made"
+    },
+    {
+     "x": -235.5,
+     "z": -59.5,
+     "ry": 0.795,
+     "st": 3.142,
+     "kind": "wall",
+     "entry": null,
+     "far": 4.74,
+     "src": "made",
+     "lean": [
+      -235.5,
+      -60.1,
+      0
+     ]
+    },
+    {
+     "x": -232,
+     "z": -59.5,
+     "ry": -0.528,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 4.92,
+     "src": "made",
+     "pace": [
+      -232,
+      -59.5,
+      1.571
+     ]
+    },
+    {
+     "x": -229,
+     "z": -55,
+     "ry": -1.888,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 5,
+     "src": "made"
+    },
+    {
+     "x": -239,
+     "z": -55,
+     "ry": 1.958,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 5,
+     "src": "made",
+     "pace": [
+      -239,
+      -55,
+      -3.142
+     ]
+    },
+    {
+     "x": -233,
+     "z": -50,
+     "ry": -3.045,
+     "st": 0,
+     "kind": "open",
+     "entry": null,
+     "far": 5.1,
+     "src": "made"
+    },
+    {
+     "x": -229,
+     "z": -53.5,
+     "ry": -1.776,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 5.22,
+     "src": "made"
+    },
+    {
+     "x": -239,
+     "z": -53.5,
+     "ry": 1.429,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 5.22,
+     "src": "made"
+    },
+    {
+     "x": -235.5,
+     "z": -50,
+     "ry": 2.586,
+     "st": 0,
+     "kind": "open",
+     "entry": null,
+     "far": 5.22,
+     "src": "made"
+    },
+    {
+     "x": -239,
+     "z": -57,
+     "ry": 1.471,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 5.39,
+     "src": "made"
+    },
+    {
+     "x": -231.5,
+     "z": -50,
+     "ry": -2.747,
+     "st": 0,
+     "kind": "open",
+     "entry": null,
+     "far": 5.59,
+     "src": "made"
+    },
+    {
+     "x": -233,
+     "z": -60.5,
+     "ry": 0.121,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 5.59,
+     "src": "made"
+    },
+    {
+     "x": -229.5,
+     "z": -58.5,
+     "ry": -0.845,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 5.7,
+     "src": "made",
+     "pace": [
+      -229.5,
+      -59.65,
+      0
+     ],
+     "beat": [
+      [
+       -229.5,
+       -63
+      ]
+     ]
+    },
+    {
+     "x": -238.5,
+     "z": -58.5,
+     "ry": 0.657,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 5.7,
+     "src": "made",
+     "pace": [
+      -238.5,
+      -58.5,
+      -3.142
+     ],
+     "beat": [
+      [
+       -238.5,
+       -63
+      ]
+     ]
+    },
+    {
+     "x": -237.5,
+     "z": -59.5,
+     "ry": 0.912,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 5.7,
+     "src": "made"
+    }
+   ]
+  },
+  "market": {
+   "cityPlace": null,
+   "name": "the Jay St night market",
+   "place": "the picnic yard among the eight stalls, on the Jay St & Washington St lot (the city block -2,1)",
+   "at": [
+    -45.9,
+    47.9
+   ],
+   "spots": {
+    "street": [
+     -45.9,
+     47.9
+    ],
+    "counter:fence": [
+     -47.1,
+     47.6
+    ],
+    "counter:gunshop": [
+     -44.6,
+     47.3
+    ],
+    "counter:shop": [
+     -44.6,
+     50
+    ]
+   },
+   "fixtures": {
+    "counter:fence": {
+     "id": "-2_1·market·stall·4",
+     "box": [
+      -49.6,
+      0.3,
+      46.4,
+      -48.2,
+      2.6,
+      48.8
+     ]
+    },
+    "counter:gunshop": {
+     "id": "-2_1·market·stall·6",
+     "box": [
+      -43.5,
+      0.3,
+      46.1,
+      -42.1,
+      2.6,
+      48.5
+     ]
+    },
+    "counter:shop": {
+     "id": "-2_1·market·stall·7",
+     "box": [
+      -43.5,
+      0.3,
+      48.8,
+      -42.1,
+      2.6,
+      51.2
+     ]
+    },
+    "front": {
+     "id": "-2_1·karaoke·structure·0",
+     "box": [
+      -49.4,
+      0.2,
+      52.6,
+      -40.4,
+      15.2,
+      59.9
+     ]
+    }
+   },
+   "look": [
+    [
+     -47.21,
+     5.5,
+     36.98
+    ],
+    [
+     -45.9,
+     1.6,
+     47.9
+    ]
+   ],
+   "reach": 9,
+   "ways": {
+    "walk": {
+     "x": -40.2,
+     "z": 47.9,
+     "metres": 5.7
+    },
+    "kerb": {
+     "x": -45.9,
+     "z": 33.88,
+     "heading": -1.57,
+     "metres": 10.78
+    },
+    "subway": {
+     "id": "subway-fit-street",
+     "name": "FIT ST",
+     "x": -89.5,
+     "z": -9.5,
+     "face": "+z",
+     "lines": [
+      "neon"
+     ],
+     "metres": 72.08
+    }
+   },
+   "missing": [
+    "a gun counter (the gun dealer stands at a food stall)",
+    "a fence's counter (the fence stands at a food stall)"
+   ],
+   "blocks": [
+    [
+     -2,
+     1
+    ]
+   ],
+   "stands": [
+    {
+     "x": -46.1,
+     "z": 48.6,
+     "ry": 2.441,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 0.73,
+     "src": "made",
+     "pace": [
+      -46.1,
+      47.45,
+      0
+     ]
+    },
+    {
+     "x": -47.6,
+     "z": 49.1,
+     "ry": 1.963,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 2.08,
+     "src": "made",
+     "pace": [
+      -47.6,
+      49.1,
+      0
+     ],
+     "beat": [
+      [
+       -47.6,
+       52.1
+      ]
+     ]
+    },
+    {
+     "x": -43.6,
+     "z": 47.8,
+     "ry": -1.131,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 2.3,
+     "src": "made"
+    },
+    {
+     "x": -47.4,
+     "z": 45.9,
+     "ry": 0.538,
+     "st": 3.142,
+     "kind": "open",
+     "entry": {
+      "i": -2,
+      "j": 1,
+      "side": "N",
+      "u": -48.7,
+      "x": -48.7,
+      "z": 40.17
+     },
+     "far": 2.5,
+     "src": "made"
+    },
+    {
+     "x": -48.4,
+     "z": 47.9,
+     "ry": 1.848,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 2.5,
+     "src": "made"
+    },
+    {
+     "x": -47.1,
+     "z": 50.8,
+     "ry": 2.952,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 3.14,
+     "src": "made"
+    },
+    {
+     "x": -43.4,
+     "z": 49.9,
+     "ry": -2.704,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 3.2,
+     "src": "made"
+    },
+    {
+     "x": -45.6,
+     "z": 51.3,
+     "ry": -2.971,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 3.41,
+     "src": "made",
+     "pace": [
+      -45.6,
+      51.3,
+      0
+     ]
+    },
+    {
+     "x": -41.9,
+     "z": 47.9,
+     "ry": -1.684,
+     "st": 1.571,
+     "kind": "open",
+     "entry": {
+      "i": -2,
+      "j": 1,
+      "side": "E",
+      "u": 47.9,
+      "x": -40.8,
+      "z": 47.9
+     },
+     "far": 4,
+     "src": "made",
+     "pace": [
+      -41.9,
+      46.75,
+      0
+     ]
+    },
+    {
+     "x": -43.9,
+     "z": 51.4,
+     "ry": -2.251,
+     "st": 1.571,
+     "kind": "open",
+     "entry": {
+      "i": -2,
+      "j": 1,
+      "side": "E",
+      "u": 52.9,
+      "x": -40.8,
+      "z": 52.9
+     },
+     "far": 4.03,
+     "src": "made",
+     "pace": [
+      -43.9,
+      50.25,
+      0
+     ]
+    },
+    {
+     "x": -50.1,
+     "z": 47.8,
+     "ry": 1.453,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 4.2,
+     "src": "made"
+    },
+    {
+     "x": -41.9,
+     "z": 49.4,
+     "ry": -1.794,
+     "st": 1.571,
+     "kind": "open",
+     "entry": {
+      "i": -2,
+      "j": 1,
+      "side": "E",
+      "u": 49.4,
+      "x": -40.8,
+      "z": 49.4
+     },
+     "far": 4.27,
+     "src": "made",
+     "pace": [
+      -41.9,
+      49.4,
+      0
+     ]
+    },
+    {
+     "x": -50.1,
+     "z": 49.3,
+     "ry": 2.069,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 4.43,
+     "src": "made"
+    },
+    {
+     "x": -47.1,
+     "z": 52.3,
+     "ry": 2.681,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 4.56,
+     "src": "made"
+    },
+    {
+     "x": -45.1,
+     "z": 52.5,
+     "ry": -2.792,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 4.67,
+     "src": "made"
+    },
+    {
+     "x": -49.9,
+     "z": 45.4,
+     "ry": 1.179,
+     "st": 3.142,
+     "kind": "open",
+     "entry": {
+      "i": -2,
+      "j": 1,
+      "side": "N",
+      "u": -50,
+      "x": -50,
+      "z": 40.8
+     },
+     "far": 4.72,
+     "src": "made",
+     "pace": [
+      -51.05,
+      45.4,
+      1.571
+     ]
+    },
+    {
+     "x": -49.1,
+     "z": 51.8,
+     "ry": 2.846,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 5.04,
+     "src": "made"
+    },
+    {
+     "x": -50.1,
+     "z": 50.8,
+     "ry": 1.684,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 5.1,
+     "src": "made",
+     "pace": [
+      -50.1,
+      50.8,
+      0
+     ]
+    },
+    {
+     "x": -50.9,
+     "z": 46.4,
+     "ry": 0.804,
+     "st": 3.142,
+     "kind": "open",
+     "entry": {
+      "i": -2,
+      "j": 1,
+      "side": "N",
+      "u": -50.9,
+      "x": -50.9,
+      "z": 40.8
+     },
+     "far": 5.22,
+     "src": "made",
+     "pace": [
+      -51.45,
+      46.4,
+      1.571
+     ]
+    },
+    {
+     "x": -51.6,
+     "z": 47.8,
+     "ry": 1.603,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 5.7,
+     "src": "made",
+     "pace": [
+      -52.15,
+      47.8,
+      1.571
+     ]
+    },
+    {
+     "x": -51.6,
+     "z": 49.3,
+     "ry": 1.892,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 5.87,
+     "src": "made"
+    },
+    {
+     "x": -51.6,
+     "z": 50.8,
+     "ry": 1.938,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 6.4,
+     "src": "made",
+     "pace": [
+      -52.15,
+      50.8,
+      1.571
+     ]
+    },
+    {
+     "x": -39.6,
+     "z": 49.1,
+     "ry": -1.732,
+     "st": 1.571,
+     "kind": "open",
+     "entry": {
+      "i": -2,
+      "j": 1,
+      "side": "E",
+      "u": 49.1,
+      "x": -40.8,
+      "z": 49.1
+     },
+     "far": 6.41,
+     "src": "made"
+    },
+    {
+     "x": -50.1,
+     "z": 52.8,
+     "ry": 2.209,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 6.45,
+     "src": "made"
+    },
+    {
+     "x": -51.9,
+     "z": 45.4,
+     "ry": 1.075,
+     "st": 3.142,
+     "kind": "open",
+     "entry": {
+      "i": -2,
+      "j": 1,
+      "side": "N",
+      "u": -51.9,
+      "x": -51.9,
+      "z": 40.8
+     },
+     "far": 6.5,
+     "src": "made"
+    },
+    {
+     "x": -49.6,
+     "z": 54,
+     "ry": 2.191,
+     "st": 1.571,
+     "kind": "wall",
+     "entry": null,
+     "far": 7.13,
+     "src": "made",
+     "lean": [
+      -49.3,
+      54,
+      -1.571
+     ],
+     "pace": [
+      -49.6,
+      54,
+      0
+     ]
+    },
+    {
+     "x": -51.6,
+     "z": 52.5,
+     "ry": 2.331,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 7.32,
+     "src": "made",
+     "pace": [
+      -51.6,
+      52.5,
+      0
+     ]
+    },
+    {
+     "x": -39.6,
+     "z": 52.1,
+     "ry": -2.213,
+     "st": 1.571,
+     "kind": "open",
+     "entry": {
+      "i": -2,
+      "j": 1,
+      "side": "E",
+      "u": 52.1,
+      "x": -40.8,
+      "z": 52.1
+     },
+     "far": 7.57,
+     "src": "made"
+    },
+    {
+     "x": -53.1,
+     "z": 52,
+     "ry": 1.741,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 8.29,
+     "src": "made",
+     "pace": [
+      -53.65,
+      52,
+      1.571
+     ]
+    },
+    {
+     "x": -54.1,
+     "z": 50,
+     "ry": 1.801,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 8.46,
+     "src": "made"
+    },
+    {
+     "x": -39.6,
+     "z": 53.6,
+     "ry": -2.654,
+     "st": 1.571,
+     "kind": "open",
+     "entry": {
+      "i": -2,
+      "j": 1,
+      "side": "E",
+      "u": 53.6,
+      "x": -40.8,
+      "z": 53.6
+     },
+     "far": 8.5,
+     "src": "made",
+     "pace": [
+      -39.6,
+      53.6,
+      0
+     ],
+     "beat": [
+      [
+       -39.6,
+       58.1
+      ]
+     ]
+    },
+    {
+     "x": -53.1,
+     "z": 43.1,
+     "ry": 0.753,
+     "st": 3.142,
+     "kind": "wall",
+     "entry": {
+      "i": -2,
+      "j": 1,
+      "side": "N",
+      "u": -53.1,
+      "x": -53.1,
+      "z": 40.8
+     },
+     "far": 8.65,
+     "src": "made",
+     "lean": [
+      -53.7,
+      43.1,
+      1.571
+     ],
+     "pace": [
+      -53.1,
+      43.1,
+      1.571
+     ],
+     "beat": [
+      [
+       -50.1,
+       43.1
+      ]
+     ]
+    },
+    {
+     "x": -49.6,
+     "z": 56,
+     "ry": 2.342,
+     "st": 1.571,
+     "kind": "wall",
+     "entry": null,
+     "far": 8.91,
+     "src": "made",
+     "lean": [
+      -49.3,
+      56,
+      -1.571
+     ]
+    }
+   ]
+  },
+  "uptown": {
+   "cityPlace": "plaza",
+   "name": "Glasswall Plaza",
+   "place": "the plaza's west and south edges, where the city stands its own people, and its four benches round the fountain",
+   "at": [
+    18,
+    -18
+   ],
+   "spots": {
+    "street": [
+     18,
+     -18
+    ],
+    "counter:shop": [
+     19,
+     -15.05
+    ]
+   },
+   "fixtures": {
+    "counter:shop": {
+     "id": "0_-1·plaza·bench·1",
+     "box": [
+      18,
+      0.3,
+      -13.95,
+      20,
+      1.1,
+      -13.35
+     ]
+    }
+   },
+   "look": null,
+   "reach": 13,
+   "ways": {
+    "walk": {
+     "x": 18,
+     "z": -5.2,
+     "metres": 12.8
+    },
+    "kerb": {
+     "x": 18,
+     "z": -38.12,
+     "heading": -1.57,
+     "metres": 16.88
+    },
+    "subway": {
+     "id": "subway-1st-kent",
+     "name": "1ST ST",
+     "x": 57.5,
+     "z": -45.5,
+     "face": "+z",
+     "lines": [
+      "tide"
+     ],
+     "metres": 48.13
+    }
+   },
+   "missing": [
+    "a shop (uptown's shopkeeper stands by a plaza bench: the plaza has no kiosk or storefront of its own)"
+   ],
+   "blocks": [
+    [
+     0,
+     -1
+    ]
+   ],
+   "stands": [
+    {
+     "x": 18.58,
+     "z": -13.98,
+     "ry": 3.142,
+     "st": null,
+     "kind": "bench",
+     "entry": null,
+     "far": 4.06,
+     "src": "seats",
+     "y": 0.3,
+     "piece": "0_-1·plaza·bench·1"
+    },
+    {
+     "x": 13.98,
+     "z": -18.58,
+     "ry": 1.571,
+     "st": null,
+     "kind": "bench",
+     "entry": null,
+     "far": 4.06,
+     "src": "seats",
+     "y": 0.3,
+     "piece": "0_-1·plaza·bench·2"
+    },
+    {
+     "x": 19.42,
+     "z": -13.98,
+     "ry": 3.142,
+     "st": null,
+     "kind": "bench",
+     "entry": null,
+     "far": 4.26,
+     "src": "seats",
+     "y": 0.3,
+     "piece": "0_-1·plaza·bench·1"
+    },
+    {
+     "x": 13.98,
+     "z": -19.42,
+     "ry": 1.571,
+     "st": null,
+     "kind": "bench",
+     "entry": null,
+     "far": 4.26,
+     "src": "seats",
+     "y": 0.3,
+     "piece": "0_-1·plaza·bench·2"
+    },
+    {
+     "x": 14.5,
+     "z": -13.5,
+     "ry": 2.428,
+     "st": 0,
+     "kind": "open",
+     "entry": null,
+     "far": 5.7,
+     "src": "made"
+    },
+    {
+     "x": 12,
+     "z": -18,
+     "ry": 1.134,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 0,
+      "j": -1,
+      "side": "W",
+      "u": -18,
+      "x": 6.4,
+      "z": -18
+     },
+     "far": 6,
+     "src": "published",
+     "pace": [
+      12,
+      -17.45,
+      -3.142
+     ]
+    },
+    {
+     "x": 18,
+     "z": -12,
+     "ry": 2.642,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": 0,
+      "j": -1,
+      "side": "S",
+      "u": 18,
+      "x": 18,
+      "z": -6.4
+     },
+     "far": 6,
+     "src": "published",
+     "pace": [
+      18.55,
+      -12,
+      -1.571
+     ]
+    },
+    {
+     "x": 22,
+     "z": -13.5,
+     "ry": -1.987,
+     "st": 0,
+     "kind": "open",
+     "entry": null,
+     "far": 6.02,
+     "src": "made",
+     "pace": [
+      22.55,
+      -13.5,
+      -1.571
+     ]
+    },
+    {
+     "x": 18.58,
+     "z": -24.02,
+     "ry": 0,
+     "st": null,
+     "kind": "bench",
+     "entry": null,
+     "far": 6.05,
+     "src": "seats",
+     "y": 0.3,
+     "piece": "0_-1·plaza·bench·0"
+    },
+    {
+     "x": 24.02,
+     "z": -18.58,
+     "ry": -1.571,
+     "st": null,
+     "kind": "bench",
+     "entry": null,
+     "far": 6.05,
+     "src": "seats",
+     "y": 0.3,
+     "piece": "0_-1·plaza·bench·3"
+    },
+    {
+     "x": 17,
+     "z": -24,
+     "ry": 0.512,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 6.08,
+     "src": "made",
+     "pace": [
+      16.45,
+      -24,
+      1.571
+     ],
+     "beat": [
+      [
+       14,
+       -24
+      ]
+     ]
+    },
+    {
+     "x": 12,
+     "z": -19.5,
+     "ry": 1.818,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 0,
+      "j": -1,
+      "side": "W",
+      "u": -19.5,
+      "x": 6.4,
+      "z": -19.5
+     },
+     "far": 6.18,
+     "src": "published"
+    },
+    {
+     "x": 12,
+     "z": -16.5,
+     "ry": 1.941,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 0,
+      "j": -1,
+      "side": "W",
+      "u": -16.5,
+      "x": 6.4,
+      "z": -16.5
+     },
+     "far": 6.18,
+     "src": "published"
+    },
+    {
+     "x": 16.5,
+     "z": -12,
+     "ry": 2.861,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": 0,
+      "j": -1,
+      "side": "S",
+      "u": 16.5,
+      "x": 16.5,
+      "z": -6.4
+     },
+     "far": 6.18,
+     "src": "published",
+     "pace": [
+      16.5,
+      -12,
+      -1.571
+     ],
+     "beat": [
+      [
+       12,
+       -12
+      ]
+     ]
+    },
+    {
+     "x": 19.5,
+     "z": -12,
+     "ry": -3.286,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": 0,
+      "j": -1,
+      "side": "S",
+      "u": 19.5,
+      "x": 19.5,
+      "z": -6.4
+     },
+     "far": 6.18,
+     "src": "published",
+     "pace": [
+      20.65,
+      -12,
+      -1.571
+     ],
+     "beat": [
+      [
+       24,
+       -12
+      ]
+     ]
+    },
+    {
+     "x": 19.42,
+     "z": -24.02,
+     "ry": 0,
+     "st": null,
+     "kind": "bench",
+     "entry": null,
+     "far": 6.19,
+     "src": "seats",
+     "y": 0.3,
+     "piece": "0_-1·plaza·bench·0"
+    },
+    {
+     "x": 24.02,
+     "z": -19.42,
+     "ry": -1.571,
+     "st": null,
+     "kind": "bench",
+     "entry": null,
+     "far": 6.19,
+     "src": "seats",
+     "y": 0.3,
+     "piece": "0_-1·plaza·bench·3"
+    },
+    {
+     "x": 22.8,
+     "z": -22,
+     "ry": -0.849,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 6.25,
+     "src": "made"
+    },
+    {
+     "x": 24,
+     "z": -16,
+     "ry": -1.493,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 6.32,
+     "src": "made",
+     "pace": [
+      24,
+      -16,
+      0
+     ],
+     "beat": [
+      [
+       24,
+       -13
+      ]
+     ]
+    },
+    {
+     "x": 13,
+     "z": -14,
+     "ry": 2.229,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 6.4,
+     "src": "made"
+    },
+    {
+     "x": 12,
+     "z": -21,
+     "ry": 1.324,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 0,
+      "j": -1,
+      "side": "W",
+      "u": -21,
+      "x": 6.4,
+      "z": -21
+     },
+     "far": 6.71,
+     "src": "published",
+     "pace": [
+      12,
+      -21,
+      -3.142
+     ],
+     "beat": [
+      [
+       12,
+       -25.5
+      ]
+     ]
+    },
+    {
+     "x": 12,
+     "z": -15,
+     "ry": 2.081,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 0,
+      "j": -1,
+      "side": "W",
+      "u": -15,
+      "x": 6.4,
+      "z": -15
+     },
+     "far": 6.71,
+     "src": "published",
+     "pace": [
+      12,
+      -14.45,
+      -3.142
+     ]
+    },
+    {
+     "x": 15,
+     "z": -12,
+     "ry": 2.406,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": 0,
+      "j": -1,
+      "side": "S",
+      "u": 15,
+      "x": 15,
+      "z": -6.4
+     },
+     "far": 6.71,
+     "src": "made",
+     "pace": [
+      15.55,
+      -12,
+      -1.571
+     ]
+    },
+    {
+     "x": 21,
+     "z": -12,
+     "ry": -2.342,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": 0,
+      "j": -1,
+      "side": "S",
+      "u": 21,
+      "x": 21,
+      "z": -6.4
+     },
+     "far": 6.71,
+     "src": "made",
+     "pace": [
+      21.55,
+      -12,
+      -1.571
+     ]
+    },
+    {
+     "x": 15,
+     "z": -24,
+     "ry": 0.601,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 6.71,
+     "src": "made"
+    },
+    {
+     "x": 21,
+     "z": -24,
+     "ry": -0.539,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 6.71,
+     "src": "made"
+    },
+    {
+     "x": 23.5,
+     "z": -13.5,
+     "ry": -2.23,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 7.11,
+     "src": "made"
+    },
+    {
+     "x": 22.8,
+     "z": -23.5,
+     "ry": -0.792,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 7.3,
+     "src": "made"
+    },
+    {
+     "x": 24.3,
+     "z": -22,
+     "ry": -0.635,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 7.46,
+     "src": "made",
+     "pace": [
+      24.3,
+      -22.55,
+      0
+     ]
+    },
+    {
+     "x": 12,
+     "z": -22.5,
+     "ry": 0.451,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 0,
+      "j": -1,
+      "side": "W",
+      "u": -22.5,
+      "x": 6.4,
+      "z": -22.5
+     },
+     "far": 7.5,
+     "src": "made",
+     "pace": [
+      12,
+      -22.5,
+      -3.142
+     ],
+     "beat": [
+      [
+       12,
+       -27
+      ]
+     ]
+    },
+    {
+     "x": 13.5,
+     "z": -12,
+     "ry": 2.781,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": 0,
+      "j": -1,
+      "side": "S",
+      "u": 13.5,
+      "x": 13.5,
+      "z": -6.4
+     },
+     "far": 7.5,
+     "src": "made",
+     "pace": [
+      13.5,
+      -12,
+      -1.571
+     ],
+     "beat": [
+      [
+       9,
+       -12
+      ]
+     ]
+    },
+    {
+     "x": 18,
+     "z": -25.5,
+     "ry": -0.249,
+     "st": 3.142,
+     "kind": "open",
+     "entry": {
+      "i": 0,
+      "j": -1,
+      "side": "N",
+      "u": 18,
+      "x": 18,
+      "z": -31.2
+     },
+     "far": 7.5,
+     "src": "made",
+     "pace": [
+      18,
+      -25.5,
+      1.571
+     ],
+     "beat": [
+      [
+       22.5,
+       -25.5
+      ],
+      [
+       13.5,
+       -25.5
+      ]
+     ]
+    },
+    {
+     "x": 22.5,
+     "z": -12,
+     "ry": -2.446,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": 0,
+      "j": -1,
+      "side": "S",
+      "u": 22.5,
+      "x": 22.5,
+      "z": -6.4
+     },
+     "far": 7.5,
+     "src": "made",
+     "pace": [
+      23.65,
+      -12,
+      -1.571
+     ],
+     "beat": [
+      [
+       27,
+       -12
+      ]
+     ]
+    },
+    {
+     "x": 25.5,
+     "z": -18.05,
+     "ry": -1.97,
+     "st": 1.571,
+     "kind": "open",
+     "entry": {
+      "i": 0,
+      "j": -1,
+      "side": "E",
+      "u": -18.1,
+      "x": 31.2,
+      "z": -18.1
+     },
+     "far": 7.5,
+     "src": "made",
+     "pace": [
+      25.5,
+      -18.6,
+      0
+     ]
+    },
+    {
+     "x": 13.5,
+     "z": -24,
+     "ry": 0.722,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 7.5,
+     "src": "made"
+    },
+    {
+     "x": 25.5,
+     "z": -16.55,
+     "ry": -1.931,
+     "st": 1.571,
+     "kind": "open",
+     "entry": {
+      "i": 0,
+      "j": -1,
+      "side": "E",
+      "u": -16.6,
+      "x": 31.2,
+      "z": -16.6
+     },
+     "far": 7.64,
+     "src": "made"
+    }
+   ]
+  },
+  "corner": {
+   "cityPlace": "corner--1_1",
+   "name": "Jay St & Washington St",
+   "place": "the city's own dealing-corner spots: the open apron of the night market's lot, on the corner",
+   "at": [
+    -43.55,
+    43.4
+   ],
+   "spots": {
+    "street": [
+     -43.55,
+     43.4
+    ]
+   },
+   "fixtures": {},
+   "look": null,
+   "reach": 9,
+   "ways": {
+    "walk": {
+     "x": -43.55,
+     "z": 40.2,
+     "metres": 3.2
+    },
+    "kerb": {
+     "x": -43.55,
+     "z": 33.88,
+     "heading": -1.57,
+     "metres": 6.28
+    },
+    "subway": {
+     "id": "subway-fit-street",
+     "name": "FIT ST",
+     "x": -89.5,
+     "z": -9.5,
+     "face": "+z",
+     "lines": [
+      "neon"
+     ],
+     "metres": 70.07
+    }
+   },
+   "missing": [],
+   "blocks": [
+    [
+     -2,
+     1
+    ]
+   ],
+   "stands": [
+    {
+     "x": -44,
+     "z": 44,
+     "ry": 3.231,
+     "st": 1.571,
+     "kind": "open",
+     "entry": {
+      "i": -2,
+      "j": 1,
+      "side": "E",
+      "u": 44.7,
+      "x": -40.8,
+      "z": 44.7
+     },
+     "far": 0.75,
+     "src": "published",
+     "pace": [
+      -44,
+      44,
+      0
+     ],
+     "beat": [
+      [
+       -44,
+       48.5
+      ]
+     ]
+    },
+    {
+     "x": -43.5,
+     "z": 42.5,
+     "ry": -5.176,
+     "st": 3.142,
+     "kind": "open",
+     "entry": {
+      "i": -2,
+      "j": 1,
+      "side": "E",
+      "u": 42.5,
+      "x": -40.8,
+      "z": 42.5
+     },
+     "far": 0.9,
+     "src": "published",
+     "pace": [
+      -43.5,
+      42.5,
+      1.571
+     ]
+    },
+    {
+     "x": -42.5,
+     "z": 43.5,
+     "ry": -7.235,
+     "st": 1.571,
+     "kind": "open",
+     "entry": {
+      "i": -2,
+      "j": 1,
+      "side": "E",
+      "u": 43.5,
+      "x": -40.8,
+      "z": 43.5
+     },
+     "far": 1.05,
+     "src": "published",
+     "pace": [
+      -42.5,
+      43.5,
+      0
+     ]
+    },
+    {
+     "x": -45,
+     "z": 42.5,
+     "ry": 1.974,
+     "st": 3.142,
+     "kind": "open",
+     "entry": {
+      "i": -2,
+      "j": 1,
+      "side": "N",
+      "u": -48.6,
+      "x": -48.6,
+      "z": 40.13
+     },
+     "far": 1.71,
+     "src": "published",
+     "pace": [
+      -45.55,
+      42.5,
+      1.571
+     ]
+    },
+    {
+     "x": -43,
+     "z": 45.5,
+     "ry": -8.586,
+     "st": 1.571,
+     "kind": "open",
+     "entry": {
+      "i": -2,
+      "j": 1,
+      "side": "E",
+      "u": 45.5,
+      "x": -40.8,
+      "z": 45.5
+     },
+     "far": 2.17,
+     "src": "published"
+    },
+    {
+     "x": -46,
+     "z": 44,
+     "ry": 1.819,
+     "st": 3.142,
+     "kind": "open",
+     "entry": {
+      "i": -2,
+      "j": 1,
+      "side": "N",
+      "u": -49.8,
+      "x": -49.8,
+      "z": 40.73
+     },
+     "far": 2.52,
+     "src": "published",
+     "pace": [
+      -46,
+      44,
+      1.571
+     ]
+    },
+    {
+     "x": -46.5,
+     "z": 42.5,
+     "ry": 1.591,
+     "st": 3.142,
+     "kind": "open",
+     "entry": {
+      "i": -2,
+      "j": 1,
+      "side": "N",
+      "u": -47.9,
+      "x": -47.9,
+      "z": 39.77
+     },
+     "far": 3.08,
+     "src": "published",
+     "pace": [
+      -47.65,
+      42.5,
+      1.571
+     ],
+     "beat": [
+      [
+       -51,
+       42.5
+      ]
+     ]
+    },
+    {
+     "x": -41.6,
+     "z": 40.6,
+     "ry": -0.964,
+     "st": 3.142,
+     "kind": "open",
+     "entry": {
+      "i": -2,
+      "j": 1,
+      "side": "E",
+      "u": 41.5,
+      "x": -40.8,
+      "z": 41.5
+     },
+     "far": 3.41,
+     "src": "made"
+    },
+    {
+     "x": -39.5,
+     "z": 44,
+     "ry": -6.223,
+     "st": 1.571,
+     "kind": "corner",
+     "entry": {
+      "i": -2,
+      "j": 1,
+      "side": "E",
+      "u": 44,
+      "x": -40.8,
+      "z": 44
+     },
+     "far": 4.09,
+     "src": "published"
+    },
+    {
+     "x": -46,
+     "z": 40,
+     "ry": -0.385,
+     "st": 3.142,
+     "kind": "open",
+     "entry": {
+      "i": -2,
+      "j": 1,
+      "side": "N",
+      "u": -46.5,
+      "x": -46.5,
+      "z": 39.08
+     },
+     "far": 4.19,
+     "src": "published"
+    },
+    {
+     "x": -39.5,
+     "z": 45.5,
+     "ry": -7.437,
+     "st": 1.571,
+     "kind": "open",
+     "entry": {
+      "i": -2,
+      "j": 1,
+      "side": "E",
+      "u": 45.5,
+      "x": -40.8,
+      "z": 45.5
+     },
+     "far": 4.56,
+     "src": "published",
+     "pace": [
+      -39.5,
+      45.5,
+      0
+     ],
+     "beat": [
+      [
+       -39.5,
+       48.5
+      ]
+     ]
+    },
+    {
+     "x": -48.9,
+     "z": 43.4,
+     "ry": 1.706,
+     "st": 3.142,
+     "kind": "open",
+     "entry": {
+      "i": -2,
+      "j": 1,
+      "side": "N",
+      "u": -49.9,
+      "x": -49.9,
+      "z": 40.77
+     },
+     "far": 5.35,
+     "src": "made"
+    },
+    {
+     "x": -39.6,
+     "z": 47.6,
+     "ry": -2.849,
+     "st": 1.571,
+     "kind": "open",
+     "entry": {
+      "i": -2,
+      "j": 1,
+      "side": "E",
+      "u": 47.6,
+      "x": -40.8,
+      "z": 47.6
+     },
+     "far": 5.77,
+     "src": "made",
+     "pace": [
+      -39.6,
+      47.05,
+      0
+     ]
+    },
+    {
+     "x": -50.1,
+     "z": 39.6,
+     "ry": 1.408,
+     "st": 3.142,
+     "kind": "open",
+     "entry": {
+      "i": -2,
+      "j": 1,
+      "side": "N",
+      "u": -49.6,
+      "x": -49.6,
+      "z": 40.63
+     },
+     "far": 7.57,
+     "src": "made",
+     "pace": [
+      -50.65,
+      39.6,
+      1.571
+     ]
+    }
+   ]
+  },
+  "bar": {
+   "cityPlace": null,
+   "name": "DEAD AIR",
+   "place": "the bar's Washington St front and its Ivy St side (the city block -3,0)",
+   "at": [
+    -81.85,
+    33.2
+   ],
+   "spots": {
+    "street": [
+     -81.85,
+     33.2
+    ],
+    "counter:shop": [
+     -81.85,
+     32.7
+    ]
+   },
+   "fixtures": {
+    "counter:shop": {
+     "id": "-3_0·bar·structure·0",
+     "box": [
+      -87.3,
+      0.2,
+      18.7,
+      -76.4,
+      12.2,
+      31.6
+     ]
+    }
+   },
+   "look": [
+    [
+     -74.04,
+     5.5,
+     41.01
+    ],
+    [
+     -81.85,
+     1.6,
+     33.2
+    ]
+   ],
+   "reach": 14,
+   "ways": {
+    "walk": {
+     "x": -81.85,
+     "z": 31.8,
+     "metres": 1.4
+    },
+    "kerb": {
+     "x": -81.85,
+     "z": 33.88,
+     "heading": -1.57,
+     "metres": 3.92
+    },
+    "subway": {
+     "id": "subway-fit-street",
+     "name": "FIT ST",
+     "x": -89.5,
+     "z": -9.5,
+     "face": "+z",
+     "lines": [
+      "neon"
+     ],
+     "metres": 43.38
+    }
+   },
+   "missing": [
+    "a way into the bar (the barkeeper stands outside at its front: the bar has no interior)"
+   ],
+   "blocks": [
+    [
+     -3,
+     0
+    ]
+   ],
+   "stands": [
+    {
+     "x": -80.35,
+     "z": 32.2,
+     "ry": -1.363,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": -3,
+      "j": 0,
+      "side": "S",
+      "u": -80.3,
+      "x": -80.3,
+      "z": 31.2
+     },
+     "far": 1.8,
+     "src": "made"
+    },
+    {
+     "x": -85.85,
+     "z": 32.2,
+     "ry": 1.44,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": -3,
+      "j": 0,
+      "side": "S",
+      "u": -85.8,
+      "x": -85.8,
+      "z": 31.2
+     },
+     "far": 4.12,
+     "src": "made"
+    },
+    {
+     "x": -87.35,
+     "z": 32.7,
+     "ry": 0.997,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": -3,
+      "j": 0,
+      "side": "S",
+      "u": -87.3,
+      "x": -87.3,
+      "z": 31.2
+     },
+     "far": 5.52,
+     "src": "made"
+    },
+    {
+     "x": -87.85,
+     "z": 30.2,
+     "ry": 1.533,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": -3,
+      "j": 0,
+      "side": "S",
+      "u": -87.8,
+      "x": -87.8,
+      "z": 31.2
+     },
+     "far": 6.71,
+     "src": "made",
+     "pace": [
+      -87.85,
+      30.2,
+      -1.571
+     ],
+     "beat": [
+      [
+       -92.35,
+       30.2
+      ]
+     ]
+    },
+    {
+     "x": -88.85,
+     "z": 32.7,
+     "ry": 1.93,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": -3,
+      "j": 0,
+      "side": "S",
+      "u": -88.8,
+      "x": -88.8,
+      "z": 31.2
+     },
+     "far": 7.02,
+     "src": "made",
+     "pace": [
+      -88.85,
+      32.7,
+      -1.571
+     ],
+     "beat": [
+      [
+       -90.85,
+       32.7
+      ]
+     ]
+    },
+    {
+     "x": -75.35,
+     "z": 29.7,
+     "ry": -0.675,
+     "st": 1.571,
+     "kind": "open",
+     "entry": {
+      "i": -3,
+      "j": 0,
+      "side": "E",
+      "u": 29.7,
+      "x": -76.8,
+      "z": 29.7
+     },
+     "far": 7.38,
+     "src": "made"
+    },
+    {
+     "x": -87.85,
+     "z": 28.7,
+     "ry": 0.608,
+     "st": 0,
+     "kind": "wall",
+     "entry": {
+      "i": -3,
+      "j": 0,
+      "side": "S",
+      "u": -89.5,
+      "x": -89.5,
+      "z": 31.2
+     },
+     "far": 7.5,
+     "src": "made",
+     "lean": [
+      -87.3,
+      28.7,
+      -1.571
+     ],
+     "pace": [
+      -87.85,
+      28.7,
+      -1.571
+     ],
+     "beat": [
+      [
+       -90.85,
+       28.7
+      ]
+     ]
+    },
+    {
+     "x": -75.35,
+     "z": 28.2,
+     "ry": -0.629,
+     "st": 1.571,
+     "kind": "open",
+     "entry": {
+      "i": -3,
+      "j": 0,
+      "side": "E",
+      "u": 28.2,
+      "x": -76.8,
+      "z": 28.2
+     },
+     "far": 8.2,
+     "src": "made",
+     "pace": [
+      -75.35,
+      27.65,
+      0
+     ],
+     "beat": [
+      [
+       -75.35,
+       23.7
+      ]
+     ]
+    },
+    {
+     "x": -89.35,
+     "z": 29.2,
+     "ry": 0.707,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": -3,
+      "j": 0,
+      "side": "S",
+      "u": -89.4,
+      "x": -89.4,
+      "z": 31.2
+     },
+     "far": 8.5,
+     "src": "made"
+    },
+    {
+     "x": -90.35,
+     "z": 32.7,
+     "ry": 1.864,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": -3,
+      "j": 0,
+      "side": "S",
+      "u": -90.3,
+      "x": -90.3,
+      "z": 31.2
+     },
+     "far": 8.51,
+     "src": "made"
+    },
+    {
+     "x": -90.35,
+     "z": 30.2,
+     "ry": 1.663,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": -3,
+      "j": 0,
+      "side": "S",
+      "u": -90.3,
+      "x": -90.3,
+      "z": 31.2
+     },
+     "far": 9.01,
+     "src": "made"
+    },
+    {
+     "x": -75.35,
+     "z": 26.7,
+     "ry": -1.094,
+     "st": 1.571,
+     "kind": "open",
+     "entry": {
+      "i": -3,
+      "j": 0,
+      "side": "E",
+      "u": 26.7,
+      "x": -76.8,
+      "z": 26.7
+     },
+     "far": 9.19,
+     "src": "made"
+    },
+    {
+     "x": -90.85,
+     "z": 28.7,
+     "ry": 0.983,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": -3,
+      "j": 0,
+      "side": "S",
+      "u": -91.4,
+      "x": -91.4,
+      "z": 31.2
+     },
+     "far": 10.06,
+     "src": "made"
+    },
+    {
+     "x": -75.35,
+     "z": 25.2,
+     "ry": -1.112,
+     "st": 1.571,
+     "kind": "open",
+     "entry": {
+      "i": -3,
+      "j": 0,
+      "side": "E",
+      "u": 25.2,
+      "x": -76.8,
+      "z": 25.2
+     },
+     "far": 10.31,
+     "src": "made"
+    },
+    {
+     "x": -92.35,
+     "z": 30.2,
+     "ry": 1.499,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": -3,
+      "j": 0,
+      "side": "S",
+      "u": -92.3,
+      "x": -92.3,
+      "z": 31.2
+     },
+     "far": 10.92,
+     "src": "made"
+    },
+    {
+     "x": -92.85,
+     "z": 32.7,
+     "ry": 1.695,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": -3,
+      "j": 0,
+      "side": "S",
+      "u": -92.8,
+      "x": -92.8,
+      "z": 31.2
+     },
+     "far": 11.01,
+     "src": "made"
+    },
+    {
+     "x": -75.35,
+     "z": 23.7,
+     "ry": -0.594,
+     "st": 1.571,
+     "kind": "open",
+     "entry": {
+      "i": -3,
+      "j": 0,
+      "side": "E",
+      "u": 23.7,
+      "x": -76.8,
+      "z": 23.7
+     },
+     "far": 11.51,
+     "src": "made"
+    },
+    {
+     "x": -93.85,
+     "z": 30.2,
+     "ry": 1.495,
+     "st": 0,
+     "kind": "stoop",
+     "entry": {
+      "i": -3,
+      "j": 0,
+      "side": "S",
+      "u": -93.8,
+      "x": -93.8,
+      "z": 31.2
+     },
+     "far": 12.37,
+     "src": "made",
+     "sit": [
+      -93.59,
+      29.94,
+      -0.785
+     ],
+     "pace": [
+      -93.3,
+      30.2,
+      -1.571
+     ]
+    },
+    {
+     "x": -94.35,
+     "z": 32.2,
+     "ry": 1.103,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": -3,
+      "j": 0,
+      "side": "S",
+      "u": -94.3,
+      "x": -94.3,
+      "z": 31.2
+     },
+     "far": 12.54,
+     "src": "made"
+    },
+    {
+     "x": -75.35,
+     "z": 22.2,
+     "ry": -0.914,
+     "st": 1.571,
+     "kind": "open",
+     "entry": {
+      "i": -3,
+      "j": 0,
+      "side": "E",
+      "u": 22.2,
+      "x": -76.8,
+      "z": 22.2
+     },
+     "far": 12.78,
+     "src": "made",
+     "pace": [
+      -75.35,
+      21.65,
+      0
+     ]
+    }
+   ]
+  },
+  "park": {
+   "cityPlace": "park",
+   "name": "Pleasantview Park",
+   "place": "the park's east walk, its benches and the bandstand",
+   "at": [
+    -18,
+    198
+   ],
+   "spots": {
+    "street": [
+     -18,
+     198
+    ]
+   },
+   "fixtures": {
+    "front": {
+     "id": "-1_5·bandstand·structure·0",
+     "box": [
+      -23,
+      0.2,
+      194,
+      -15,
+      7.8,
+      202
+     ]
+    }
+   },
+   "look": [
+    [
+     -7,
+     5.5,
+     198
+    ],
+    [
+     -18,
+     1.6,
+     198
+    ]
+   ],
+   "reach": 14,
+   "ways": {
+    "walk": {
+     "x": -5.2,
+     "z": 198,
+     "metres": 12.8
+    },
+    "kerb": {
+     "x": -18,
+     "z": 177.88,
+     "heading": -1.57,
+     "metres": 16.88
+    },
+    "subway": {
+     "id": "subway-pleasantview",
+     "name": "PLEASANTVIEW",
+     "x": -17,
+     "z": 188.5,
+     "face": "-z",
+     "lines": [
+      "tide",
+      "union"
+     ],
+     "metres": 9.55
+    }
+   },
+   "missing": [],
+   "blocks": [
+    [
+     -1,
+     5
+    ]
+   ],
+   "stands": [
+    {
+     "x": -18,
+     "z": 193.5,
+     "ry": 0.186,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 4.5,
+     "src": "made",
+     "pace": [
+      -18,
+      193.5,
+      1.571
+     ],
+     "beat": [
+      [
+       -13.5,
+       193.5
+      ],
+      [
+       -22.5,
+       193.5
+      ]
+     ]
+    },
+    {
+     "x": -13.5,
+     "z": 198,
+     "ry": -1.154,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 4.5,
+     "src": "made",
+     "pace": [
+      -13.5,
+      197.45,
+      0
+     ]
+    },
+    {
+     "x": -18,
+     "z": 202.5,
+     "ry": 3.542,
+     "st": 0,
+     "kind": "open",
+     "entry": null,
+     "far": 4.5,
+     "src": "made",
+     "pace": [
+      -18,
+      202.5,
+      -1.571
+     ],
+     "beat": [
+      [
+       -22.5,
+       202.5
+      ]
+     ]
+    },
+    {
+     "x": -13.5,
+     "z": 196.5,
+     "ry": -1.636,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 4.74,
+     "src": "made"
+    },
+    {
+     "x": -13.5,
+     "z": 199.5,
+     "ry": -1.879,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 4.74,
+     "src": "made"
+    },
+    {
+     "x": -20,
+     "z": 193.5,
+     "ry": 0.184,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 4.92,
+     "src": "made"
+    },
+    {
+     "x": -16,
+     "z": 193.5,
+     "ry": 0.028,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 4.92,
+     "src": "made"
+    },
+    {
+     "x": -13.5,
+     "z": 195,
+     "ry": -0.688,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 5.41,
+     "src": "made",
+     "pace": [
+      -13.5,
+      194.45,
+      0
+     ]
+    },
+    {
+     "x": -13.5,
+     "z": 201,
+     "ry": -2.381,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 5.41,
+     "src": "made",
+     "pace": [
+      -13.5,
+      201,
+      0
+     ],
+     "beat": [
+      [
+       -13.5,
+       203
+      ]
+     ]
+    },
+    {
+     "x": -19,
+     "z": 192.5,
+     "ry": 0.085,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 5.59,
+     "src": "made",
+     "pace": [
+      -19.55,
+      192.5,
+      1.571
+     ]
+    },
+    {
+     "x": -15.5,
+     "z": 203,
+     "ry": -2.883,
+     "st": 0,
+     "kind": "open",
+     "entry": null,
+     "far": 5.59,
+     "src": "made",
+     "pace": [
+      -15.5,
+      203,
+      -1.571
+     ]
+    },
+    {
+     "x": -17.42,
+     "z": 192.33,
+     "ry": 0,
+     "st": null,
+     "kind": "bench",
+     "entry": null,
+     "far": 5.7,
+     "src": "published",
+     "y": 0.3
+    },
+    {
+     "x": -16.58,
+     "z": 192.33,
+     "ry": 0,
+     "st": null,
+     "kind": "bench",
+     "entry": null,
+     "far": 5.85,
+     "src": "published",
+     "y": 0.3
+    },
+    {
+     "x": -12,
+     "z": 198,
+     "ry": -1.744,
+     "st": 1.571,
+     "kind": "open",
+     "entry": {
+      "i": -1,
+      "j": 5,
+      "side": "E",
+      "u": 198,
+      "x": -6.4,
+      "z": 198
+     },
+     "far": 6,
+     "src": "published",
+     "pace": [
+      -12,
+      197.45,
+      0
+     ]
+    },
+    {
+     "x": -18,
+     "z": 204,
+     "ry": 2.8,
+     "st": 0,
+     "kind": "open",
+     "entry": null,
+     "far": 6,
+     "src": "made",
+     "pace": [
+      -17.45,
+      204,
+      -1.571
+     ]
+    },
+    {
+     "x": -12,
+     "z": 196.5,
+     "ry": -1.385,
+     "st": 1.571,
+     "kind": "open",
+     "entry": {
+      "i": -1,
+      "j": 5,
+      "side": "E",
+      "u": 196.5,
+      "x": -6.4,
+      "z": 196.5
+     },
+     "far": 6.18,
+     "src": "published"
+    },
+    {
+     "x": -12,
+     "z": 199.5,
+     "ry": -1.549,
+     "st": 1.571,
+     "kind": "open",
+     "entry": {
+      "i": -1,
+      "j": 5,
+      "side": "E",
+      "u": 198,
+      "x": -6.4,
+      "z": 198
+     },
+     "far": 6.18,
+     "src": "published"
+    },
+    {
+     "x": -19.5,
+     "z": 204,
+     "ry": 2.587,
+     "st": 0,
+     "kind": "open",
+     "entry": null,
+     "far": 6.18,
+     "src": "made"
+    },
+    {
+     "x": -16.5,
+     "z": 204,
+     "ry": -2.912,
+     "st": 0,
+     "kind": "open",
+     "entry": null,
+     "far": 6.18,
+     "src": "made"
+    },
+    {
+     "x": -24.5,
+     "z": 199,
+     "ry": 1.798,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 6.58,
+     "src": "made",
+     "pace": [
+      -24.5,
+      199,
+      -3.142
+     ],
+     "beat": [
+      [
+       -24.5,
+       194.5
+      ],
+      [
+       -24.5,
+       203.5
+      ]
+     ]
+    },
+    {
+     "x": -20.78,
+     "z": 191.93,
+     "ry": 0,
+     "st": null,
+     "kind": "bench",
+     "entry": null,
+     "far": 6.68,
+     "src": "published",
+     "y": 0.3
+    },
+    {
+     "x": -12,
+     "z": 195,
+     "ry": -0.965,
+     "st": 1.571,
+     "kind": "open",
+     "entry": {
+      "i": -1,
+      "j": 5,
+      "side": "E",
+      "u": 194.4,
+      "x": -6.4,
+      "z": 194.4
+     },
+     "far": 6.71,
+     "src": "published",
+     "pace": [
+      -12,
+      194.45,
+      0
+     ]
+    },
+    {
+     "x": -12,
+     "z": 201,
+     "ry": -2.383,
+     "st": 1.571,
+     "kind": "open",
+     "entry": {
+      "i": -1,
+      "j": 5,
+      "side": "E",
+      "u": 201.9,
+      "x": -6.4,
+      "z": 201.9
+     },
+     "far": 6.71,
+     "src": "published",
+     "pace": [
+      -12,
+      200.45,
+      0
+     ]
+    },
+    {
+     "x": -21.18,
+     "z": 204.07,
+     "ry": -3.142,
+     "st": null,
+     "kind": "bench",
+     "entry": null,
+     "far": 6.85,
+     "src": "made",
+     "y": 0.3
+    },
+    {
+     "x": -15.5,
+     "z": 191.5,
+     "ry": -0.038,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 6.96,
+     "src": "made"
+    },
+    {
+     "x": -19,
+     "z": 191,
+     "ry": -0.302,
+     "st": 3.142,
+     "kind": "open",
+     "entry": {
+      "i": -1,
+      "j": 5,
+      "side": "N",
+      "u": -18.5,
+      "x": -18.5,
+      "z": 185.2
+     },
+     "far": 7.07,
+     "src": "published",
+     "pace": [
+      -20.15,
+      191,
+      1.571
+     ],
+     "beat": [
+      [
+       -22,
+       191
+      ]
+     ]
+    },
+    {
+     "x": -21.62,
+     "z": 191.93,
+     "ry": 0,
+     "st": null,
+     "kind": "bench",
+     "entry": null,
+     "far": 7.07,
+     "src": "published",
+     "y": 0.3
+    },
+    {
+     "x": -15,
+     "z": 204.5,
+     "ry": -2.663,
+     "st": 0,
+     "kind": "open",
+     "entry": null,
+     "far": 7.16,
+     "src": "made",
+     "pace": [
+      -14.45,
+      204.5,
+      -1.571
+     ],
+     "beat": [
+      [
+       -13,
+       204.5
+      ]
+     ]
+    },
+    {
+     "x": -22.02,
+     "z": 204.07,
+     "ry": -3.142,
+     "st": null,
+     "kind": "bench",
+     "entry": null,
+     "far": 7.28,
+     "src": "made",
+     "y": 0.3
+    },
+    {
+     "x": -25.5,
+     "z": 198,
+     "ry": 1.449,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": -1,
+      "j": 5,
+      "side": "W",
+      "u": 198,
+      "x": -31.2,
+      "z": 198
+     },
+     "far": 7.5,
+     "src": "published",
+     "pace": [
+      -25.5,
+      198,
+      -3.142
+     ],
+     "beat": [
+      [
+       -25.5,
+       195
+      ]
+     ]
+    },
+    {
+     "x": -18,
+     "z": 205.5,
+     "ry": 3.107,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": -1,
+      "j": 5,
+      "side": "S",
+      "u": -18.2,
+      "x": -18.2,
+      "z": 211.2
+     },
+     "far": 7.5,
+     "src": "published",
+     "pace": [
+      -18,
+      205.5,
+      -1.571
+     ],
+     "beat": [
+      [
+       -22.5,
+       205.5
+      ],
+      [
+       -15,
+       205.5
+      ]
+     ]
+    },
+    {
+     "x": -12,
+     "z": 193.5,
+     "ry": -0.818,
+     "st": 1.571,
+     "kind": "open",
+     "entry": {
+      "i": -1,
+      "j": 5,
+      "side": "E",
+      "u": 193.5,
+      "x": -6.4,
+      "z": 193.5
+     },
+     "far": 7.5,
+     "src": "published",
+     "pace": [
+      -12,
+      192.35,
+      0
+     ],
+     "beat": [
+      [
+       -12,
+       190.5
+      ]
+     ]
+    },
+    {
+     "x": -12,
+     "z": 202.5,
+     "ry": -2.568,
+     "st": 1.571,
+     "kind": "open",
+     "entry": {
+      "i": -1,
+      "j": 5,
+      "side": "E",
+      "u": 202.5,
+      "x": -6.4,
+      "z": 202.5
+     },
+     "far": 7.5,
+     "src": "published",
+     "pace": [
+      -12,
+      202.5,
+      0
+     ],
+     "beat": [
+      [
+       -12,
+       204.5
+      ]
+     ]
+    },
+    {
+     "x": -25.5,
+     "z": 196.5,
+     "ry": 1.024,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": -1,
+      "j": 5,
+      "side": "W",
+      "u": 196.5,
+      "x": -31.2,
+      "z": 196.5
+     },
+     "far": 7.65,
+     "src": "made",
+     "pace": [
+      -25.5,
+      196.5,
+      -3.142
+     ],
+     "beat": [
+      [
+       -25.5,
+       194.5
+      ]
+     ]
+    },
+    {
+     "x": -19.5,
+     "z": 205.5,
+     "ry": 3.034,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": -1,
+      "j": 5,
+      "side": "S",
+      "u": -19.5,
+      "x": -19.5,
+      "z": 211.2
+     },
+     "far": 7.65,
+     "src": "made",
+     "pace": [
+      -19.5,
+      205.5,
+      -1.571
+     ],
+     "beat": [
+      [
+       -24,
+       205.5
+      ]
+     ]
+    },
+    {
+     "x": -16.5,
+     "z": 205.5,
+     "ry": -3.202,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": -1,
+      "j": 5,
+      "side": "S",
+      "u": -14.8,
+      "x": -14.8,
+      "z": 211.2
+     },
+     "far": 7.65,
+     "src": "made",
+     "pace": [
+      -15.35,
+      205.5,
+      -1.571
+     ]
+    }
+   ]
+  },
+  "docks": {
+   "cityPlace": "docks",
+   "name": "Low Tide Docks",
+   "place": "the cargo ring behind the quay; the pier is the quay's edge at its first mooring",
+   "at": [
+    90,
+    -270
+   ],
+   "spots": {
+    "street": [
+     90,
+     -270
+    ],
+    "pier": [
+     87,
+     -284.25
+    ]
+   },
+   "fixtures": {
+    "pier": {
+     "id": "2_-8·quay·mooring·0",
+     "box": [
+      86.65,
+      0.3,
+      -286.05,
+      87.35,
+      1.1,
+      -285.35
+     ]
+    }
+   },
+   "look": null,
+   "reach": 14,
+   "ways": {
+    "walk": {
+     "x": 90,
+     "z": -257.2,
+     "metres": 12.8
+    },
+    "kerb": {
+     "x": 90,
+     "z": -248.88,
+     "heading": 1.57,
+     "metres": 19
+    },
+    "subway": {
+     "id": "subway-low-tide",
+     "name": "LOW TIDE",
+     "x": 82.5,
+     "z": -242.5,
+     "face": "-z",
+     "lines": [
+      "tide",
+      "harbor"
+     ],
+     "metres": 28.5
+    }
+   },
+   "missing": [],
+   "blocks": [
+    [
+     2,
+     -8
+    ]
+   ],
+   "stands": [
+    {
+     "x": 89.5,
+     "z": -270,
+     "ry": -1.266,
+     "st": 0,
+     "kind": "open",
+     "entry": null,
+     "far": 0.5,
+     "src": "published",
+     "pace": [
+      90.65,
+      -270,
+      -1.571
+     ]
+    },
+    {
+     "x": 90.5,
+     "z": -271,
+     "ry": 0.977,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 1.12,
+     "src": "published",
+     "pace": [
+      90.5,
+      -272.15,
+      0
+     ]
+    },
+    {
+     "x": 90.5,
+     "z": -269,
+     "ry": 1.844,
+     "st": 0,
+     "kind": "open",
+     "entry": null,
+     "far": 1.12,
+     "src": "published",
+     "pace": [
+      90.5,
+      -269,
+      -1.571
+     ]
+    },
+    {
+     "x": 89.5,
+     "z": -272,
+     "ry": -0.769,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 2.06,
+     "src": "published",
+     "pace": [
+      89.5,
+      -272,
+      -3.142
+     ]
+    },
+    {
+     "x": 89.5,
+     "z": -268,
+     "ry": -1.942,
+     "st": 0,
+     "kind": "open",
+     "entry": null,
+     "far": 2.06,
+     "src": "published"
+    },
+    {
+     "x": 88,
+     "z": -272,
+     "ry": 0.087,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 2.83,
+     "src": "published",
+     "pace": [
+      88,
+      -272,
+      -3.142
+     ]
+    },
+    {
+     "x": 88,
+     "z": -268,
+     "ry": -2.474,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": 2,
+      "j": -8,
+      "side": "W",
+      "u": -261.5,
+      "x": 76.8,
+      "z": -261.5
+     },
+     "far": 2.83,
+     "src": "published",
+     "pace": [
+      88.55,
+      -268,
+      -1.571
+     ]
+    },
+    {
+     "x": 92,
+     "z": -272,
+     "ry": 0.492,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 2.83,
+     "src": "published",
+     "pace": [
+      92,
+      -273.15,
+      0
+     ]
+    },
+    {
+     "x": 92,
+     "z": -268,
+     "ry": 3.092,
+     "st": 0,
+     "kind": "open",
+     "entry": null,
+     "far": 2.83,
+     "src": "published",
+     "pace": [
+      92,
+      -268,
+      -1.571
+     ]
+    },
+    {
+     "x": 91,
+     "z": -273,
+     "ry": 0.032,
+     "st": 1.571,
+     "kind": "open",
+     "entry": {
+      "i": 2,
+      "j": -8,
+      "side": "E",
+      "u": -275.3,
+      "x": 103.2,
+      "z": -275.3
+     },
+     "far": 3.16,
+     "src": "published",
+     "pace": [
+      91,
+      -274.15,
+      0
+     ]
+    },
+    {
+     "x": 91,
+     "z": -267,
+     "ry": 2.214,
+     "st": 0,
+     "kind": "open",
+     "entry": null,
+     "far": 3.16,
+     "src": "published",
+     "pace": [
+      91,
+      -267,
+      -1.571
+     ],
+     "beat": [
+      [
+       93.61,
+       -265.52
+      ]
+     ]
+    },
+    {
+     "x": 86.5,
+     "z": -272,
+     "ry": 0.663,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 4.03,
+     "src": "published",
+     "pace": [
+      86.5,
+      -272,
+      -3.142
+     ]
+    },
+    {
+     "x": 93.5,
+     "z": -272,
+     "ry": -0.679,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 4.03,
+     "src": "published",
+     "pace": [
+      93.5,
+      -273.15,
+      0
+     ]
+    },
+    {
+     "x": 89,
+     "z": -274,
+     "ry": 0.438,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 4.12,
+     "src": "made",
+     "pace": [
+      89,
+      -272.85,
+      -3.142
+     ],
+     "beat": [
+      [
+       89,
+       -269.5
+      ]
+     ]
+    },
+    {
+     "x": 86,
+     "z": -268,
+     "ry": 2.299,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 4.47,
+     "src": "published",
+     "pace": [
+      86,
+      -266.85,
+      -3.142
+     ],
+     "beat": [
+      [
+       89.77,
+       -265.55
+      ]
+     ]
+    },
+    {
+     "x": 90,
+     "z": -265.5,
+     "ry": 3.465,
+     "st": 0,
+     "kind": "open",
+     "entry": null,
+     "far": 4.5,
+     "src": "made",
+     "pace": [
+      90.55,
+      -265.5,
+      -1.571
+     ],
+     "beat": [
+      [
+       93,
+       -265.5
+      ]
+     ]
+    },
+    {
+     "x": 88.5,
+     "z": -265.5,
+     "ry": 3.241,
+     "st": 0,
+     "kind": "open",
+     "entry": null,
+     "far": 4.74,
+     "src": "made",
+     "pace": [
+      88.5,
+      -265.5,
+      -1.571
+     ],
+     "beat": [
+      [
+       84,
+       -265.5
+      ]
+     ]
+    },
+    {
+     "x": 91.5,
+     "z": -265.5,
+     "ry": -2.473,
+     "st": 0,
+     "kind": "open",
+     "entry": null,
+     "far": 4.74,
+     "src": "made"
+    },
+    {
+     "x": 85,
+     "z": -270,
+     "ry": 1.468,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 5,
+     "src": "published",
+     "pace": [
+      85,
+      -269.45,
+      -3.142
+     ],
+     "beat": [
+      [
+       85,
+       -265.5
+      ]
+     ]
+    },
+    {
+     "x": 95,
+     "z": -270,
+     "ry": -1.649,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 5,
+     "src": "published",
+     "pace": [
+      95,
+      -271.15,
+      0
+     ],
+     "beat": [
+      [
+       95,
+       -274.5
+      ]
+     ]
+    },
+    {
+     "x": 90,
+     "z": -275,
+     "ry": -0.036,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 5,
+     "src": "made",
+     "pace": [
+      89.45,
+      -275,
+      1.571
+     ]
+    },
+    {
+     "x": 87,
+     "z": -274,
+     "ry": 0.987,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 5,
+     "src": "made",
+     "pace": [
+      87,
+      -272.85,
+      -3.142
+     ],
+     "beat": [
+      [
+       87,
+       -269.5
+      ]
+     ]
+    },
+    {
+     "x": 87,
+     "z": -266,
+     "ry": 2.491,
+     "st": 0,
+     "kind": "open",
+     "entry": null,
+     "far": 5,
+     "src": "made"
+    },
+    {
+     "x": 85,
+     "z": -271.5,
+     "ry": 1.358,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 5.22,
+     "src": "published",
+     "pace": [
+      85,
+      -271.5,
+      -3.142
+     ]
+    },
+    {
+     "x": 88,
+     "z": -275,
+     "ry": 0.132,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 5.39,
+     "src": "made",
+     "pace": [
+      88,
+      -273.85,
+      -3.142
+     ]
+    },
+    {
+     "x": 92,
+     "z": -275,
+     "ry": 0.03,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 5.39,
+     "src": "made",
+     "pace": [
+      92,
+      -275,
+      0
+     ]
+    },
+    {
+     "x": 93,
+     "z": -265.5,
+     "ry": -2.148,
+     "st": 0,
+     "kind": "open",
+     "entry": null,
+     "far": 5.41,
+     "src": "made"
+    },
+    {
+     "x": 85,
+     "z": -273,
+     "ry": 0.675,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 5.83,
+     "src": "made",
+     "pace": [
+      85,
+      -273,
+      -3.142
+     ],
+     "beat": [
+      [
+       85,
+       -277.5
+      ]
+     ]
+    },
+    {
+     "x": 89.5,
+     "z": -264,
+     "ry": -3.222,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": 2,
+      "j": -8,
+      "side": "S",
+      "u": 89.5,
+      "x": 89.5,
+      "z": -258.4
+     },
+     "far": 6.02,
+     "src": "published"
+    },
+    {
+     "x": 89,
+     "z": -276,
+     "ry": 0.608,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 6.08,
+     "src": "made",
+     "pace": [
+      88.45,
+      -276,
+      1.571
+     ]
+    },
+    {
+     "x": 91,
+     "z": -276,
+     "ry": -0.561,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 6.08,
+     "src": "made",
+     "pace": [
+      90.45,
+      -276,
+      1.571
+     ]
+    },
+    {
+     "x": 96,
+     "z": -269,
+     "ry": -1.538,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 6.08,
+     "src": "made"
+    },
+    {
+     "x": 93.5,
+     "z": -275,
+     "ry": -0.183,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 6.1,
+     "src": "made",
+     "pace": [
+      93.5,
+      -275,
+      0
+     ],
+     "beat": [
+      [
+       93.5,
+       -270.5
+      ]
+     ]
+    },
+    {
+     "x": 91.5,
+     "z": -264,
+     "ry": 3.377,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": 2,
+      "j": -8,
+      "side": "S",
+      "u": 91.5,
+      "x": 91.5,
+      "z": -258.4
+     },
+     "far": 6.18,
+     "src": "published",
+     "pace": [
+      92.05,
+      -264,
+      -1.571
+     ]
+    },
+    {
+     "x": 84.5,
+     "z": -267,
+     "ry": 2.158,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 6.26,
+     "src": "made",
+     "pace": [
+      84.5,
+      -266.45,
+      -3.142
+     ]
+    },
+    {
+     "x": 88,
+     "z": -264,
+     "ry": -3.139,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": 2,
+      "j": -8,
+      "side": "S",
+      "u": 88,
+      "x": 88,
+      "z": -258.4
+     },
+     "far": 6.32,
+     "src": "published",
+     "pace": [
+      88.55,
+      -264,
+      -1.571
+     ]
+    }
+   ]
+  },
+  "precinct": {
+   "cityPlace": "police",
+   "name": "Precinct 9",
+   "place": "the precinct's Central Ave wall and its Kent St front (the steps, the green lamps, the two cruisers)",
+   "at": [
+    39.8,
+    -18.5
+   ],
+   "spots": {
+    "street": [
+     39.8,
+     -18.5
+    ],
+    "desk": [
+     40.3,
+     -18.5
+    ]
+   },
+   "fixtures": {
+    "desk": {
+     "id": "1_-1·precinct·structure·0",
+     "box": [
+      41.4,
+      0.2,
+      -29.6,
+      66.6,
+      22.2,
+      -7.4
+     ]
+    },
+    "front": {
+     "id": "1_-1·precinct·structure·0",
+     "box": [
+      41.4,
+      0.2,
+      -29.6,
+      66.6,
+      22.2,
+      -7.4
+     ]
+    }
+   },
+   "look": [
+    [
+     28.8,
+     5.5,
+     -18.5
+    ],
+    [
+     39.8,
+     1.6,
+     -18.5
+    ]
+   ],
+   "reach": 16,
+   "ways": {
+    "walk": {
+     "x": 40.2,
+     "z": -18.5,
+     "metres": 0.4
+    },
+    "kerb": {
+     "x": 33.88,
+     "z": -18.5,
+     "heading": 0,
+     "metres": 2.68
+    },
+    "subway": {
+     "id": "subway-1st-kent",
+     "name": "1ST ST",
+     "x": 57.5,
+     "z": -45.5,
+     "face": "+z",
+     "lines": [
+      "tide"
+     ],
+     "metres": 32.28
+    }
+   },
+   "missing": [
+    "a desk (bail is paid and tips are sold on the front steps: the precinct has no interior)"
+   ],
+   "blocks": [
+    [
+     1,
+     -1
+    ]
+   ],
+   "stands": [
+    {
+     "x": 39.8,
+     "z": -20,
+     "ry": 0.46,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "W",
+      "u": -20,
+      "x": 40.8,
+      "z": -20
+     },
+     "far": 1.5,
+     "src": "made"
+    },
+    {
+     "x": 39.8,
+     "z": -17,
+     "ry": 2.682,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "W",
+      "u": -17,
+      "x": 40.8,
+      "z": -17
+     },
+     "far": 1.5,
+     "src": "made"
+    },
+    {
+     "x": 39.8,
+     "z": -21.5,
+     "ry": -0.196,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "W",
+      "u": -21.5,
+      "x": 40.8,
+      "z": -21.5
+     },
+     "far": 3,
+     "src": "made",
+     "pace": [
+      39.8,
+      -20.95,
+      -3.142
+     ]
+    },
+    {
+     "x": 39.8,
+     "z": -15,
+     "ry": 2.665,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "W",
+      "u": -15,
+      "x": 40.8,
+      "z": -15
+     },
+     "far": 3.5,
+     "src": "made",
+     "pace": [
+      39.8,
+      -15,
+      -3.142
+     ]
+    },
+    {
+     "x": 41.8,
+     "z": -22,
+     "ry": -0.256,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "W",
+      "u": -22,
+      "x": 40.8,
+      "z": -22
+     },
+     "far": 4.03,
+     "src": "made"
+    },
+    {
+     "x": 41.8,
+     "z": -15,
+     "ry": -2.935,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "W",
+      "u": -15,
+      "x": 40.8,
+      "z": -15
+     },
+     "far": 4.03,
+     "src": "made"
+    },
+    {
+     "x": 39.8,
+     "z": -23,
+     "ry": -0.375,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "W",
+      "u": -23,
+      "x": 40.8,
+      "z": -23
+     },
+     "far": 4.5,
+     "src": "made"
+    },
+    {
+     "x": 39.8,
+     "z": -13.5,
+     "ry": 3.55,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "W",
+      "u": -13.5,
+      "x": 40.8,
+      "z": -13.5
+     },
+     "far": 5,
+     "src": "made"
+    },
+    {
+     "x": 41.8,
+     "z": -23.5,
+     "ry": -0.727,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "W",
+      "u": -23.5,
+      "x": 40.8,
+      "z": -23.5
+     },
+     "far": 5.39,
+     "src": "made",
+     "pace": [
+      41.8,
+      -22.95,
+      -3.142
+     ]
+    },
+    {
+     "x": 41.8,
+     "z": -13.5,
+     "ry": -2.716,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "W",
+      "u": -13.5,
+      "x": 40.8,
+      "z": -13.5
+     },
+     "far": 5.39,
+     "src": "made",
+     "pace": [
+      41.8,
+      -12.95,
+      -3.142
+     ]
+    },
+    {
+     "x": 39.8,
+     "z": -24.5,
+     "ry": 0.398,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "W",
+      "u": -24.5,
+      "x": 40.8,
+      "z": -24.5
+     },
+     "far": 6,
+     "src": "made",
+     "pace": [
+      39.8,
+      -24.5,
+      -3.142
+     ],
+     "beat": [
+      [
+       39.8,
+       -29
+      ]
+     ]
+    },
+    {
+     "x": 41.8,
+     "z": -25,
+     "ry": 0.153,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "W",
+      "u": -25,
+      "x": 40.8,
+      "z": -25
+     },
+     "far": 6.8,
+     "src": "made",
+     "pace": [
+      41.8,
+      -25,
+      -3.142
+     ],
+     "beat": [
+      [
+       41.8,
+       -29.5
+      ]
+     ]
+    },
+    {
+     "x": 41.8,
+     "z": -12,
+     "ry": -2.661,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "W",
+      "u": -12,
+      "x": 40.8,
+      "z": -12
+     },
+     "far": 6.8,
+     "src": "made",
+     "pace": [
+      41.8,
+      -10.85,
+      -3.142
+     ],
+     "beat": [
+      [
+       41.8,
+       -7.5
+      ]
+     ]
+    },
+    {
+     "x": 39.8,
+     "z": -26,
+     "ry": -0.292,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "W",
+      "u": -26,
+      "x": 40.8,
+      "z": -26
+     },
+     "far": 7.5,
+     "src": "made"
+    },
+    {
+     "x": 39.8,
+     "z": -11,
+     "ry": 3.281,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "W",
+      "u": -11,
+      "x": 40.8,
+      "z": -11
+     },
+     "far": 7.5,
+     "src": "made"
+    },
+    {
+     "x": 41.8,
+     "z": -26.5,
+     "ry": -0.244,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "W",
+      "u": -26.5,
+      "x": 40.8,
+      "z": -26.5
+     },
+     "far": 8.25,
+     "src": "made"
+    },
+    {
+     "x": 41.8,
+     "z": -10.5,
+     "ry": -3.367,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "W",
+      "u": -10.5,
+      "x": 40.8,
+      "z": -10.5
+     },
+     "far": 8.25,
+     "src": "made"
+    },
+    {
+     "x": 39.8,
+     "z": -27.5,
+     "ry": -0.155,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "W",
+      "u": -27.5,
+      "x": 40.8,
+      "z": -27.5
+     },
+     "far": 9,
+     "src": "made"
+    },
+    {
+     "x": 39.8,
+     "z": -9.5,
+     "ry": 2.833,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "W",
+      "u": -9.5,
+      "x": 40.8,
+      "z": -9.5
+     },
+     "far": 9,
+     "src": "made",
+     "pace": [
+      39.8,
+      -8.95,
+      -3.142
+     ]
+    },
+    {
+     "x": 41.8,
+     "z": -28,
+     "ry": -0.302,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "W",
+      "u": -28,
+      "x": 40.8,
+      "z": -28
+     },
+     "far": 9.71,
+     "src": "made"
+    },
+    {
+     "x": 41.8,
+     "z": -9,
+     "ry": -2.818,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "W",
+      "u": -9,
+      "x": 40.8,
+      "z": -9
+     },
+     "far": 9.71,
+     "src": "made"
+    },
+    {
+     "x": 39.8,
+     "z": -29,
+     "ry": 0.02,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "W",
+      "u": -29,
+      "x": 40.8,
+      "z": -29
+     },
+     "far": 10.5,
+     "src": "made"
+    },
+    {
+     "x": 43.3,
+     "z": -28.5,
+     "ry": -0.832,
+     "st": -1.571,
+     "kind": "wall",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "W",
+      "u": -29.1,
+      "x": 40.8,
+      "z": -29.1
+     },
+     "far": 10.59,
+     "src": "made",
+     "lean": [
+      43.3,
+      -28.3,
+      -3.142
+     ]
+    },
+    {
+     "x": 43.3,
+     "z": -8.5,
+     "ry": -2.968,
+     "st": -1.571,
+     "kind": "wall",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "S",
+      "u": 43.3,
+      "x": 43.3,
+      "z": -6.4
+     },
+     "far": 10.59,
+     "src": "made",
+     "lean": [
+      43.3,
+      -8.7,
+      0
+     ],
+     "pace": [
+      43.3,
+      -7.35,
+      -3.142
+     ]
+    },
+    {
+     "x": 44.8,
+     "z": -28.5,
+     "ry": -0.839,
+     "st": 3.142,
+     "kind": "wall",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "N",
+      "u": 44.8,
+      "x": 44.8,
+      "z": -31.2
+     },
+     "far": 11.18,
+     "src": "made",
+     "lean": [
+      44.8,
+      -28.3,
+      -3.142
+     ],
+     "pace": [
+      44.25,
+      -28.5,
+      1.571
+     ]
+    },
+    {
+     "x": 44.8,
+     "z": -8.5,
+     "ry": -2.899,
+     "st": 0,
+     "kind": "wall",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "S",
+      "u": 44.8,
+      "x": 44.8,
+      "z": -6.4
+     },
+     "far": 11.18,
+     "src": "made",
+     "lean": [
+      44.8,
+      -8.7,
+      0
+     ],
+     "pace": [
+      45.35,
+      -8.5,
+      -1.571
+     ]
+    },
+    {
+     "x": 42.3,
+     "z": -7.5,
+     "ry": -2.882,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "S",
+      "u": 42.6,
+      "x": 42.6,
+      "z": -6.4
+     },
+     "far": 11.28,
+     "src": "made"
+    },
+    {
+     "x": 41.8,
+     "z": -30,
+     "ry": -0.237,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "W",
+      "u": -30,
+      "x": 40.8,
+      "z": -30
+     },
+     "far": 11.67,
+     "src": "made"
+    },
+    {
+     "x": 46.3,
+     "z": -28.5,
+     "ry": -0.969,
+     "st": 3.142,
+     "kind": "wall",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "N",
+      "u": 46.3,
+      "x": 46.3,
+      "z": -31.2
+     },
+     "far": 11.93,
+     "src": "made",
+     "lean": [
+      46.3,
+      -28.3,
+      -3.142
+     ]
+    },
+    {
+     "x": 46.3,
+     "z": -8.5,
+     "ry": -2.835,
+     "st": 0,
+     "kind": "wall",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "S",
+      "u": 46.3,
+      "x": 46.3,
+      "z": -6.4
+     },
+     "far": 11.93,
+     "src": "made",
+     "lean": [
+      46.3,
+      -8.7,
+      0
+     ]
+    },
+    {
+     "x": 43.8,
+     "z": -30,
+     "ry": -0.151,
+     "st": 3.142,
+     "kind": "open",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "N",
+      "u": 43.8,
+      "x": 43.8,
+      "z": -31.2
+     },
+     "far": 12.18,
+     "src": "made",
+     "pace": [
+      43.8,
+      -30,
+      1.571
+     ],
+     "beat": [
+      [
+       48.3,
+       -30
+      ]
+     ]
+    },
+    {
+     "x": 47.8,
+     "z": -28.5,
+     "ry": -0.983,
+     "st": 3.142,
+     "kind": "wall",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "N",
+      "u": 47.8,
+      "x": 47.8,
+      "z": -31.2
+     },
+     "far": 12.81,
+     "src": "made",
+     "lean": [
+      47.8,
+      -28.3,
+      -3.142
+     ],
+     "pace": [
+      47.25,
+      -28.5,
+      1.571
+     ]
+    },
+    {
+     "x": 47.8,
+     "z": -8.5,
+     "ry": -2.596,
+     "st": 0,
+     "kind": "wall",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "S",
+      "u": 47.8,
+      "x": 47.8,
+      "z": -6.4
+     },
+     "far": 12.81,
+     "src": "made",
+     "lean": [
+      47.8,
+      -8.7,
+      0
+     ],
+     "pace": [
+      48.35,
+      -8.5,
+      -1.571
+     ]
+    },
+    {
+     "x": 42.3,
+     "z": -5,
+     "ry": -2.927,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "S",
+      "u": 41.8,
+      "x": 41.8,
+      "z": -6
+     },
+     "far": 13.73,
+     "src": "made",
+     "pace": [
+      42.85,
+      -5,
+      -1.571
+     ]
+    },
+    {
+     "x": 49.3,
+     "z": -28.5,
+     "ry": -0.759,
+     "st": 3.142,
+     "kind": "wall",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "N",
+      "u": 49.3,
+      "x": 49.3,
+      "z": -31.2
+     },
+     "far": 13.79,
+     "src": "made",
+     "lean": [
+      49.3,
+      -28.3,
+      -3.142
+     ]
+    },
+    {
+     "x": 49.3,
+     "z": -8.5,
+     "ry": -1.909,
+     "st": 0,
+     "kind": "wall",
+     "entry": {
+      "i": 1,
+      "j": -1,
+      "side": "S",
+      "u": 49.3,
+      "x": 49.3,
+      "z": -6.4
+     },
+     "far": 13.79,
+     "src": "made",
+     "lean": [
+      49.3,
+      -8.7,
+      0
+     ],
+     "pace": [
+      50.45,
+      -8.5,
+      -1.571
+     ],
+     "beat": [
+      [
+       53.8,
+       -8.5
+      ]
+     ]
+    }
+   ]
+  }
+ },
+ "held": {
+  "jail": {
+   "cityPlace": "jail",
+   "name": "Iron Island",
+   "place": "the exercise yard: the bench by the fence, the ground by the bleachers and the weights",
+   "at": [
+    291.5,
+    -382.6
+   ],
+   "spots": {
+    "street": [
+     291.5,
+     -382.6
+    ],
+    "cell": [
+     291,
+     -382.6
+    ]
+   },
+   "fixtures": {
+    "cell": {
+     "id": "8_-11·yard-life·bench·0",
+     "box": [
+      289.3,
+      0.4,
+      -383.5,
+      289.9,
+      1.2,
+      -381.7
+     ]
+    },
+    "front": {
+     "id": "8_-12·cells·structure·0",
+     "box": [
+      288,
+      0.2,
+      -416.4,
+      308.4,
+      15.8,
+      -399.6
+     ]
+    }
+   },
+   "look": [
+    [
+     288.69,
+     5.5,
+     -371.96
+    ],
+    [
+     291.5,
+     1.6,
+     -382.6
+    ]
+   ],
+   "reach": 12,
+   "ways": {
+    "walk": {
+     "x": 243.8,
+     "z": -286.8,
+     "metres": 107.02
+    },
+    "kerb": {
+     "x": 255.2,
+     "z": -287.5,
+     "heading": 3.14,
+     "metres": 101.79
+    },
+    "subway": {
+     "id": "subway-low-tide",
+     "name": "LOW TIDE",
+     "x": 82.5,
+     "z": -242.5,
+     "face": "-z",
+     "lines": [
+      "tide",
+      "harbor"
+     ],
+     "metres": 251.61
+    }
+   },
+   "missing": [
+    "a cell (prisoners are held in the exercise yard: the cell blocks are solid buildings)"
+   ],
+   "blocks": [
+    [
+     8,
+     -11
+    ]
+   ],
+   "stands": [
+    {
+     "x": 291.5,
+     "z": -383.5,
+     "ry": -0.113,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 0.9,
+     "src": "published",
+     "pace": [
+      291.5,
+      -383.5,
+      -3.142
+     ],
+     "beat": [
+      [
+       291.5,
+       -386.5
+      ]
+     ]
+    },
+    {
+     "x": 292,
+     "z": -381.5,
+     "ry": -2.732,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 1.21,
+     "src": "published",
+     "pace": [
+      292,
+      -381.5,
+      -3.142
+     ]
+    },
+    {
+     "x": 289.93,
+     "z": -383.02,
+     "ry": 1.571,
+     "st": null,
+     "kind": "bench",
+     "entry": null,
+     "far": 1.63,
+     "src": "seats",
+     "y": 0.3,
+     "piece": "8_-11·yard-life·bench·0"
+    },
+    {
+     "x": 289.93,
+     "z": -382.18,
+     "ry": 1.571,
+     "st": null,
+     "kind": "bench",
+     "entry": null,
+     "far": 1.63,
+     "src": "seats",
+     "y": 0.3,
+     "piece": "8_-11·yard-life·bench·0"
+    },
+    {
+     "x": 290.5,
+     "z": -381,
+     "ry": 2.106,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 1.89,
+     "src": "published",
+     "pace": [
+      290.5,
+      -380.45,
+      -3.142
+     ]
+    },
+    {
+     "x": 291.5,
+     "z": -380,
+     "ry": 3.365,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 2.6,
+     "src": "published",
+     "pace": [
+      291.5,
+      -379.45,
+      -3.142
+     ]
+    },
+    {
+     "x": 293,
+     "z": -380,
+     "ry": -2.537,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 3,
+     "src": "published",
+     "pace": [
+      293,
+      -380,
+      -3.142
+     ],
+     "beat": [
+      [
+       293,
+       -384.5
+      ]
+     ]
+    },
+    {
+     "x": 289.5,
+     "z": -380,
+     "ry": 2.873,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 3.28,
+     "src": "published",
+     "pace": [
+      289.5,
+      -380,
+      -3.142
+     ]
+    },
+    {
+     "x": 290.5,
+     "z": -379,
+     "ry": 2.842,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 3.74,
+     "src": "published",
+     "pace": [
+      290.5,
+      -378.45,
+      -3.142
+     ]
+    },
+    {
+     "x": 292,
+     "z": -378.5,
+     "ry": -3.251,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 4.13,
+     "src": "published"
+    }
+   ]
+  },
+  "clinic": {
+   "cityPlace": "hospital",
+   "name": "St. Mercy",
+   "place": "the forecourt by the main entrance: its bench, the two garden benches, the wheelchair and the IV pole",
+   "at": [
+    165,
+    -23
+   ],
+   "spots": {
+    "street": [
+     165,
+     -23
+    ],
+    "bed": [
+     165,
+     -21.9
+    ]
+   },
+   "fixtures": {
+    "bed": {
+     "id": "4_-1·forecourt·bench·0",
+     "box": [
+      164.1,
+      0.3,
+      -20.8,
+      165.9,
+      1.2,
+      -20.2
+     ]
+    }
+   },
+   "look": [
+    [
+     157.19,
+     5.5,
+     -15.19
+    ],
+    [
+     165,
+     1.6,
+     -23
+    ]
+   ],
+   "reach": 16,
+   "ways": {
+    "walk": {
+     "x": 149.2,
+     "z": -23,
+     "metres": 15.8
+    },
+    "kerb": {
+     "x": 147.12,
+     "z": -23,
+     "heading": 3.14,
+     "metres": 20
+    },
+    "subway": {
+     "id": "subway-st-mercy",
+     "name": "ST MERCY",
+     "x": 123.5,
+     "z": -9.5,
+     "face": "+z",
+     "lines": [
+      "neon"
+     ],
+     "metres": 43.64
+    }
+   },
+   "missing": [
+    "a bed (patients sit on the forecourt's benches. The one gurney the city has, 4_-2·court·gurney·0, stands in the ambulance court 32 m north of the forecourt, which the city's own notes put under the EMERGENCY canopy)"
+   ],
+   "blocks": [
+    [
+     4,
+     -1
+    ]
+   ],
+   "stands": [
+    {
+     "x": 165,
+     "z": -23,
+     "ry": -0.229,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 0,
+     "src": "made",
+     "pace": [
+      164.45,
+      -23,
+      1.571
+     ]
+    },
+    {
+     "x": 164,
+     "z": -24,
+     "ry": 1.015,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 1.41,
+     "src": "made",
+     "pace": [
+      163.45,
+      -24,
+      1.571
+     ],
+     "beat": [
+      [
+       159.5,
+       -24
+      ]
+     ]
+    },
+    {
+     "x": 164,
+     "z": -22,
+     "ry": 2.721,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 1.41,
+     "src": "made",
+     "pace": [
+      163.45,
+      -22,
+      1.571
+     ],
+     "beat": [
+      [
+       159.5,
+       -22
+      ]
+     ]
+    },
+    {
+     "x": 166,
+     "z": -24,
+     "ry": -0.655,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 1.41,
+     "src": "made",
+     "pace": [
+      166,
+      -24,
+      1.571
+     ]
+    },
+    {
+     "x": 166,
+     "z": -22,
+     "ry": -1.999,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 1.41,
+     "src": "made"
+    },
+    {
+     "x": 163,
+     "z": -23,
+     "ry": 1.396,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 2,
+     "src": "made",
+     "pace": [
+      162.45,
+      -23,
+      1.571
+     ],
+     "beat": [
+      [
+       158.5,
+       -23
+      ]
+     ]
+    },
+    {
+     "x": 165,
+     "z": -25,
+     "ry": -0.231,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 2,
+     "src": "made",
+     "pace": [
+      164.45,
+      -25,
+      1.571
+     ]
+    },
+    {
+     "x": 167,
+     "z": -23,
+     "ry": -1.735,
+     "st": 1.571,
+     "kind": "wall",
+     "entry": null,
+     "far": 2,
+     "src": "made",
+     "lean": [
+      167.7,
+      -23,
+      -1.571
+     ],
+     "pace": [
+      167,
+      -23,
+      0
+     ]
+    },
+    {
+     "x": 164.58,
+     "z": -20.83,
+     "ry": 3.142,
+     "st": null,
+     "kind": "bench",
+     "entry": null,
+     "far": 2.21,
+     "src": "seats",
+     "y": 0.3,
+     "piece": "4_-1·forecourt·bench·0"
+    },
+    {
+     "x": 165.42,
+     "z": -20.83,
+     "ry": 3.142,
+     "st": null,
+     "kind": "bench",
+     "entry": null,
+     "far": 2.21,
+     "src": "seats",
+     "y": 0.3,
+     "piece": "4_-1·forecourt·bench·0"
+    },
+    {
+     "x": 163,
+     "z": -25,
+     "ry": 0.305,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 2.83,
+     "src": "made",
+     "pace": [
+      162.45,
+      -25,
+      1.571
+     ],
+     "beat": [
+      [
+       160,
+       -25
+      ]
+     ]
+    },
+    {
+     "x": 163,
+     "z": -21,
+     "ry": 2.019,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 4,
+      "j": -1,
+      "side": "W",
+      "u": -17.7,
+      "x": 150.4,
+      "z": -17.7
+     },
+     "far": 2.83,
+     "src": "made",
+     "pace": [
+      163,
+      -19.85,
+      -3.142
+     ]
+    },
+    {
+     "x": 167,
+     "z": -25,
+     "ry": -1.263,
+     "st": 3.142,
+     "kind": "wall",
+     "entry": null,
+     "far": 2.83,
+     "src": "made",
+     "lean": [
+      167.7,
+      -25,
+      -1.571
+     ],
+     "pace": [
+      166.45,
+      -25,
+      1.571
+     ]
+    },
+    {
+     "x": 167,
+     "z": -21,
+     "ry": -2.383,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 2.83,
+     "src": "made"
+    },
+    {
+     "x": 164,
+     "z": -25.9,
+     "ry": -0.02,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 3.07,
+     "src": "made",
+     "pace": [
+      163.45,
+      -25.9,
+      1.571
+     ],
+     "beat": [
+      [
+       159.5,
+       -25.9
+      ]
+     ]
+    },
+    {
+     "x": 166,
+     "z": -25.9,
+     "ry": -0.401,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 3.07,
+     "src": "made",
+     "pace": [
+      166,
+      -25.9,
+      1.571
+     ]
+    },
+    {
+     "x": 162,
+     "z": -23.9,
+     "ry": 1.635,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 3.13,
+     "src": "made"
+    },
+    {
+     "x": 162,
+     "z": -21.9,
+     "ry": 2.174,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 4,
+      "j": -1,
+      "side": "W",
+      "u": -16.5,
+      "x": 150.4,
+      "z": -16.5
+     },
+     "far": 3.2,
+     "src": "made"
+    },
+    {
+     "x": 163.5,
+     "z": -19.4,
+     "ry": 3.164,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": 4,
+      "j": -1,
+      "side": "W",
+      "u": -19,
+      "x": 150.4,
+      "z": -19
+     },
+     "far": 3.9,
+     "src": "made",
+     "beat": [
+      [
+       165.5,
+       -19.4
+      ]
+     ]
+    },
+    {
+     "x": 161,
+     "z": -22.9,
+     "ry": 1.445,
+     "st": -1.571,
+     "kind": "open",
+     "entry": {
+      "i": 4,
+      "j": -1,
+      "side": "W",
+      "u": -14.6,
+      "x": 150.4,
+      "z": -14.6
+     },
+     "far": 4,
+     "src": "made"
+    },
+    {
+     "x": 167.5,
+     "z": -26.5,
+     "ry": -0.321,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 4.3,
+     "src": "made"
+    },
+    {
+     "x": 168,
+     "z": -19.9,
+     "ry": -2.48,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 4.31,
+     "src": "made",
+     "pace": [
+      168,
+      -19.9,
+      0
+     ],
+     "beat": [
+      [
+       168,
+       -17.9
+      ]
+     ]
+    },
+    {
+     "x": 166,
+     "z": -27.5,
+     "ry": -0.418,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 4.61,
+     "src": "made",
+     "pace": [
+      165.45,
+      -27.5,
+      1.571
+     ],
+     "beat": [
+      [
+       163,
+       -27.5
+      ]
+     ]
+    },
+    {
+     "x": 162,
+     "z": -26.5,
+     "ry": 0.399,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 4.61,
+     "src": "made"
+    },
+    {
+     "x": 164.5,
+     "z": -18.4,
+     "ry": 2.727,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": 4,
+      "j": -1,
+      "side": "S",
+      "u": 157.6,
+      "x": 157.6,
+      "z": -6.4
+     },
+     "far": 4.63,
+     "src": "made"
+    },
+    {
+     "x": 163,
+     "z": -27.5,
+     "ry": 0.322,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 4.92,
+     "src": "made"
+    },
+    {
+     "x": 167,
+     "z": -18.4,
+     "ry": -2.616,
+     "st": 1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 5.02,
+     "src": "made"
+    },
+    {
+     "x": 164.5,
+     "z": -28,
+     "ry": 0.11,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 5.02,
+     "src": "made"
+    },
+    {
+     "x": 160,
+     "z": -24.5,
+     "ry": 0.847,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 5.22,
+     "src": "made"
+    },
+    {
+     "x": 163,
+     "z": -18,
+     "ry": 2.711,
+     "st": 0,
+     "kind": "open",
+     "entry": {
+      "i": 4,
+      "j": -1,
+      "side": "S",
+      "u": 158.5,
+      "x": 158.5,
+      "z": -6.4
+     },
+     "far": 5.39,
+     "src": "made"
+    },
+    {
+     "x": 159.5,
+     "z": -23,
+     "ry": 1.643,
+     "st": -1.571,
+     "kind": "open",
+     "entry": null,
+     "far": 5.5,
+     "src": "made"
+    },
+    {
+     "x": 167.5,
+     "z": -28,
+     "ry": -0.665,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 5.59,
+     "src": "made"
+    },
+    {
+     "x": 161.82,
+     "z": -28.02,
+     "ry": 0,
+     "st": null,
+     "kind": "bench",
+     "entry": null,
+     "far": 5.94,
+     "src": "seats",
+     "y": 0.3,
+     "piece": "4_-1·garden·bench·0"
+    },
+    {
+     "x": 165,
+     "z": -17,
+     "ry": 3.341,
+     "st": 0,
+     "kind": "open",
+     "entry": null,
+     "far": 6,
+     "src": "made",
+     "pace": [
+      165,
+      -17,
+      -1.571
+     ],
+     "beat": [
+      [
+       160.5,
+       -17
+      ]
+     ]
+    },
+    {
+     "x": 169,
+     "z": -18.5,
+     "ry": -2.231,
+     "st": 1.571,
+     "kind": "open",
+     "entry": {
+      "i": 4,
+      "j": -1,
+      "side": "S",
+      "u": 175.5,
+      "x": 175.5,
+      "z": -6.4
+     },
+     "far": 6.02,
+     "src": "made",
+     "pace": [
+      169,
+      -19.05,
+      0
+     ]
+    },
+    {
+     "x": 165.5,
+     "z": -29,
+     "ry": -0.08,
+     "st": 3.142,
+     "kind": "open",
+     "entry": null,
+     "far": 6.02,
+     "src": "made"
+    },
+    {
+     "x": 160.98,
+     "z": -28.02,
+     "ry": 0,
+     "st": null,
+     "kind": "bench",
+     "entry": null,
+     "far": 6.43,
+     "src": "seats",
+     "y": 0.3,
+     "piece": "4_-1·garden·bench·0"
+    },
+    {
+     "x": 164.02,
+     "z": -35.52,
+     "ry": 0,
+     "st": null,
+     "kind": "bench",
+     "entry": null,
+     "far": 12.56,
+     "src": "seats",
+     "y": 0.3,
+     "piece": "4_-1·garden·bench·1"
+    },
+    {
+     "x": 163.18,
+     "z": -35.52,
+     "ry": 0,
+     "st": null,
+     "kind": "bench",
+     "entry": null,
+     "far": 12.65,
+     "src": "seats",
+     "y": 0.3,
+     "piece": "4_-1·garden·bench·1"
+    }
+   ]
+  }
+ },
+ "pads": {
+  "a1": {
+   "home": "lot:-212,-48",
+   "name": "Pad 28 Sunny Acres",
+   "door": [
+    -234,
+    -55
+   ],
+   "block": [
+    -7,
+    -2
+   ],
+   "far": 0
+  },
+  "a2": {
+   "home": "lot:-212,-64",
+   "name": "Pad 27 Sunny Acres",
+   "door": [
+    -234,
+    -57
+   ],
+   "block": [
+    -7,
+    -2
+   ],
+   "far": 2
+  },
+  "a3": {
+   "home": "lot:-221,-48",
+   "name": "Pad 26 Sunny Acres",
+   "door": [
+    -243,
+    -55
+   ],
+   "block": [
+    -7,
+    -2
+   ],
+   "far": 9
+  },
+  "a4": {
+   "home": "lot:-203,-48",
+   "name": "Pad 30 Sunny Acres",
+   "door": [
+    -225,
+    -55
+   ],
+   "block": [
+    -7,
+    -2
+   ],
+   "far": 9
+  },
+  "a5": {
+   "home": "lot:-221,-64",
+   "name": "Pad 25 Sunny Acres",
+   "door": [
+    -243,
+    -57
+   ],
+   "block": [
+    -7,
+    -2
+   ],
+   "far": 9.22
+  },
+  "a6": {
+   "home": "lot:-203,-64",
+   "name": "Pad 29 Sunny Acres",
+   "door": [
+    -225,
+    -57
+   ],
+   "block": [
+    -7,
+    -2
+   ],
+   "far": 9.22
+  },
+  "a7": {
+   "home": "lot:-230,-48",
+   "name": "Pad 24 Sunny Acres",
+   "door": [
+    -252,
+    -55
+   ],
+   "block": [
+    -8,
+    -2
+   ],
+   "far": 18
+  },
+  "a8": {
+   "home": "lot:-194,-48",
+   "name": "Pad 32 Sunny Acres",
+   "door": [
+    -216,
+    -55
+   ],
+   "block": [
+    -6,
+    -2
+   ],
+   "far": 18
+  },
+  "a9": {
+   "home": "lot:-230,-64",
+   "name": "Pad 23 Sunny Acres",
+   "door": [
+    -252,
+    -57
+   ],
+   "block": [
+    -8,
+    -2
+   ],
+   "far": 18.11
+  },
+  "a10": {
+   "home": "lot:-194,-64",
+   "name": "Pad 31 Sunny Acres",
+   "door": [
+    -216,
+    -57
+   ],
+   "block": [
+    -6,
+    -2
+   ],
+   "far": 18.11
+  }
+ },
+ "trips": {
+  "projects>market": {
+   "straight": 214,
+   "walk": {
+    "seconds": 265,
+    "metres": 397
+   },
+   "scooter": {
+    "seconds": 80,
+    "metres": 300
+   },
+   "subway": {
+    "seconds": 263,
+    "metres": 463
+   },
+   "taxi": {
+    "seconds": 203,
+    "metres": 425
+   }
+  },
+  "projects>corner": {
+   "straight": 214,
+   "walk": {
+    "seconds": 263,
+    "metres": 395
+   },
+   "scooter": {
+    "seconds": 77,
+    "metres": 298
+   },
+   "subway": {
+    "seconds": 261,
+    "metres": 460
+   },
+   "taxi": {
+    "seconds": 199,
+    "metres": 419
+   }
+  },
+  "market>projects": {
+   "straight": 214,
+   "walk": {
+    "seconds": 200,
+    "metres": 300
+   },
+   "scooter": {
+    "seconds": 80,
+    "metres": 300
+   },
+   "subway": {
+    "seconds": 228,
+    "metres": 400
+   },
+   "taxi": {
+    "seconds": 183,
+    "metres": 359
+   }
+  },
+  "market>uptown": {
+   "straight": 92,
+   "walk": {
+    "seconds": 87,
+    "metres": 130
+   },
+   "scooter": {
+    "seconds": 29,
+    "metres": 130
+   },
+   "subway": {
+    "seconds": 159,
+    "metres": 323
+   },
+   "taxi": {
+    "seconds": 113,
+    "metres": 287
+   }
+  },
+  "market>bar": {
+   "straight": 39,
+   "walk": {
+    "seconds": 36,
+    "metres": 53
+   },
+   "scooter": {
+    "seconds": 13,
+    "metres": 53
+   },
+   "subway": {
+    "seconds": 167,
+    "metres": 321
+   },
+   "taxi": {
+    "seconds": 43,
+    "metres": 51
+   }
+  },
+  "uptown>market": {
+   "straight": 92,
+   "walk": {
+    "seconds": 87,
+    "metres": 130
+   },
+   "scooter": {
+    "seconds": 29,
+    "metres": 130
+   },
+   "subway": {
+    "seconds": 164,
+    "metres": 323
+   },
+   "taxi": {
+    "seconds": 97,
+    "metres": 126
+   }
+  },
+  "uptown>park": {
+   "straight": 219,
+   "walk": {
+    "seconds": 168,
+    "metres": 252
+   },
+   "scooter": {
+    "seconds": 52,
+    "metres": 252
+   },
+   "subway": {
+    "seconds": 110,
+    "metres": 272
+   },
+   "taxi": {
+    "seconds": 114,
+    "metres": 251
+   }
+  },
+  "corner>projects": {
+   "straight": 214,
+   "walk": {
+    "seconds": 198,
+    "metres": 298
+   },
+   "scooter": {
+    "seconds": 77,
+    "metres": 298
+   },
+   "subway": {
+    "seconds": 228,
+    "metres": 398
+   },
+   "taxi": {
+    "seconds": 183,
+    "metres": 357
+   }
+  },
+  "corner>bar": {
+   "straight": 40,
+   "walk": {
+    "seconds": 34,
+    "metres": 51
+   },
+   "scooter": {
+    "seconds": 10,
+    "metres": 51
+   },
+   "subway": {
+    "seconds": 167,
+    "metres": 315
+   },
+   "taxi": {
+    "seconds": 40,
+    "metres": 49
+   }
+  },
+  "corner>docks": {
+   "straight": 341,
+   "walk": {
+    "seconds": 298,
+    "metres": 447
+   },
+   "scooter": {
+    "seconds": 77,
+    "metres": 447
+   },
+   "subway": {
+    "seconds": 181,
+    "metres": 432
+   },
+   "taxi": {
+    "seconds": 116,
+    "metres": 502
+   }
+  },
+  "bar>market": {
+   "straight": 39,
+   "walk": {
+    "seconds": 34,
+    "metres": 51
+   },
+   "scooter": {
+    "seconds": 13,
+    "metres": 53
+   },
+   "subway": {
+    "seconds": 171,
+    "metres": 338
+   },
+   "taxi": {
+    "seconds": 115,
+    "metres": 126
+   }
+  },
+  "bar>corner": {
+   "straight": 40,
+   "walk": {
+    "seconds": 32,
+    "metres": 49
+   },
+   "scooter": {
+    "seconds": 10,
+    "metres": 51
+   },
+   "subway": {
+    "seconds": 166,
+    "metres": 332
+   },
+   "taxi": {
+    "seconds": 111,
+    "metres": 120
+   }
+  },
+  "bar>park": {
+   "straight": 177,
+   "walk": {
+    "seconds": 152,
+    "metres": 229
+   },
+   "scooter": {
+    "seconds": 43,
+    "metres": 231
+   },
+   "subway": {
+    "seconds": 140,
+    "metres": 415
+   },
+   "taxi": {
+    "seconds": 109,
+    "metres": 273
+   }
+  },
+  "bar>precinct": {
+   "straight": 132,
+   "walk": {
+    "seconds": 114,
+    "metres": 172
+   },
+   "scooter": {
+    "seconds": 28,
+    "metres": 174
+   },
+   "subway": {
+    "seconds": 130,
+    "metres": 276
+   },
+   "taxi": {
+    "seconds": 100,
+    "metres": 274
+   }
+  },
+  "park>uptown": {
+   "straight": 219,
+   "walk": {
+    "seconds": 168,
+    "metres": 252
+   },
+   "scooter": {
+    "seconds": 52,
+    "metres": 252
+   },
+   "subway": {
+    "seconds": 115,
+    "metres": 272
+   },
+   "taxi": {
+    "seconds": 200,
+    "metres": 420
+   }
+  },
+  "park>bar": {
+   "straight": 177,
+   "walk": {
+    "seconds": 154,
+    "metres": 231
+   },
+   "scooter": {
+    "seconds": 43,
+    "metres": 231
+   },
+   "subway": {
+    "seconds": 137,
+    "metres": 398
+   },
+   "taxi": {
+    "seconds": 116,
+    "metres": 224
+   }
+  },
+  "docks>corner": {
+   "straight": 341,
+   "walk": {
+    "seconds": 298,
+    "metres": 447
+   },
+   "scooter": {
+    "seconds": 77,
+    "metres": 447
+   },
+   "subway": {
+    "seconds": 182,
+    "metres": 447
+   },
+   "taxi": {
+    "seconds": 173,
+    "metres": 481
+   }
+  },
+  "docks>precinct": {
+   "straight": 256,
+   "walk": {
+    "seconds": 212,
+    "metres": 319
+   },
+   "scooter": {
+    "seconds": 53,
+    "metres": 302
+   },
+   "subway": {
+    "seconds": 137,
+    "metres": 325
+   },
+   "taxi": {
+    "seconds": 179,
+    "metres": 339
+   }
+  },
+  "precinct>bar": {
+   "straight": 132,
+   "walk": {
+    "seconds": 114,
+    "metres": 172
+   },
+   "scooter": {
+    "seconds": 28,
+    "metres": 174
+   },
+   "subway": {
+    "seconds": 137,
+    "metres": 276
+   },
+   "taxi": {
+    "seconds": 90,
+    "metres": 178
+   }
+  },
+  "precinct>docks": {
+   "straight": 256,
+   "walk": {
+    "seconds": 201,
+    "metres": 302
+   },
+   "scooter": {
+    "seconds": 53,
+    "metres": 302
+   },
+   "subway": {
+    "seconds": 121,
+    "metres": 293
+   },
+   "taxi": {
+    "seconds": 153,
+    "metres": 408
+   }
+  },
+  "jail>precinct": {
+   "straight": 443,
+   "walk": {
+    "seconds": 413,
+    "metres": 619
+   },
+   "scooter": {
+    "seconds": 161,
+    "metres": 603
+   },
+   "subway": {
+    "seconds": 317,
+    "metres": 598
+   },
+   "taxi": {
+    "seconds": 231,
+    "metres": 617
+   }
+  },
+  "projects>jail": {
+   "straight": 619,
+   "walk": {
+    "seconds": 566,
+    "metres": 848
+   },
+   "scooter": {
+    "seconds": 228,
+    "metres": 848
+   },
+   "subway": {
+    "seconds": 440,
+    "metres": 850
+   },
+   "taxi": {
+    "seconds": 403,
+    "metres": 846
+   }
+  },
+  "market>jail": {
+   "straight": 547,
+   "walk": {
+    "seconds": 503,
+    "metres": 755
+   },
+   "scooter": {
+    "seconds": 187,
+    "metres": 755
+   },
+   "subway": {
+    "seconds": 373,
+    "metres": 727
+   },
+   "taxi": {
+    "seconds": 315,
+    "metres": 795
+   }
+  },
+  "uptown>jail": {
+   "straight": 456,
+   "walk": {
+    "seconds": 417,
+    "metres": 625
+   },
+   "scooter": {
+    "seconds": 171,
+    "metres": 625
+   },
+   "subway": {
+    "seconds": 328,
+    "metres": 604
+   },
+   "taxi": {
+    "seconds": 271,
+    "metres": 655
+   }
+  },
+  "corner>jail": {
+   "straight": 542,
+   "walk": {
+    "seconds": 499,
+    "metres": 748
+   },
+   "scooter": {
+    "seconds": 185,
+    "metres": 748
+   },
+   "subway": {
+    "seconds": 373,
+    "metres": 720
+   },
+   "taxi": {
+    "seconds": 315,
+    "metres": 809
+   }
+  },
+  "bar>jail": {
+   "straight": 559,
+   "walk": {
+    "seconds": 516,
+    "metres": 773
+   },
+   "scooter": {
+    "seconds": 188,
+    "metres": 776
+   },
+   "subway": {
+    "seconds": 373,
+    "metres": 830
+   },
+   "taxi": {
+    "seconds": 315,
+    "metres": 766
+   }
+  },
+  "park>jail": {
+   "straight": 658,
+   "walk": {
+    "seconds": 585,
+    "metres": 877
+   },
+   "scooter": {
+    "seconds": 209,
+    "metres": 877
+   },
+   "subway": {
+    "seconds": 328,
+    "metres": 804
+   },
+   "taxi": {
+    "seconds": 315,
+    "metres": 907
+   }
+  },
+  "docks>jail": {
+   "straight": 231,
+   "walk": {
+    "seconds": 232,
+    "metres": 347
+   },
+   "scooter": {
+    "seconds": 125,
+    "metres": 326
+   },
+   "subway": {
+    "seconds": 388,
+    "metres": 620
+   },
+   "taxi": {
+    "seconds": 183,
+    "metres": 404
+   }
+  },
+  "precinct>jail": {
+   "straight": 443,
+   "walk": {
+    "seconds": 402,
+    "metres": 603
+   },
+   "scooter": {
+    "seconds": 161,
+    "metres": 603
+   },
+   "subway": {
+    "seconds": 313,
+    "metres": 582
+   },
+   "taxi": {
+    "seconds": 315,
+    "metres": 708
+   }
+  },
+  "clinic>bar": {
+   "straight": 253,
+   "walk": {
+    "seconds": 201,
+    "metres": 301
+   },
+   "scooter": {
+    "seconds": 56,
+    "metres": 303
+   },
+   "subway": {
+    "seconds": 137,
+    "metres": 349
+   },
+   "taxi": {
+    "seconds": 89,
+    "metres": 310
+   }
+  },
+  "projects>clinic": {
+   "straight": 400,
+   "walk": {
+    "seconds": 396,
+    "metres": 594
+   },
+   "scooter": {
+    "seconds": 111,
+    "metres": 476
+   },
+   "subway": {
+    "seconds": 282,
+    "metres": 672
+   },
+   "taxi": {
+    "seconds": 241,
+    "metres": 548
+   }
+  },
+  "market>clinic": {
+   "straight": 222,
+   "walk": {
+    "seconds": 188,
+    "metres": 282
+   },
+   "scooter": {
+    "seconds": 55,
+    "metres": 282
+   },
+   "subway": {
+    "seconds": 177,
+    "metres": 284
+   },
+   "taxi": {
+    "seconds": 169,
+    "metres": 324
+   }
+  },
+  "uptown>clinic": {
+   "straight": 147,
+   "walk": {
+    "seconds": 132,
+    "metres": 199
+   },
+   "scooter": {
+    "seconds": 42,
+    "metres": 178
+   },
+   "subway": {
+    "seconds": 147,
+    "metres": 243
+   },
+   "taxi": {
+    "seconds": 147,
+    "metres": 281
+   }
+  },
+  "corner>clinic": {
+   "straight": 219,
+   "walk": {
+    "seconds": 183,
+    "metres": 275
+   },
+   "scooter": {
+    "seconds": 52,
+    "metres": 275
+   },
+   "subway": {
+    "seconds": 177,
+    "metres": 277
+   },
+   "taxi": {
+    "seconds": 126,
+    "metres": 331
+   }
+  },
+  "bar>clinic": {
+   "straight": 253,
+   "walk": {
+    "seconds": 201,
+    "metres": 301
+   },
+   "scooter": {
+    "seconds": 56,
+    "metres": 303
+   },
+   "subway": {
+    "seconds": 162,
+    "metres": 387
+   },
+   "taxi": {
+    "seconds": 126,
+    "metres": 300
+   }
+  },
+  "park>clinic": {
+   "straight": 287,
+   "walk": {
+    "seconds": 269,
+    "metres": 404
+   },
+   "scooter": {
+    "seconds": 77,
+    "metres": 404
+   },
+   "subway": {
+    "seconds": 147,
+    "metres": 361
+   },
+   "taxi": {
+    "seconds": 169,
+    "metres": 436
+   }
+  },
+  "docks>clinic": {
+   "straight": 258,
+   "walk": {
+    "seconds": 252,
+    "metres": 379
+   },
+   "scooter": {
+    "seconds": 64,
+    "metres": 322
+   },
+   "subway": {
+    "seconds": 192,
+    "metres": 502
+   },
+   "taxi": {
+    "seconds": 104,
+    "metres": 322
+   }
+  },
+  "precinct>clinic": {
+   "straight": 125,
+   "walk": {
+    "seconds": 129,
+    "metres": 194
+   },
+   "scooter": {
+    "seconds": 32,
+    "metres": 157
+   },
+   "subway": {
+    "seconds": 147,
+    "metres": 239
+   },
+   "taxi": {
+    "seconds": 125,
+    "metres": 310
+   }
+  }
+ }
+}

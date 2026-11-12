@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hud-dev</title>
+<link rel="icon" href="data:,">
+<!--
+  The HUD's dev page: the panels over a flat stand-in for the 3D stage (demo/hud/stage-stub.js). Not the product:
+  the product is demo/index.html, the HUD over the city.
+
+    node demo/serve.mjs --port 5471        then http://127.0.0.1:5471/demo/hud-dev.html
+    ?selftest=play|watch|coach             a whole season on auto; the title ends as hud-ok or hud-fail: why
+    ?shot=<name>                           one screen, for demo/tools/hud-shots.mjs
+    ?mode=play&seat=robber&seed=3          straight into a season
+-->
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #17171b; }
+  #stage { position: fixed; inset: 0; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="hud"></div>
+<!-- the zte skin letters its headings in the city's own sign face, which the kit builds from city code that imports three:
+     the same import map as the city's page (demo/index.html), so the dev page wears the real look -->
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.185.1/examples/jsm/" } }</script>
+<script type="module" src="./hud/dev.js"></script>
+</body>
+</html>

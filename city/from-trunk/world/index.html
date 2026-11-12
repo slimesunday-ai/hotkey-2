@@ -1,0 +1,68 @@
+<meta charset="utf-8">
+<title>AI City · World v2</title>
+<style>
+  :root { --ink: #f3f1ec; --dim: #a9a7a1; --panel: rgba(17, 18, 22, .78); --line: rgba(255, 255, 255, .12); --hot: #ffd166; --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body { margin: 0; background: #0e0f12; color: var(--ink); font: 12px/1.35 var(--mono); overflow: hidden; }
+  #world { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+  .panel { position: fixed; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  #where { left: 14px; top: calc(14px + env(safe-area-inset-top, 0px)); padding: 9px 12px 10px; max-width: min(360px, 70vw); pointer-events: none; }
+  #where .d { font: 700 18px/1.1 system-ui, -apple-system, "Helvetica Neue", sans-serif; letter-spacing: .01em; }
+  #where .a { color: var(--dim); margin-top: 3px; }
+  #mapWin { right: 14px; top: calc(14px + env(safe-area-inset-top, 0px)); padding: 8px; width: 232px; }
+  #mapWin canvas { display: block; width: 232px; height: 232px; cursor: crosshair; image-rendering: pixelated; border-radius: 3px; }
+  #mapWin .t { display: flex; justify-content: space-between; color: var(--dim); margin-bottom: 6px; }
+  #mapWin button { all: unset; cursor: pointer; color: var(--dim); } #mapWin.min canvas { display: none; }
+  #bar { left: 14px; right: 14px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); padding: 6px 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  #stat { flex: 1; min-width: 180px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .btn { font: inherit; color: var(--ink); background: rgba(255, 255, 255, .06); border: 1px solid var(--line); border-radius: 4px; padding: 4px 9px; cursor: pointer; }
+  .btn:hover { background: rgba(255, 255, 255, .12); } .btn.on { background: var(--hot); color: #111; border-color: var(--hot); }
+  select.btn { padding: 3px 6px; } select.btn option { color: #111; }
+  .seg { display: flex; } .seg .btn { border-radius: 0; margin-left: -1px; } .seg .btn:first-child { border-radius: 4px 0 0 4px; } .seg .btn:last-child { border-radius: 0 4px 4px 0; }
+  #hint { left: 50%; transform: translateX(-50%); bottom: calc(62px + env(safe-area-inset-bottom, 0px)); padding: 5px 10px; color: var(--dim); pointer-events: none; transition: opacity .6s; }
+  #fade { position: fixed; inset: 0; background: #0e0f12; opacity: 0; pointer-events: none; transition: opacity .35s; display: grid; place-items: center; font: 700 22px system-ui, sans-serif; color: var(--ink); }
+  #tapWin { right: 14px; top: calc(270px + env(safe-area-inset-top, 0px)); bottom: calc(62px + env(safe-area-inset-bottom, 0px)); width: 360px; display: flex; flex-direction: column; }
+  #tapWin .hd { padding: 8px 10px 6px; display: flex; gap: 6px; align-items: center; border-bottom: 1px solid var(--line); }
+  #tapWin .hd b { flex: 1; font-weight: 600; }
+  .pane { flex: 1; min-height: 0; overflow: auto; padding: 4px 10px 8px; }
+  .ev { padding: 5px 0; border-bottom: 1px solid rgba(255, 255, 255, .06); }
+  .ev .tm { color: #77766f; font-size: 10px; } .ev .th { color: #9d9b94; font-style: italic; padding-left: 12px; }
+  .ev.scam, .ev.rug { color: #ff6b6b; } .ev.build { color: #8be28b; } .ev.build_fail { color: #ffb35c; } .ev.system { color: #8fb7ff; } .ev.whisper { color: #d69cff; } .ev.invalid { color: #6c6b66; } .ev.say b { color: var(--hot); }
+  table.board { width: 100%; border-collapse: collapse; } .board th { text-align: left; color: var(--dim); font-weight: normal; padding: 4px 3px; position: sticky; top: 0; background: #16171b; }
+  .board td { padding: 3px; white-space: nowrap; border-bottom: 1px solid rgba(255, 255, 255, .06); } .board tr { cursor: pointer; } .board tr.on td { background: var(--hot); color: #111; }
+  .whisper { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--line); } .whisper input { flex: 1; min-width: 0; font: inherit; color: var(--ink); background: rgba(255, 255, 255, .06); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; }
+  .bubble { position: fixed; left: 0; top: 0; transform: translate(-50%, -100%); background: #f7f4ea; color: #16161a; border-radius: 6px; padding: 3px 7px; max-width: 220px; pointer-events: none; font-size: 11px; line-height: 1.3; z-index: 2; box-shadow: 0 2px 0 rgba(0, 0, 0, .25); }
+  .bubble b { color: #7a4b00; }
+  #err { position: fixed; left: 14px; bottom: 70px; color: #ff8080; background: #000; font: 11px var(--mono); white-space: pre-wrap; max-width: 90%; z-index: 9; }
+  #err:empty { display: none; }
+  @media (max-width: 760px) { #mapWin { width: 132px; } #mapWin canvas { width: 132px; height: 132px; } #tapWin { left: 14px; width: auto; top: auto; height: 40vh; } #where .d { font-size: 15px; } .hideN { display: none !important; } }
+</style>
+
+<canvas id="world"></canvas>
+<div class="panel" id="where"><div class="d" id="dname">Loading the city…</div><div class="a" id="daddr"></div></div>
+<div class="panel" id="mapWin"><div class="t"><span>city map · click to go</span><button id="mapMin" aria-label="Toggle map">–</button></div><canvas id="map" width="256" height="256" aria-label="City map. Click to travel."></canvas></div>
+<div class="panel" id="tapWin" hidden><div class="hd"><b>wiretap</b><button class="btn on" id="tabFeed">Feed</button><button class="btn" id="tabAgents">Agents</button></div>
+  <div class="pane" id="feed"></div>
+  <div class="pane" id="agentsPane" hidden><table class="board"><thead><tr><th>agent</th><th>house</th><th>cr</th><th>crew</th><th>doing</th></tr></thead><tbody id="board"></tbody></table></div>
+  <div class="whisper" id="whisperRow" hidden><span id="whTo"></span><input id="whText" maxlength="200" placeholder="whisper (owner channel)"><button class="btn" id="whSend">Send</button></div></div>
+<div class="panel" id="hint">drag to look · right-drag or WASD to move · scroll to zoom · click the map to travel</div>
+<div class="panel" id="bar">
+  <div id="stat">…</div>
+  <select class="btn" id="goto" title="Go to a district"></select>
+  <button class="btn" id="tour">Tour</button>
+  <div class="seg" id="tod"><button class="btn" data-t="0.42">Day</button><button class="btn" data-t="0.735">Dusk</button><button class="btn" data-t="0.93">Night</button><button class="btn on" data-t="cycle">Cycle</button></div>
+  <select class="btn" id="pal" title="Palette"></select>
+  <select class="btn hideN" id="colors" title="Colour depth"><option value="0" selected>Clean</option><option value="1">256 colours</option><option value="2">16 colours</option></select>
+</div>
+<div id="fade"><span id="fadeTxt"></span></div>
+<div id="err"></div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.185.1/examples/jsm/"
+} }
+</script>
+<script>window.addEventListener('error', e => { const el = document.getElementById('err'); if (el) el.textContent += (e.message || e) + '\n'; });</script>
+<script type="module" src="./main.js"></script>

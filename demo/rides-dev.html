@@ -1,0 +1,55 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>hotkey 2 · rides (dev)</title>
+<link rel="icon" href="data:,">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  The ride scenes' own page (demo/stage/rides/). It loads the pinned city the way demo/index.html does (the same
+  elements, the same three.js, the city's main.js unchanged), the WHOLE city as it is (no small set, no set dressing),
+  then the stage's actors and the rides on top. Nothing here is read by the game page.
+
+  Query parameters go straight to the city (tod=night, q=low|medium|high, peds=0). cars defaults to 0, as on the
+  game's page (its cabs are ours; ?cars=1 lets the city's traffic run beside them).
+  Ours:
+    play=<scene>   play one scene on load: subway | scooter | subway2 | cab | foot (the trips are in stage/rides/dev.js)
+    plain=1        hide this page's own chrome
+  window.__rides = { ready, rides, actors, play(name, o), view(pos, tgt, fov), log }
+  Contact sheets: node demo/stage/rides/shots.mjs (see its header).
+-->
+<style>
+  html, body { margin: 0; height: 100%; background: #2f9bff; overflow: hidden; }
+  #stage canvas { display: block; }
+  #loadin { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+    background: #17171b; color: #f7f7f2; font: 800 15px/1.2 "Arial Black", Impact, sans-serif; text-transform: uppercase; letter-spacing: .04em;
+    transition: opacity .5s; }
+  #loadin.off { opacity: 0; pointer-events: none; }
+  #loadin b { color: #ffc21a; font-size: 34px; }
+  #loadin .bar { width: min(320px, 70vw); height: 10px; background: #2c2c33; }
+  #loadin .bar i { display: block; height: 100%; width: 0; background: #ffc21a; }
+  #err { position: fixed; left: 14px; bottom: 12px; z-index: 30; color: #fff; background: #c00; font: 12px monospace; white-space: pre-wrap; max-width: 60vw; }
+  #err:empty, #modfail:empty { display: none; }
+  #modfail { position: fixed; left: 14px; top: 56px; z-index: 30; color: #fff; background: #d7141a; font: 700 12px/1.4 ui-monospace, Menlo, monospace;
+    white-space: pre-wrap; max-width: 70vw; padding: 8px 10px; }
+  #tag { position: fixed; left: 14px; top: 14px; z-index: 10; background: #17171b; color: #ffc21a; padding: 8px 10px 7px;
+    font: 800 12px/1 "Arial Black", Impact, sans-serif; text-transform: uppercase; letter-spacing: .02em; }
+  #scenes { position: fixed; right: 14px; top: 14px; z-index: 10; display: flex; gap: 6px; }
+  #scenes button { background: #17171b; color: #f7f7f2; border: 0; padding: 7px 10px; font: 800 11px/1 "Arial Black", Impact, sans-serif; text-transform: uppercase; cursor: pointer; }
+  #scenes button:hover { color: #ffc21a; }
+  #say { position: fixed; left: 14px; bottom: 12px; z-index: 10; background: rgba(23, 23, 27, .88); color: #f7f7f2; padding: 5px 8px; font: 600 12px/1.3 ui-monospace, Menlo, monospace; }
+  #say:empty { display: none; }
+  body.plain #tag, body.plain #scenes, body.plain #say, body.plain #camhud, body.plain #camtoast { display: none !important; }
+</style>
+<div id="stage"></div>
+<div id="tag">hotkey 2 · rides (dev)</div>
+<div id="scenes"></div>
+<div id="say"></div>
+<div id="err"></div>
+<div id="modfail"></div>
+<div id="loadin"><b>hotkey 2</b><span id="loadmsg">waking the city</span><div class="bar"><i></i></div></div>
+<!-- three.js 0.185.1 from our own copy, as demo/index.html: keep the two in step -->
+<script type="importmap">{ "imports": { "three": "../city/vendor/three/build/three.module.js", "three/addons/": "../city/vendor/three/examples/jsm/" } }</script>
+<script>
+  addEventListener('error', e => { document.getElementById('err').textContent += (e.message || e) + '\n'; });
+  addEventListener('unhandledrejection', e => { document.getElementById('err').textContent += (e.reason && e.reason.stack || e.reason) + '\n'; });
+</script>
+<script type="module" src="./stage/rides/dev.js"></script>

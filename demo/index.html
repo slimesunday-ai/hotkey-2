@@ -1,0 +1,62 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>hotkey 2</title>
+<link rel="icon" href="data:,">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  hotkey 2 in the 3D city (SPEC section 24): the city, the stage in it, the panels over it.
+  The city is the pinned copy in city/from-trunk/ and is never edited: this page gives it the few elements it looks
+  for (#stage, #loadin, #err, #modfail), loads its main.js as it is, and then works through window.__city.
+  Everything else is ours: boot.js starts it, stage/ plays the game in the city, hud/ is the panels.
+  The ways to open this page are listed at the top of boot.js.
+-->
+<style>
+  html, body { margin: 0; height: 100%; background: #2f9bff; overflow: hidden; }
+  #stage canvas { display: block; }
+  /* the city's load-in veil: main.js adds .off when the view has settled */
+  #loadin { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+    background: #17171b; color: #f7f7f2; font: 800 15px/1.2 "Arial Black", Impact, sans-serif; text-transform: uppercase; letter-spacing: .04em;
+    transition: opacity .5s; }
+  #loadin.off { opacity: 0; pointer-events: none; }
+  /* the game keeps the veil until its panels are up (boot.js adds .up): the city lifts its own veil when the near
+     blocks are built, but the panels wait for the far ones too, and a bare city with nothing to click reads as broken */
+  body.game:not(.up) #loadin, body.game:not(.up) #loadin.off { opacity: 1; pointer-events: auto; }
+  #loadin small { font: 600 12px/1.4 ui-monospace, Menlo, monospace; text-transform: none; letter-spacing: 0; color: #a9a9b3; }
+  #loadin b { color: #ffc21a; font-size: 34px; }
+  #loadin .bar { width: min(320px, 70vw); height: 10px; background: #2c2c33; }
+  #loadin .bar i { display: block; height: 100%; width: 0; background: #ffc21a; }
+  #err { position: fixed; left: 14px; bottom: 12px; z-index: 30; color: #fff; background: #c00; font: 12px monospace; white-space: pre-wrap; max-width: 60vw; }
+  #err:empty, #modfail:empty { display: none; }
+  #modfail { position: fixed; left: 14px; top: 56px; z-index: 30; color: #fff; background: #d7141a; font: 700 12px/1.4 ui-monospace, Menlo, monospace;
+    white-space: pre-wrap; max-width: 70vw; padding: 8px 10px; }
+  #tag { position: fixed; left: 14px; top: 14px; z-index: 10; background: #17171b; color: #ffc21a; padding: 8px 10px 7px;
+    font: 800 12px/1 "Arial Black", Impact, sans-serif; text-transform: uppercase; letter-spacing: .02em; }
+  /* plain=1: a clean frame for screenshots (#camhud and #camtoast are the city's camera bar, made by its camera rig) */
+  body.plain #tag, body.plain .hint, body.plain #camhud, body.plain #camtoast { display: none !important; }
+  /* the game: the panels are the only chrome. The city's own on-page bits (its camera bar, key help, toasts) are
+     hidden, since the keys they name belong to the panels here */
+  body.game #tag, body.game .hint, body.game #camhud, body.game #camtoast, body.game #camx, body.game #camhelp { display: none !important; }
+  /* the panels' host lets the mouse through to the city wherever no panel is (the panels switch it back on themselves) */
+  #hud { position: fixed; inset: 0; z-index: 15; pointer-events: none; }
+  /* ... and so must the panels' own two full-page roots, or no click and no drag ever reaches the city (measured: a
+     real click on a person landed on the root, not on the canvas). Every panel takes the mouse back for itself. */
+  #hud #k, #hud .hk { pointer-events: none; }
+  #hud .hk-top, #hud .hk-left > *, #hud .hk-right, #hud .hk-ticker, #hud .hk-guide > *, #hud .hk-flyout, #hud .hk-toasts > * { pointer-events: auto; }
+  .hint { position: fixed; right: 14px; bottom: 12px; z-index: 10; font: 600 12px/1.3 "Arial Black", sans-serif; color: #fff;
+    background: rgba(23, 23, 27, .88); padding: 4px 8px 3px; text-transform: uppercase; }
+</style>
+<div id="stage"></div>
+<div id="tag">hotkey 2 · the city</div>
+<div class="hint">drag to move · right-drag to turn · scroll to zoom</div>
+<div id="err"></div>
+<div id="modfail"></div>
+<div id="hud"></div>
+<div id="loadin"><b>hotkey 2</b><span id="loadmsg">waking the city</span><div class="bar"><i></i></div><small>Only the part of the city you are in is built. The rest loads as you travel.</small></div>
+<!-- three.js 0.185.1, the version the pinned city was written against, from our own copy (city/vendor/three/,
+     fetched once by demo/tools/vendor-three.mjs): the page needs no network. Keep it in step when the pin moves. -->
+<script type="importmap">{ "imports": { "three": "../city/vendor/three/build/three.module.js", "three/addons/": "../city/vendor/three/examples/jsm/" } }</script>
+<script>
+  addEventListener('error', e => { document.getElementById('err').textContent += (e.message || e) + '\n'; });
+  addEventListener('unhandledrejection', e => { document.getElementById('err').textContent += (e.reason && e.reason.stack || e.reason) + '\n'; });
+</script>
+<script type="module" src="./boot.js"></script>

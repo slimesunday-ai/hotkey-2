@@ -1,0 +1,14 @@
+{
+  "name": "hotkey-2",
+  "private": true,
+  "license": "SEE LICENSE IN LICENSE",
+  "type": "module",
+  "description": "hotkey 2: a headless, seeded crime-economy game played by AI agents. Round 1: the core.",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "bots": "node run.mjs --bots --seeds 200",
+    "fake-season": "node run.mjs --ai --fake --lineup ai10 --seeds 1",
+    "check-keys": "node scripts/check-keys.mjs"
+  }
+}
