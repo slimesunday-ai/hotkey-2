@@ -9,8 +9,8 @@
 // the title `stage-ok` or `stage-fail: <why>`; this prints the numbers it left (hours, wall clock, frames a second).
 // With --shots, a picture is taken the first time each of these is on stage (the camera is cut in on the scene first): a robbery with the roll over it, a
 // hand-off, a street sale, an arrest, a spoken bubble, a phone chip, a confessional, the wide set early on, the fifth
-// hour (in play: the camera with the player), a night hour, the pen and the tent with someone in them, and (in play)
-// the player's own pad open.
+// hour (in play: the camera with the player), a night hour, the pen and the tent with someone in them, somebody shot
+// (at the shot and as they lie), the player held in the jail, and (in play) the player's own pad open.
 // --offline points the three.js CDN at a dead address, to prove the page needs no network for it.
 import path from 'node:path';
 import { launch } from './chrome.mjs';
@@ -30,6 +30,10 @@ const WANTED = [
   { name: 'robbery', delay: 1200, show: '^(rob|npc:robbers|fight)', test: `!!document.querySelector('.hk-roll') && S.playing.some(s => /^(rob|npc:robbers|fight)/.test(s.kind))` },
   { name: 'hand-off', delay: 2600, show: '^(pickup|gift)$', test: `S.playing.some(s => s.kind === 'pickup' || s.kind === 'gift')` },
   { name: 'street-sale', delay: 2600, show: '^work:deal$', test: `S.playing.some(s => s.kind === 'work:deal')` },
+  // (somebody shot, the blood: at the shot, and as they lie. And whoever is held in the jail, in its orange)
+  { name: 'shot', delay: 150, show: ':shot$', test: `!!S.blood && S.blood.wounds > 0` },
+  { name: 'shot-down', delay: 1800, show: ':shot$', test: `!!S.blood && S.blood.down > 0` },
+  { name: 'jail', delay: 3000, test: `S.inside.some(p => p.key === 'jail' && p.id === S.you)` },
   { name: 'arrest', delay: 2800, show: '^arrest$|:(arrest|bust|sting)$', test: `S.playing.some(s => s.kind === 'arrest' || /:(arrest|bust|sting)$/.test(s.kind))` },
   { name: 'talk-out-loud', delay: 500, test: `!!document.querySelector('.hk-air .hk-say, .hk-air [class*="say"], .hk-air [class*="bubble"]')` },
   { name: 'talk-phone', delay: 400, test: `!!document.querySelector('.hk-air .hk-phone-icon')` },
@@ -78,7 +82,12 @@ try {
     await page.sleep(todo.some(w => !w.done) ? 120 : 1000);
   }
   console.log(title || 'no verdict: the run outlasted this tool');
-  console.log(JSON.stringify(await page.evaluate('window.__stagetest ?? window.__demo.stage.debug()', 10000), null, 1));
+  const T = await page.evaluate('window.__stagetest ?? window.__demo.stage.debug()', 10000);
+  console.log(JSON.stringify(T, null, 1));
+  // (the audit's counts in one line, when it was on: the feet off the drawn ground and the heads over each other too)
+  const A = T?.stage?.audit ?? T?.audit ?? null;
+  if (A) console.log(`audit: ${['scenes', 'walks', 'overlaps', 'furniture', 'vanish', 'feet', 'heads', 'close', 'pushes', 'jumps', 'pops', 'through'].map(k => `${k} ${A[k] ?? '-'}`).join(' · ')}`);
+  if (A?.examples) for (const e of A.examples.filter(e => /^(feet|heads|vanish|overlap|furniture) /.test(e)).slice(0, 10)) console.log(`  ${e}`);
   const missed = todo.filter(w => !w.done).map(w => w.name);
   if (missed.length) console.log(`never on stage, so no picture: ${missed.join(', ')}`);
   const cdn = page.failed.filter(f => f.includes('jsdelivr'));

@@ -43,8 +43,16 @@ const ARRIVE_M = 6;
 const PACE = 2.3;
 /** A watched departure by a ride is over when they are out of the picture, and after this many seconds whatever. */
 const WATCHED = 14;
-/** And an arrival that has not got to its place after this many is put there. */
-const ARRIVING = 24;
+/** …unless they are still in it: then this many more at the most. */
+const WATCHED_MORE = 30;
+/**
+ * And an arrival that has not got to its place after this many is put there.
+ * (36, was 24: a watched arrival on foot starts as far as 26 m back along the lane, at the rides' own 1.5 m/s, and
+ * its spot can be seven metres more into a plaza: 35.9 m, 24.4 s. Glasswall Plaza's bench seats are the city's own
+ * sitters' now (figures.js), the spot given instead is that far in, and the arrival was put there two metres
+ * short. And on the lane it can stand some seconds behind one of the city's walkers waiting at a crossing)
+ */
+const ARRIVING = 36;
 
 export function createTravel({ city, actors, map }) {
   // ── the fade: the stage's own, over the city and under the panels (the panels never go dark) ───────────────────
@@ -53,7 +61,28 @@ export function createTravel({ city, actors, map }) {
   veil.style.cssText = `position: fixed; inset: 0; z-index: 12; background: #0b0b0e; opacity: 0; pointer-events: none; transition: opacity ${FADE_S}s linear;`;
   document.body.append(veil);
   const real = s => new Promise(resolve => setTimeout(resolve, s * 1000));
+  // (is a person in the camera's picture now? A body's sphere against the camera's frustum)
+  const VIEW = city.THREE ? { M: new city.THREE.Matrix4(), F: new city.THREE.Frustum(), S: new city.THREE.Sphere() } : null;
+  const seen = (id, r = 1.2) => {
+    if (!VIEW || !actors.has(id)) return false;
+    const A = actors.get(id);
+    if (A.w.hide) return false;
+    // (not in the picture while a place's inside view is up and they stand outside it: actors.js inPicture)
+    if (actors.pictureHides?.(A.x, A.y ?? 0, A.z)) return false;
+    const cam = city.camera;
+    cam.updateMatrixWorld();
+    VIEW.F.setFromProjectionMatrix(VIEW.M.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
+    VIEW.S.center.set(A.x, (A.y ?? 0) + 1, A.z);
+    VIEW.S.radius = r;
+    return VIEW.F.intersectsSphere(VIEW.S);
+  };
   let dark = 0;
+  // (black: the veil is all the way over, from the end of the fade out to the start of the fade in. The audit's
+  // `vanish` takes it as a cut of the whole picture: actors.js pictureDark)
+  let black = false;
+  // (and black at any moment since it was last asked: an hour settled at once under the black can begin and end
+  // between two frames, and what it put on is first drawn as the veil starts to lift)
+  let wasBlack = false;
   const count = { leaves: 0, arrives: 0, cuts: 0, noLane: 0, byMode: {}, capped: 0, cancelled: 0 };
   const tally = (half, mode, lead) => {
     const k = `${mode} ${half}${lead ? ', followed' : ''}`;
@@ -63,6 +92,15 @@ export function createTravel({ city, actors, map }) {
     get dark() {
       return dark > 0;
     },
+    get black() {
+      return black;
+    },
+    /** Black now, or at any moment since the last ask (the audit asks once a frame: actors.js pictureDark). */
+    sinceAsked() {
+      const was = black || wasBlack;
+      wasBlack = false;
+      return was;
+    },
     /** To black. Counted: two who ask for black get it until both have asked for the picture back. */
     async out() {
       dark += 1;
@@ -70,13 +108,34 @@ export function createTravel({ city, actors, map }) {
       count.cuts += 1;
       veil.style.opacity = '1';
       await real(FADE_S + 0.03);
+      black = dark > 0;
+      if (black) wasBlack = true;
     },
     async in() {
       dark = Math.max(0, dark - 1);
       if (dark) return;
+      black = false;
       veil.style.opacity = '0';
       await real(FADE_S);
     },
+    /**
+     * Black AT ONCE, no fade: for a change of view nobody walked into (a skipped hour settled inside or out of a
+     * place with an inside view, inside.js). Counted like out(); in() fades it away.
+     */
+    blackNow() {
+      dark += 1;
+      // (the audit's `vanish` takes it as a cut of the whole picture, as it does a faded black: `black`, above)
+      black = true;
+      wasBlack = true;
+      if (dark > 1 && veil.style.opacity === '1') return;
+      count.cuts += 1;
+      veil.style.transition = 'none';
+      veil.style.opacity = '1';
+      void veil.offsetWidth;
+      veil.style.transition = `opacity ${FADE_S}s linear`;
+    },
+    /** Seconds the fade takes each way, real time. */
+    seconds: FADE_S,
     /**
      * The black goes UNDER the city's carriage (its root is z 7 on the game's page) while one is open, and back over
      * everything of the city's when it has closed: the car rides over black, and what is under it when it closes
@@ -195,7 +254,9 @@ export function createTravel({ city, actors, map }) {
         } else await actors.seconds(LEAVE_S);
       },
       async arrive(actor, { at, from }) {
-        const [x, z, ry] = wayIn(at, from, actor.id);
+        // (`actor.landAt`: [x, z, ry], where whoever called wants the cut to put them: the run's ride home, a little up
+        // the lane from the player's own trailer)
+        const [x, z, ry] = actor.landAt ?? wayIn(at, from, actor.id);
         actors.place(actor.id, x, z, ry);
       },
     },
@@ -251,7 +312,18 @@ export function createTravel({ city, actors, map }) {
         // (off stage at a cut: the clip ends there, it is not left to blend out where they next appear)
         (actors.cutClip ?? actors.stop)(actor.id);
         actors.place(actor.id, A.x, A.z, A.ry);
-        actors.show(actor.id, false);
+        // STILL IN THE PICTURE WITH NOWHERE LEFT TO WALK (not the followed person, whose cut is black): they are left
+        // standing where the walk gave out and taken off once the camera has lost them, or left alone if something
+        // else wants them first. Taken off here they went in plain sight: a neighbour off for the day whose lane
+        // ended eighteen metres up, inside a picture the thin panels had made bigger (park, seed 29, 2026-11-13).
+        if (!actor.lead && seen(actor.id, 3)) {
+          count.stood = (count.stood ?? 0) + 1;
+          // (lost by a good margin: the camera moves a little between the frame that finds them gone and the one
+          // they are taken off in, and a body at the very edge was seen to go off there)
+          actors.until(() => !!actor.gone?.() || !actors.has(actor.id) || !seen(actor.id, 3)).then(() => {
+            if (!actor.gone?.() && actors.has(actor.id)) actors.show(actor.id, false);
+          });
+        } else actors.show(actor.id, false);
       }
     },
 
@@ -369,7 +441,13 @@ export function createTravel({ city, actors, map }) {
           // them off the stage itself. Not for ever: someone still in the picture after WATCHED seconds is taken off
           let capped = false;
           await Promise.race([actors.until(() => !R.busy(actor.id) || actor.gone?.()), actors.seconds(WATCHED).then(() => (capped = true))]);
-          if (capped && R.busy(actor.id)) count.capped += 1;
+          // (STILL IN THE PICTURE at that moment, walking off toward a station 80 m up the street: taken off there
+          // they vanish in plain sight. They are left to walk on until they are out of it, WATCHED_MORE seconds at
+          // the most. `capped` counts only the ones cut while the camera could still see them)
+          if (capped && R.busy(actor.id) && seen(actor.id)) {
+            await Promise.race([actors.until(() => !R.busy(actor.id) || actor.gone?.() || !seen(actor.id)), actors.seconds(WATCHED_MORE)]);
+          }
+          if (capped && R.busy(actor.id) && seen(actor.id)) count.capped += 1;
         },
         cancel(actor) {
           if (R.busy(actor.id)) R.cancel(actor.id);

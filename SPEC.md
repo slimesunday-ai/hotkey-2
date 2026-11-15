@@ -1181,4 +1181,49 @@ but it doesnt feel like it? so we just load what's needed for the location youre
     puts them at the place they were going to: the card's "Skip" button, Space or Enter when no menu is up, or the
     carriage's own Esc. Nothing that is not travel is skipped.
 
+12. **After the first whole season played** (the coordinator's 60 hours, 2026-11-12; nothing designed, no rule
+    changed):
+    - *Night reads.* By night a KEY LAMP of the city's own lamp light is kept over the followed person (4.2 m over
+      the ground they stand on, 2.4 m toward the camera) and over each scene playing elsewhere on stage: it is
+      still night, and they stand in a pool of lamp light as under a street lamp. `?key=<up>,<front>` tries other
+      heights (lower is brighter and tighter); `?key=0` is the night without it. The look is slime's to judge.
+    - *Nobody stands in water.* The plaza's fountain, the park's pond and a paddling pool are solid to anyone on
+      foot (`citymap.js` WET: three measured boxes; the city publishes none of them).
+    - *Street buyers queue.* Each comes on at their own point; the first goes to the seller, the others wait in a
+      line 2.6 m off and 1.25 m apart facing the seller, walk up at their turn and walk off along the sidewalk when
+      served. A bench where somebody keeps a counter is nobody's seat.
+    - *Less waiting, nothing faster.* Open ground for an attack is looked for within 8 m; extras come on 10 m from
+      whoever they have come to see where the sidewalk is farther off; a walk is laid over the ground where the
+      lane way is broken or nearly twice as long.
+
+13. **Nobody shares a place with anybody, the city's own people included; the jail's orange; blood** (slime, after
+    playing an arrest and a robbery, 2026-11-12: "we do cut to the jail but im sitting on top of an npc ... buggy
+    stuff like that cant happen"; "we cut to the jail, and your in an orange jumpsuit until you pass the time";
+    "when you shoot in a robbery it shold be blood splatter on the person you hit". No rule changed, nothing in
+    `src/`):
+    - *The city's own people are bodies to the stage* (`demo/stage/figures.js`). The city stands and seats people
+      of its own in its places (two inmates on Iron Island's waiting bench, people on plaza benches, clerks, talkers
+      on a sidewalk). They are read off what the city draws, block by block, never typed. Nobody of ours is given a
+      seat, a lean, a standing spot or a scene's mark within a body's width of one (asked every time a place is
+      given), no way over the ground is laid through one, and a held place that runs out of places hands out free
+      ground round its own point instead of the one point for everybody. So at Iron Island a held person stands
+      cuffed in the yard: its one bench is the inmates'.
+    - *Nor with one of ours.* Every place is asked against everybody's before it is given, whichever list it came
+      from: a block's spots, a held place's own, a keeper's named place, and the places the director makes itself
+      (open ground for an attack, a mark in a queue). Three cases of two of ours on one place were found proving
+      this and are gone: the ninth person held and every one after, St. Mercy's medic and its seventh patient, and
+      a robber given the spot his victim had been stood on.
+    - *The audit proves it.* `overlaps` counts every time somebody of ours is in one of the city's people (the two
+      middles under 0.6 m apart for half a second, as `close` is for two of ours); `byFigure` shows they were looked
+      for. A season must end with `overlaps 0`. `?figures=0` is the stage as it was, still counted.
+    - *Held in the jail, a seat wears the county orange*: the city's own issue (`cast.js` `OUTFITS.county`, what its
+      yard's inmates wear) over their own face, hair and hat, from the cut into the jail until they are let go; out
+      of it, their own clothes. The player or anybody else.
+    - *Whoever is shot bleeds*, with the city's own blood (`stage/gorefx.js`, its street accidents'): at the shot a
+      spray and a mist from the chest, splats where the drops come down and a wound that rides the body; as they go
+      down the wound is on them where they lie and the city's pool spreads under them; it is kept while they lie
+      hurt and dries when they are up or taken away. Only when the scene says the shot went home (the one fired at
+      is shot, falls or lies hurt in what follows): a hold-up fires nothing. `?blood=0` leaves it out. What a
+      bystander may see is unchanged: a robbery is public to whoever stands on the block (section 24).
+
 Measured loads, hour lengths and the audit are in `city/API-NOTES.md`, "The big city".

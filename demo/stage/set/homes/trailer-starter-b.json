@@ -1,0 +1,39 @@
+{
+ "tier": "trailer",
+ "name": "starter-b",
+ "story": "The same starter pack the other way round: the kitchenette on the left with the moving boxes stacked in its corner, the curb CRT on a dresser next to it with the recliner turned to it on a rag rug, and the mattress lying along the back wall on the right under a print, the nightstand and its lamp at its foot. The floor in front of the door stays open; the cash goes under a loose floorboard beside it.",
+ "room": {"w":28,"d":14,"h":2.45,"walls":{"N":"paint:#d6dcc8","E":"panelling:dark"},"floor":"carpet:#8a7a66"},
+ "items": [
+  {"id":"rug-rag","x":7,"z":3,"rot":0,"variant":1,"on":"floor"},
+  {"id":"door-front","x":10,"z":0,"rot":0,"variant":0,"on":{"wall":"E"}},
+  {"id":"window","x":4,"z":0,"rot":0,"variant":0,"on":{"wall":"E"},"y":0.9},
+  {"id":"kitchenette","x":3,"z":0,"rot":0,"variant":1,"on":"floor"},
+  {"id":"plant-cactus","x":8,"z":0,"rot":0,"variant":1,"on":{"top":3}},
+  {"id":"boxes-moving","x":0,"z":0,"rot":0,"variant":1,"on":"floor"},
+  {"id":"boxes-moving","x":0,"z":3,"rot":0,"variant":0,"on":"floor"},
+  {"id":"dresser","x":9,"z":0,"rot":0,"variant":0,"on":"floor"},
+  {"id":"tv-crt","x":9,"z":0,"rot":0,"variant":0,"on":{"top":7}},
+  {"id":"recliner","x":9,"z":3,"rot":180,"variant":1,"on":"floor"},
+  {"id":"poster","x":14,"z":0,"rot":0,"variant":3,"on":{"wall":"N"},"y":1.15},
+  {"id":"box-fan","x":16,"z":0,"rot":0,"variant":1,"on":"floor"},
+  {"id":"mattress-floor","x":18,"z":0,"rot":90,"variant":0,"on":"floor"},
+  {"id":"table-end","x":26,"z":0,"rot":0,"variant":1,"on":"floor"},
+  {"id":"lamp-table","x":26,"z":0,"rot":0,"variant":1,"on":{"top":13}},
+  {"id":"art-print","x":21,"z":0,"rot":0,"variant":3,"on":{"wall":"N"},"y":1.12}
+ ],
+ "slots": [
+  {"id":"floorboard","label":"the floorboard · by the door","place":"floor","x":16,"z":7,"foot":[2,3],"rot":0,"demo":"stash-floorboard","variant":0,"fits":["stash"]},
+  {"id":"over-the-counter","label":"over the counter","place":"wall","x":4,"z":0,"foot":[4,4],"rot":0,"demo":"trophy-first-deal","variant":0,"fits":["trophy"],"wall":"N","y":1.3},
+  {"id":"on-the-counter","label":"on the counter","place":"surface","x":3,"z":0,"foot":[2,2],"rot":0,"demo":"hot-plate","variant":0,"fits":["gear","collectible"],"on":3}
+ ],
+ "vacant": [
+  {"id":"door-front","x":10,"z":0,"rot":0,"variant":0,"on":{"wall":"E"}},
+  {"id":"window","x":4,"z":0,"rot":0,"variant":0,"on":{"wall":"E"},"y":0.9},
+  {"id":"kitchenette","x":3,"z":0,"rot":0,"variant":1,"on":"floor"},
+  {"id":"mattress-floor","x":18,"z":0,"rot":90,"variant":0,"on":"floor"},
+  {"id":"boxes-moving","x":0,"z":0,"rot":0,"variant":0,"on":"floor"},
+  {"id":"boxes-moving","x":12,"z":5,"rot":0,"variant":2,"on":"floor"},
+  {"id":"sign-rent","x":12,"z":9,"rot":0,"variant":0,"on":"floor"},
+  {"id":"box-fan","x":16,"z":0,"rot":0,"variant":0,"on":"floor"}
+ ]
+}

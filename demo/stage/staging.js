@@ -98,14 +98,22 @@ function fallHits(O, x, z, ry, y0, fp, people, standing = false) {
  *   D        metres between the two · falls: [{ who: 'P' | 'Q', fp, d? }] who goes down, and on what footprint
  *   los      the line between them must be clear above the waist (a gun) · side: how much the axis ACROSS the
  *            camera's view is preferred (the pair seen side-on, neither hiding the other), with `cam` { x, z }
+ *   clear    nobody else within this of the partner's mark (m; the city's CLEAR, or more: a head's room)
  * → { u, a (the heading of u), q: [x, z] the partner's mark, bad, cost }
  */
-export function pickAxis(O, P, u0, { D = 0, falls = [], people = [], los = false, q = true, side = 0, cam = null } = {}) {
+export function pickAxis(O, P, u0, { D = 0, falls = [], people = [], los = false, q = true, side = 0, cam = null, clear = CLEAR } = {}) {
   const a0 = Math.atan2(u0[0], u0[1]);
   const y0 = P.y;
   const cf = cam ? [P.x - cam.x, P.z - cam.z] : [0, 0];
   const cl = Math.hypot(cf[0], cf[1]) || 1;
-  const nearAt = (x, z, r) => people.filter(([px, pz]) => Math.hypot(px - x, pz - z) < r);
+  // (OURS: and a head further when the two lie along the camera's bearing, one head drawn over the other: the second
+  // of the Dunn brothers was given a mark 1.2 m from the first, east of him, and their heads were one in the picture)
+  const nearAt = (x, z, r) => people.filter(([px, pz]) => {
+    const d = Math.hypot(px - x, pz - z);
+    if (d < r || !cam || d >= r * 1.45) return d < r;
+    const inline = Math.abs((px - x) * cf[0] + (pz - z) * cf[1]) / ((d || 1) * cl);
+    return inline > 0.5 && d < r * (1 + 0.45 * inline);
+  });
   let best = null;
   for (let k = 0; k < 24; k++) {
     const a = a0 + ((k % 2 ? 1 : -1) * Math.ceil(k / 2) * Math.PI) / 12;
@@ -120,7 +128,7 @@ export function pickAxis(O, P, u0, { D = 0, falls = [], people = [], los = false
         // stood in the road)
         if (h === null || h > y0 + 0.3 || h < y0 - 0.12) bad += 3;
       }
-      bad += 4 * nearAt(qx, qz, CLEAR).length;
+      bad += 4 * nearAt(qx, qz, clear).length;
       // (OURS) the partner's mark on the walkers' lane: a soft cost
       if (O?.lane && O.lane(qx, qz) < 0.6) low += 1;
     }
@@ -154,7 +162,7 @@ export function pickAxis(O, P, u0, { D = 0, falls = [], people = [], los = false
 export function placeFor(O, P, u0, o) {
   const people = o.people ?? [];
   const here = pickAxis(O, P, u0, o);
-  const crowd = people.filter(([px, pz, moving]) => !moving && Math.hypot(px - P.x, pz - P.z) < CLEAR).length;
+  const crowd = people.filter(([px, pz, moving]) => !moving && Math.hypot(px - P.x, pz - P.z) < (o.clear ?? CLEAR)).length;
   if (!here.bad && !crowd) return { x: P.x, z: P.z, ax: here, moved: false };
   let best = { x: P.x, z: P.z, ax: here, cost: here.bad * 10 + crowd * 25, moved: false };
   if (o.fixed) return best;

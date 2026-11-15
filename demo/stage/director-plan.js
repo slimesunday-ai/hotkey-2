@@ -87,7 +87,9 @@ const hashOf = text => {
 export function stepPlan(step, salt = 0) {
   const all = ACTION_CLIPS[step.action];
   if (!all) throw new Error(`no clips for the action ${step.action}`);
-  const clips = IN_ORDER[step.action] ?? (all.length > 1 ? [all[hashOf(`${step.actor}/${step.action}/${salt}`) % all.length]] : [...all]);
+  // (`step.clip`: a clip of the city's own named outright by whoever made the step, the run's work: a broom, a hammer, a
+  // shelf. The action still says how it is played: a going, a thing done, or the background)
+  const clips = step.clip ? [step.clip] : IN_ORDER[step.action] ?? (all.length > 1 ? [all[hashOf(`${step.actor}/${step.action}/${salt}`) % all.length]] : [...all]);
   const mode = GOING.has(step.action) ? 'go' : AMBIENT.has(step.action) ? 'ambient' : 'act';
   const out = { actor: step.actor, action: step.action, mode, clips, native: NATIVE.includes(step.action) };
   if (REACTION[step.action]) out.reaction = REACTION[step.action];
@@ -237,7 +239,9 @@ export function planHour(line, { seen = line.events ?? [], classes = {}, prev = 
   for (const [id, end] of Object.entries(ends)) routines[id] = { action: routineOf(classes[id], line.agents[id], prev[id]?.held ? end.held : null), hasScene: busy.has(id) };
 
   const npcs = {};
-  for (const [block, list] of Object.entries(line.npcs ?? {})) for (const n of list) npcs[n.id] = { block, spot: n.spot ?? 'street', action: n.action ?? 'idle', role: n.role };
+  // (`clips`: the city's clips this person's routine plays, named outright: a neighbour's sweeping, a stall's
+  // stocking. `face`: whom they keep their face to, or their back to (`back`): the run's moods)
+  for (const [block, list] of Object.entries(line.npcs ?? {})) for (const n of list) npcs[n.id] = { block, spot: n.spot ?? 'street', action: n.action ?? 'idle', role: n.role, clips: n.clips ?? null, face: n.face ?? null, back: n.back ?? null };
 
   return { t: line.t, day: line.day, hour: line.hour, scenes, ends, routines, npcs, rate, police: line.police ?? [] };
 }

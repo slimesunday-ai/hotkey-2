@@ -24,6 +24,9 @@ export const PITCH = 36;
 const shape = T => ({
   place: `${T.name}: ${T.place}`, name: T.name, cityPlace: T.cityPlace, at: T.at, spots: T.spots, look: T.look ?? null, reach: T.reach,
   ways: T.ways, blocks: T.blocks, fixtures: T.fixtures, missing: T.missing,
+  // (the place's own ways where the city's walkers' lanes do not go, Sunny Acres' lanes, and its homes' pads: who
+  // walks from one home to another goes along the lane, director.js laneWay)
+  paths: T.near?.paths ?? null, homes: T.near?.homes ?? [],
 });
 
 /**
@@ -39,7 +42,9 @@ export const BLOCKS = Object.fromEntries(Object.entries(DATA.places).map(([id, T
  * open ground). Nobody walks there: whoever is taken there leaves the place they were in and arrives (travel.js).
  */
 const POSE = { jail: { bench: 'sit_bench', open: 'cuffed_idle' }, clinic: { bench: 'sit_bench', open: 'winded_rest' } };
-export const HELD = Object.fromEntries(Object.entries(DATA.held).map(([id, T]) => [id, { ...shape(T), exit: T.at, pose: POSE[id] ?? { bench: 'sit_bench', open: null } }]));
+/** What a held place puts its people in while it has them: an outfit of the city's own cast (cast.js OUTFITS). The jail's is the county orange its yard's inmates wear. */
+const WEAR = { jail: 'county' };
+export const HELD = Object.fromEntries(Object.entries(DATA.held).map(([id, T]) => [id, { ...shape(T), exit: T.at, pose: POSE[id] ?? { bench: 'sit_bench', open: null }, wear: WEAR[id] ?? null }]));
 
 /** The pads: one trailer of Sunny Acres per seat (agent ids a1 … a10). `home` is the city's own id for the lot. */
 export const PADS = DATA.pads;
@@ -110,3 +115,24 @@ export function viewOf(zone) {
   return { pos: [x + 26, 46, z + 30], tgt: [x, 0, z], fov: 42 };
 }
 export const VIEWS = { set: viewOf(zoneOf(START)) };
+
+/**
+ * WATER NOBODY STANDS IN OR WALKS THROUGH: [x0, z0, x1, z1, what]. The city's collision world keeps a body out of
+ * what is at its waist; a fountain's basin, a pond and a paddling pool are below it (a step of 0.1 to 0.4 m that
+ * the city's surfaces call walkable), so a robber was stood in Glasswall Plaza's fountain for a hold-up (the
+ * owner's first whole season, day 2, 18:00). The city publishes none of them as a place or a piece (the plaza and
+ * the park are one `placeholder·structure` each in its audit list, and its water field is the sea's), so THESE
+ * THREE BOXES ARE MEASURED, 2026-11-12, and must be measured again if the pinned city moves them:
+ *   · the fountain: the collision world's heights across it (paving 0.3, rim 0.8 at x 16.0 and 22.0 and at
+ *     z -22.0 and -16.0, water 0.6 between). The box is the rim's own outer edge: with 0.2 m more, somebody on the
+ *     paving at its corner was "in the fountain" to the audit;
+ *   · the duck pond: the patch of the same shape the collision world has south-east of the bandstand (water inside
+ *     a rim, x -16 to -10, z 202.5 to 208), half a metre added;
+ *   · the paddling pool: its own box in the city's audit build (`-1_6·H0·kiddie-pool·0`).
+ */
+export const WET = [
+  [16.0, -22.0, 22.0, -16.0, 'the plaza\'s fountain'],
+  [-16.5, 202.0, -9.5, 208.5, 'the park\'s pond'],
+  [-29.3, 231.0, -27.3, 233.0, 'a paddling pool'],
+];
+

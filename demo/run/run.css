@@ -1,0 +1,705 @@
+/* THE RUN'S PANELS (demo/run/index.js): ONE FRAME in the old HUD's look (demo/hud/hud.css, the kit's zte skin) and the
+   kit's dossier's (city/from-trunk/style/city/ui/kit.css: the head with the portrait, tabs under it, stat rows).
+   Every colour is a token of the kit or one the HUD names from them; nothing new is invented, only placed.
+   The frame: the top line across the window; THE DOCK down the left (everything about you; it folds to a rail, and
+   starts folded); THE BAR along the bottom from the dock to the edge, thin; THE PANELS open one at a time beside the
+   dock, over the picture. One margin, one gutter, one ink block, one paper for all of it.
+   THIN (the owner, 11-13: "i like our ui it's just way too thick"; GTA V's size of type): everything on the bar and the
+   dock at the kit's smallest type, the rail's (--k-fs-xs), a title one step up at most; single thin rules, no ink
+   block under a tile, about half the padding there was. The paper, the ink and the colours are as they were.
+   At phone width: the top line, the dock as a strip under it (folded by default), the bar at the bottom. */
+
+#k .rn {
+  --rn-m: 6px; --rn-g: 6px; --rn-sh: 3px 3px 0 var(--k-ink);
+  --rn-dock-w: calc(240 * var(--k-px)); --rn-rail-w: calc(80 * var(--k-px)); --rn-side: var(--rn-dock-w);
+  --hk-top-h: calc(26 * var(--k-px));
+  --rn-body-t: calc(var(--rn-m) + var(--hk-top-h) + var(--rn-g));
+  --rn-gap: 8px;
+  --rn-row: calc(20 * var(--k-px));   /* one row of the bar: a key cap's height */
+}
+#k .rn.is-rail { --rn-side: var(--rn-rail-w); }
+/* the key caps on the frame: a size down from the kit's (its face stays) */
+#k[data-skin] .rn kbd { min-width: calc(16 * var(--k-px)); height: calc(16 * var(--k-px)); padding: 0 4px; }
+
+/* ── the top line: the window's width, one line ───────────────────────────────────────────────────────────────────── */
+#k .rn-top { top: var(--rn-m); left: var(--rn-m); right: var(--rn-m); transform: none; max-width: none; gap: 9px; padding: 0 4px 0 6px; box-shadow: var(--rn-sh); font-size: var(--k-fs-xs); }
+#k .rn-top .hk-mode { padding: 1px 6px; }
+#k .rn-top .hk-clock-time { font: 700 var(--k-fs-m)/1 var(--k-font); }
+#k .rn-where b { font: 400 var(--zt-fs-label, var(--k-fs-s))/1 var(--zt-font-label, var(--k-font)); text-transform: uppercase; }
+#k .rn-top .rn-stops { margin: 0 auto; }
+#k .rn-seed { color: var(--k-ink-3); font-size: var(--k-fs-xs); white-space: nowrap; }
+#k[data-skin] .hk-top .k-btn.rn-new { min-height: calc(19 * var(--k-px)); min-width: 0; padding: 0 6px; box-shadow: inset 0 0 0 1px var(--k-ink); }
+#k[data-skin] .hk-top .k-btn.rn-new:hover { transform: none; box-shadow: inset 0 0 0 2px var(--k-ink); }
+#k[data-skin] .hk-top .k-btn.rn-new.is-ask { background: var(--hk-hot); color: var(--k-ink); }
+
+/* THE LINE on the top line: its three stops as a strip, where you are lit (a click, or M, opens the map panel) */
+#k .rn-stops { display: inline-flex; align-items: center; gap: 4px; padding: 1px 5px; border: 0; background: var(--hk-paper); box-shadow: inset 0 0 0 1px var(--k-ink); cursor: pointer; font: 700 var(--k-fs-xs)/1 var(--k-font); color: var(--k-ink-2); text-transform: uppercase; }
+#k .rn-stops:hover, #k .rn-stops.is-on { box-shadow: inset 0 0 0 2px var(--k-ink); }
+#k .rn-stops kbd { margin-left: 2px; }
+#k .rn-stop { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+#k .rn-stop i { width: 7px; height: 7px; background: var(--hk-paper); box-shadow: 0 0 0 1.5px var(--k-ink); }
+#k .rn-stop.is-here { color: var(--k-ink); }
+#k .rn-stop.is-here i { background: var(--hk-yours); width: 9px; height: 9px; }
+#k .rn-stop.is-locked { color: var(--k-ink-3); }
+#k .rn-stop.is-locked i { background: var(--k-ink-3); }
+#k .rn-stop em { font-style: normal; font-weight: 400; text-transform: none; }
+#k .rn-line { width: calc(12 * var(--k-px)); height: 2px; background: var(--k-ink); }
+
+/* ── THE DOCK: everything about you, under the top line on the left. Open, only as tall as what is in it ──────────── */
+#k .rn-left { position: absolute; left: var(--rn-m); top: var(--rn-body-t); width: var(--rn-side); max-height: calc(100% - var(--rn-body-t) - var(--rn-m)); display: flex; flex-direction: column; }
+#k .rn.is-rail .rn-left { bottom: var(--rn-m); }
+#k .rn-dock { box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 0; padding: 6px 8px 7px; box-shadow: var(--rn-sh); font-size: var(--k-fs-xs);
+  overflow: hidden auto; scrollbar-width: thin; scrollbar-color: var(--k-ink) transparent; }
+#k .rn.is-rail .rn-dock { height: 100%; }
+#k .rn-dock-head { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+/* the face: the dossier's portrait plate, small; a click opens the character sheet */
+#k .rn-face { position: relative; display: block; flex: none; width: calc(36 * var(--k-px)); height: calc(44 * var(--k-px)); padding: 0; border: 0; cursor: pointer; overflow: hidden;
+  background: var(--zt-pink, var(--k-yours)); box-shadow: inset 0 0 0 1px var(--k-ink); }
+#k .rn-face:hover { box-shadow: inset 0 0 0 2px var(--k-ink); }
+#k .rn-face canvas { position: absolute; inset: 0; width: 100%; height: 100%; background: center / cover no-repeat; }
+#k .rn-id { display: grid; gap: 2px; min-width: 0; padding: 0; border: 0; background: none; text-align: left; cursor: pointer; color: var(--k-ink); font: inherit; }
+#k .rn-id b { font: 400 calc(13 * var(--k-px))/1 var(--k-font-sign-tall, var(--k-font-display)); text-transform: uppercase; }
+#k .rn-id span { font-size: var(--k-fs-xs); color: var(--k-ink-2); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#k .rn-id .rn-id-open { display: inline-flex; align-items: center; gap: 4px; color: var(--k-ink-3); text-transform: uppercase; font-weight: 700; }
+#k .rn-id .rn-id-open kbd { margin: 0; }
+#k .rn-id:hover .rn-id-open { color: var(--k-ink); }
+/* the fold: the dossier's round ink close, as a fold */
+#k[data-skin] .hk .k-btn.rn-fold { min-height: calc(20 * var(--k-px)); min-width: calc(20 * var(--k-px)); padding: 0 5px; gap: 3px; background: var(--k-ink); color: var(--hk-plate); box-shadow: none;
+  font: 700 var(--k-fs-xs)/1 var(--k-font); }
+#k[data-skin] .hk .k-btn.rn-fold kbd { background: var(--hk-plate); color: var(--k-ink); margin: 0; }
+#k[data-skin] .hk .k-btn.rn-fold:hover { background: var(--hk-hot); color: var(--k-ink); transform: none; }
+#k .rn-dock-body { display: grid; gap: 5px; grid-template-columns: minmax(0, 1fr); }
+
+/* you: carried is loud (it is what the city can take), banked quiet */
+#k .rn-cash { display: grid; gap: 3px; }
+#k .rn-carried, #k .rn-banked { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 3px 6px 4px; min-width: 0; }
+#k .rn-carried span, #k .rn-banked span { font-size: var(--k-fs-xs); text-transform: uppercase; white-space: nowrap; }
+#k .rn-carried { background: var(--hk-yours); box-shadow: inset 0 0 0 1px var(--k-ink); color: var(--k-ink); }
+#k .rn-carried span { font-weight: 700; }
+#k .rn-carried b { font: 400 calc(18 * var(--k-px))/1 var(--k-font-sign, var(--k-font-display)); white-space: nowrap; }
+#k .rn-carried.is-risk { background: var(--hk-hot); animation: hk-stamp 220ms var(--k-ease) both; }
+#k .rn-carried.is-none { background: var(--hk-paper); }
+#k .rn-banked { padding: 2px 6px; background: var(--hk-paper); box-shadow: inset 0 0 0 1px var(--k-line); color: var(--k-ink-3); }
+#k .rn-banked b { font: 700 var(--k-fs-xs)/1.2 var(--k-font); color: var(--k-ink-2); white-space: nowrap; }
+/* energy and heat: a label, the pips (ten fit: they share the row's width), the count. Nothing is cut late in a run */
+#k .rn-dock .hk-heat { display: grid; grid-template-columns: calc(58 * var(--k-px)) minmax(0, 1fr) auto; align-items: center; gap: 5px; }
+#k .rn-dock .hk-heat > span:first-child { width: auto; }
+#k .rn-dock .hk-heat em { white-space: nowrap; }
+#k .rn-dock .hk-heat-pips i { width: 10px; height: 10px; }
+#k .rn-pips { display: flex; gap: 2px; min-width: 0; }
+#k .rn-pips i { flex: 1 1 0; max-width: 10px; min-width: 5px; height: 10px; background: var(--k-bg-3); box-shadow: inset 0 0 0 1.5px var(--k-ink); }
+#k .rn-pips i.is-on { background: var(--hk-clean); }
+#k .rn-owned { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; }
+#k .rn-owned > span:first-child { width: calc(58 * var(--k-px)); color: var(--k-ink-3); }
+#k .rn-owned .hk-tag { padding: 0 4px; }
+#k .rn-owned .rn-none { color: var(--k-ink-3); font-style: normal; }
+/* the next goal: the cheapest thing not owned yet, and how far banked (solid) and carried (at risk) are from it */
+#k .rn-goal { display: grid; gap: 3px; padding-top: 4px; border-top: 1px dashed var(--k-line); }
+#k .rn-goal-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; min-width: 0; }
+#k .rn-goal-head > span { width: calc(58 * var(--k-px)); flex: none; color: var(--k-ink-3); }
+#k .rn-goal-head b { font-weight: 700; white-space: nowrap; }
+#k .rn-goal-head em { margin-left: auto; font-style: normal; font-weight: 700; white-space: nowrap; color: var(--hk-hot-text); }
+#k .rn-goal-head em.is-go { color: var(--k-ink); background: var(--hk-clean); padding: 0 4px; }
+#k .rn-goal-bar { display: flex; height: 6px; background: var(--hk-paper); box-shadow: 0 0 0 1px var(--k-ink); }
+#k .rn-goal-bar i { height: 100%; transition: width 420ms var(--k-ease); }
+#k .rn-goal-bar i.is-banked { background: var(--hk-clean); }
+#k .rn-goal-bar i.is-carried { background: var(--hk-yours); }
+#k .rn-goal.is-done { grid-template-columns: auto 1fr; align-items: baseline; }
+#k .rn-goal.is-done > span { width: calc(58 * var(--k-px)); color: var(--k-ink-3); }
+
+/* THE PANEL KEYS: open, directly under what the dock holds (no column of empty paper); on the rail, at its foot,
+   level with the bar. Two by two, each its key cap and its word */
+#k .rn-keys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding-top: 6px; border-top: 1px dashed var(--k-line); }
+#k[data-skin] .hk .k-btn.rn-key { display: flex; justify-content: flex-start; align-items: center; gap: 6px; min-width: 0; min-height: calc(22 * var(--k-px)); padding: 0 6px; box-shadow: inset 0 0 0 1px var(--k-ink);
+  font: 700 var(--k-fs-xs)/1.1 var(--k-font); text-transform: uppercase; white-space: nowrap; text-align: left; }
+#k[data-skin] .hk .k-btn.rn-key:hover { transform: none; box-shadow: inset 0 0 0 2px var(--k-ink); }
+#k[data-skin] .hk .k-btn.rn-key.is-on { background: var(--k-ink); color: var(--hk-plate); }
+#k[data-skin] .hk .k-btn.rn-key kbd { margin: 0; flex: none; }
+#k[data-skin] .hk .k-btn.rn-key.is-on kbd { background: var(--hk-clean); color: var(--k-ink); }
+#k .rn-key .is-short, #k .rn-dock.is-rail .rn-key .is-long { display: none; }
+#k .rn-dock.is-rail .rn-key .is-short { display: inline; }
+
+/* FOLDED: a slim rail that still shows what you carry and your heat (the owner's "the left side looks good") */
+#k .rn-dock.is-rail { padding: 6px 5px 8px; gap: 7px; align-items: stretch; }
+#k .rn-dock.is-rail .rn-fold { align-self: stretch; }
+#k .rn-dock.is-rail .rn-face { width: 100%; height: calc(58 * var(--k-px)); }
+#k .rn-rail-stats { display: grid; gap: 7px; }
+#k .rn-dock.is-rail .rn-carried { display: grid; justify-items: center; gap: 2px; padding: 4px 2px 5px; }
+#k .rn-dock.is-rail .rn-carried span { font-size: var(--k-fs-xs); }
+#k .rn-dock.is-rail .rn-carried.is-risk span { font-size: 0; }
+#k .rn-dock.is-rail .rn-carried.is-risk span::before { content: "At risk"; font-size: var(--k-fs-xs); }
+#k .rn-dock.is-rail .rn-carried b { font-size: calc(18 * var(--k-px)); }
+#k .rn-dock.is-rail .hk-heat { grid-template-columns: 1fr; justify-items: center; gap: 3px; }
+#k .rn-dock.is-rail .hk-heat > span:first-child { font-size: var(--k-fs-xs); text-transform: uppercase; }
+#k .rn-dock.is-rail .hk-heat-pips { gap: 2px; }
+#k .rn-dock.is-rail .hk-heat-pips i { width: 9px; height: 11px; }
+#k .rn-dock.is-rail .hk-heat-pips i.is-line { margin-right: 3px; }
+#k .rn-dock.is-rail .rn-pips { width: 100%; flex-wrap: wrap; justify-content: center; gap: 2px; }
+#k .rn-dock.is-rail .rn-pips i { flex: 0 0 auto; width: 9px; height: 11px; }
+#k .rn-dock.is-rail .rn-keys { margin-top: auto; grid-template-columns: 1fr; padding-top: 7px; }
+#k[data-skin] .hk .rn-dock.is-rail .k-btn.rn-key { flex-direction: column; justify-content: center; gap: 3px; min-height: calc(42 * var(--k-px)); padding: 4px 2px; font-size: var(--k-fs-xs); }
+
+/* ── THE BAR: along the bottom, from the dock to the edge ──────────────────────────────────────────────────────────── */
+#k .rn-card { display: block; left: calc(var(--rn-m) + var(--rn-side) + var(--rn-g)); right: var(--rn-m); bottom: var(--rn-m); width: auto; transform: none;
+  max-height: calc(100% - var(--rn-body-t) - var(--rn-m) - 40px); overflow: hidden auto; padding: 7px 6px 5px; box-shadow: var(--rn-sh);
+  font: 400 var(--k-fs-xs)/1.2 var(--k-font); scrollbar-width: thin; scrollbar-color: var(--k-ink) transparent; }
+/* its parts on a grid: the danger's number at the start, the choices, then one slim row (what is said, the ways, Go) */
+#k .rn-card-body { display: grid; grid-template-columns: auto minmax(12%, 1fr) auto; grid-template-areas: "pct top top" "pct said ways"; align-items: center; gap: 4px 6px; min-width: 0; }
+#k .rn-card-body.is-one-row { grid-template-areas: "pct said ways"; }
+#k .rn-card-body > .rn-options, #k .rn-card-body > .rn-held { grid-area: top; }
+
+/* THE DANGER OF ONE MORE HOUR HERE: a line along the bar's top edge (a hairline at none), its number at the start */
+#k .rn-meter { position: absolute; left: 0; right: 0; top: 0; display: flex; height: 4px; background: var(--hk-paper); box-shadow: inset 0 -1px 0 var(--k-ink); cursor: pointer; }
+#k .rn-meter.is-zero { height: 1px; background: var(--k-line); box-shadow: none; cursor: default; }
+#k .rn-fill { height: 100%; transition: width 420ms var(--k-ease); }
+#k .rn-fill.is-bad { background: var(--hk-bad-plate); }
+#k .rn-fill.is-scuffle { background: var(--hk-messy); }
+#k .rn-fill.is-tried { background: var(--hk-fail); }
+#k .rn-now { position: absolute; top: 0; height: 7px; width: 2px; margin-left: -1px; background: var(--k-ink); transition: left 420ms var(--k-ease); }
+#k .rn-now[hidden] { display: none; }
+#k .rn-pct { grid-area: pct; align-self: stretch; display: grid; align-content: center; justify-items: start; gap: 1px; min-width: calc(44 * var(--k-px)); padding: 0 6px 0 2px; border: 0;
+  background: none; box-shadow: 1px 0 0 var(--k-line); color: var(--k-ink); font: inherit; text-align: left; cursor: pointer; }
+#k .rn-card-body.is-one-row .rn-pct { display: flex; align-items: baseline; gap: 5px; }
+#k .rn-pct:hover .rn-pct-word, #k .rn-pct.is-open .rn-pct-word { color: var(--k-ink); text-decoration: underline; text-underline-offset: 2px; }
+#k .rn-pct.is-zero { cursor: default; }
+#k .rn-pct.is-zero:hover .rn-pct-word { color: var(--k-ink-3); text-decoration: none; }
+#k .rn-danger-pct { font: 700 var(--k-fs-m)/1.1 var(--k-font); color: var(--hk-hot-text); }
+#k .rn-pct.is-zero .rn-danger-pct { color: var(--k-ink-3); }
+#k .rn-danger-pct.is-new { animation: hk-stamp 260ms var(--k-ease) both; }
+#k .rn-pct-word { font-size: var(--k-fs-xs); text-transform: uppercase; color: var(--k-ink-3); }
+
+/* the choices: the dealt options (or the shop) as one row of tiles */
+#k .rn-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; min-width: 0; }
+#k .rn-option { display: grid; gap: 1px; align-content: center; min-width: 0; padding: 2px 6px 3px; border: 0; background: var(--hk-paper); box-shadow: inset 0 0 0 1px var(--k-ink);
+  cursor: pointer; text-align: left; font: inherit; color: var(--k-ink); }
+#k .rn-option:hover { background: var(--zt-white, var(--hk-paper)); box-shadow: inset 0 0 0 2px var(--k-ink); }
+#k .rn-option.is-safe { box-shadow: inset 3px 0 0 var(--hk-clean), inset 0 0 0 1px var(--k-ink); padding-left: 8px; }
+/* (the pick: ink, the paper's words, a pink ring round it) */
+#k .rn-option.is-on, #k .rn-option.is-on:hover { background: var(--k-ink); color: var(--hk-plate); box-shadow: 0 0 0 2px var(--hk-hot); }
+#k .rn-option.is-on kbd { background: var(--hk-clean); color: var(--k-ink); }
+#k .rn-option.is-off { opacity: .55; }
+#k .rn-option.is-owned { background: var(--hk-plate); box-shadow: inset 0 0 0 1px var(--k-line); }
+#k .rn-o-main, #k .rn-o-sub { display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; line-height: 1.2; }
+#k .rn-o-main kbd { margin: 0; flex: none; }
+#k .rn-o-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 700; }
+#k .rn-pay { flex: none; font-weight: 700; white-space: nowrap; }
+#k .rn-odds { flex: none; display: inline-flex; align-items: center; gap: 4px; }
+#k .rn-odds .hk-bar.is-small { width: calc(28 * var(--k-px)); height: 6px; box-shadow: 0 0 0 1px var(--k-ink); }
+#k .rn-odds b { font-weight: 700; }
+#k .rn-option .hk-tag { padding: 0 4px; line-height: 1.2; }
+#k .rn-o-sub { overflow: hidden; color: var(--k-ink-2); }
+#k .rn-o-sub > * { flex: none; }
+#k .rn-o-sub > .rn-who, #k .rn-o-sub > .rn-does { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#k .rn-fails, #k .rn-does { color: var(--k-ink-2); }
+#k .rn-why { color: var(--hk-hot-text); font-weight: 700; }
+#k .rn-option.is-on .rn-o-sub, #k .rn-option.is-on .rn-fails, #k .rn-option.is-on .rn-does, #k .rn-option.is-on .rn-why, #k .rn-option.is-on .rn-who, #k .rn-option.is-on .rn-who span { color: var(--hk-plate); }
+#k .rn-option.is-on .rn-odds .hk-bar { box-shadow: 0 0 0 1px var(--hk-plate); }
+
+/* the slim row: what is said (one line, the same room whatever it says), then the ways to move, Go and the fold */
+#k .rn-said { grid-area: said; min-width: 0; height: var(--rn-row); display: flex; align-items: center; overflow: hidden; }
+#k .rn-said-line { display: block; flex: 1 1 auto; min-width: 0; margin: 0; padding: 0 0 0 6px; border: 0; background: none; box-shadow: inset 2px 0 0 var(--k-line);
+  font: inherit; color: var(--k-ink); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#k .rn-said-line.is-quiet { color: var(--k-ink-3); }
+#k .rn-said-line.rn-dry { font-weight: 700; box-shadow: inset 3px 0 0 var(--hk-messy); }
+#k .rn-result, #k .rn-danger-sum, #k .rn-chips { display: flex; align-items: center; gap: 0 10px; }
+#k .rn-result { box-shadow: inset 3px 0 0 var(--hk-yours); }
+#k .rn-result .rn-tick { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#k .rn-result .rn-paid { flex: none; padding: 0 5px; background: var(--hk-clean); color: var(--k-ink); font-weight: 700; }
+#k .rn-result .rn-bad { flex: 0 0 auto; background: var(--hk-bad-plate); color: var(--hk-bad-ink); padding: 0 6px; font-weight: 700; }
+#k .rn-roll { flex: none; display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+#k .rn-roll .hk-bar.is-small { width: calc(48 * var(--k-px)); height: 7px; box-shadow: 0 0 0 1px var(--k-ink); }
+#k .rn-roll .hk-needle { top: -3px; bottom: -3px; width: 2px; margin-left: -1px; box-shadow: 0 0 0 1px var(--hk-paper); }
+#k .rn-roll .hk-needle::before { display: none; }
+#k .rn-roll .hk-tick-roll { margin: 0; padding: 0 4px; white-space: nowrap; }
+#k .rn-roll-said { color: var(--k-ink-3); white-space: nowrap; }
+#k .rn-danger-sum { cursor: pointer; color: var(--k-ink-2); }
+#k .rn-danger-sum span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+#k .rn-danger-sum i { width: 8px; height: 8px; background: var(--b); box-shadow: 0 0 0 1px var(--k-ink); }
+#k .rn-danger-sum .is-police { background: var(--zt-blu, var(--k-accent)); color: var(--zt-white, var(--k-accent-ink)); padding: 0 4px; font-weight: 700; }
+#k .rn-danger-sum em { font-style: normal; text-decoration: underline; text-underline-offset: 2px; color: var(--k-ink-3); }
+/* folded: every choice small on the row, the pick by its name */
+/* (one line that slides sideways when it holds more than its width: the pick is kept in sight, index.js paintCard) */
+#k .rn-said-line.rn-chips { gap: 4px; overflow: auto hidden; text-overflow: clip; scrollbar-width: none; }
+#k .rn-chip { flex: none; display: inline-flex; align-items: center; gap: 5px; height: calc(18 * var(--k-px)); padding: 0 6px 0 2px; border: 0; background: var(--hk-paper); box-shadow: inset 0 0 0 1px var(--k-ink);
+  font: inherit; color: var(--k-ink); cursor: pointer; white-space: nowrap; }
+#k .rn-chip kbd { margin: 0; }
+#k .rn-chip em { font-style: normal; font-weight: 700; }
+#k .rn-chip.is-on { max-width: 100%; }
+#k .rn-chip b { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#k .rn-chip.is-on { background: var(--k-ink); color: var(--hk-plate); box-shadow: 0 0 0 2px var(--hk-hot); }
+#k .rn-chip.is-on kbd { background: var(--hk-clean); color: var(--k-ink); }
+#k .rn-chip.is-off { opacity: .55; }
+
+#k .rn-ways { grid-area: ways; display: flex; align-items: center; justify-content: flex-end; gap: 4px; min-width: 0; }
+#k .hk .rn-move { flex: 0 1 auto; min-width: 0; max-width: calc(330 * var(--k-px)); min-height: 0; height: var(--rn-row); gap: 5px; padding: 0 7px 0 2px; box-shadow: inset 0 0 0 1px var(--k-ink); }
+#k .hk .rn-move:hover { transform: none; box-shadow: inset 0 0 0 2px var(--k-ink); }
+#k .hk .rn-move.is-on { background: var(--k-ink); color: var(--hk-plate); box-shadow: 0 0 0 2px var(--hk-hot); }
+#k .hk .rn-move.is-off { opacity: .55; }
+#k .rn-move .hk-move-text { display: flex; align-items: baseline; gap: 6px; line-height: 1.2; }
+#k .rn-move .hk-move-text b { flex: none; font-weight: 700; }
+#k .rn-move .hk-move-text span { flex: 0 1 auto; min-width: 0; font-size: var(--k-fs-xs); }
+/* (while what just happened is said, the ways give it the room of their small print: in their tooltips meanwhile) */
+#k .rn-card.has-result .rn-move .hk-move-text span { display: none; }
+/* the bar's buttons: Go, Skip, Continue, the fold, the take-out's: small, one thin rule */
+#k[data-skin] .hk .rn-card .k-btn { min-height: var(--rn-row); min-width: 0; padding: 0 7px; gap: 4px; box-shadow: inset 0 0 0 1px var(--k-ink); font: 400 var(--zt-fs-label, var(--k-fs-s))/1 var(--zt-font-label, var(--k-font)); }
+#k[data-skin] .hk .rn-card .k-btn:hover { transform: none; box-shadow: inset 0 0 0 2px var(--k-ink); }
+#k[data-skin] .hk .rn-card .k-btn[disabled] { opacity: .5; cursor: default; box-shadow: inset 0 0 0 1px var(--k-ink); }
+#k[data-skin] .hk .rn-card .k-btn.rn-go, #k[data-skin] .hk .rn-card .k-btn.rn-skip, #k[data-skin] .hk .rn-card .k-btn.rn-barfold { flex: none; }
+#k[data-skin] .hk .rn-card .k-btn.rn-barfold { padding: 0 4px; background: none; color: var(--k-ink-2); }
+#k[data-skin] .hk .rn-card .k-btn.rn-barfold span { font: 700 var(--k-fs-xs)/1 var(--k-font); }
+#k[data-skin] .hk .rn-card .k-btn.hk-bump { min-height: calc(16 * var(--k-px)); padding: 0 4px; background: none; box-shadow: none; }
+#k[data-skin] .hk .rn-card .k-btn.hk-bump:hover { box-shadow: inset 0 0 0 1px var(--k-ink); }
+#k .rn-take { flex: none; display: flex; align-items: center; gap: 1px; height: var(--rn-row); padding: 0 2px 0 6px; box-shadow: inset 0 0 0 1px var(--k-line); }
+#k .rn-take > span { font-size: var(--k-fs-xs); color: var(--k-ink-3); text-transform: uppercase; margin-right: 3px; }
+#k .rn-take > b { min-width: calc(34 * var(--k-px)); text-align: center; font: 700 var(--k-fs-xs)/1 var(--k-font); }
+/* held: the plate, slim */
+#k .rn-card .hk-held { gap: 4px 10px; padding: 2px 8px; min-height: var(--rn-row); }
+#k .rn-card .hk-held > b { font-size: var(--zt-fs-label, var(--k-fs-s)); }
+
+/* THE DANGER'S SMALL PRINT: a slip over the bar's start, opened from its number (the bar keeps its height) */
+#k .rn-print { position: absolute; left: calc(var(--rn-m) + var(--rn-side) + var(--rn-g)); bottom: calc(var(--rn-m) + var(--rn-card-h, 0px) + 6px);
+  width: min(calc(440 * var(--k-px)), calc(100% - var(--rn-side) - 2 * var(--rn-m) - var(--rn-g))); display: grid; gap: 5px; padding: 6px 9px 8px;
+  background: var(--zt-grid, none), var(--hk-plate); box-shadow: var(--rn-sh), inset 0 3px 0 var(--hk-hot); pointer-events: auto; color: var(--k-ink); font: 400 var(--k-fs-xs)/1.3 var(--k-font); }
+#k .rn-print[hidden] { display: none; }
+#k .rn-print-head { display: flex; align-items: center; gap: 8px; }
+#k .rn-print-head b { flex: 1; font: 400 var(--zt-fs-label, var(--k-fs-s))/1.2 var(--zt-font-label, var(--k-font)); text-transform: uppercase; }
+#k[data-skin] .hk .k-btn.rn-print-x { min-height: calc(18 * var(--k-px)); min-width: calc(18 * var(--k-px)); padding: 0; border-radius: 50%; background: var(--k-ink); color: var(--hk-plate); box-shadow: none; font: 700 var(--k-fs-xs)/1 var(--k-font); }
+#k .rn-print .hk-legend { margin-top: 0; display: grid; gap: 2px; }
+#k .rn-print .hk-legend span { white-space: normal; display: block; line-height: 1.3; }
+#k .rn-print .hk-legend i { display: inline-block; margin-right: 4px; vertical-align: -1px; }
+#k .rn-police { display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: baseline; gap: 2px 8px; padding: 2px 6px; background: var(--hk-paper); box-shadow: inset 0 0 0 1px var(--k-line); color: var(--k-ink-3); }
+#k .rn-police b { font: 700 var(--k-fs-xs)/1.2 var(--k-font); color: var(--k-ink-2); }
+#k .rn-police span { white-space: nowrap; }
+#k .rn-police em { font-style: normal; font-size: var(--k-fs-xs); line-height: 1.3; }
+#k .rn-police.is-on { background: var(--zt-blu, var(--k-accent)); color: var(--zt-white, var(--k-accent-ink)); box-shadow: none; }
+#k .rn-police.is-on b { color: inherit; }
+#k .rn-now-line { font-size: var(--k-fs-xs); color: var(--k-ink-2); line-height: 1.3; }
+
+/* ── THE PANELS: one at a time, beside the dock, over the picture; never over the bar, never taller than the free part ── */
+#k .rn-sheet { position: absolute; left: calc(var(--rn-m) + var(--rn-side) + var(--rn-g)); top: var(--rn-body-t);
+  max-height: calc(100% - var(--rn-body-t) - var(--rn-m) - var(--rn-card-h, 0px) - var(--rn-g));
+  width: min(calc(400 * var(--k-px)), calc(100% - var(--rn-side) - 2 * var(--rn-m) - var(--rn-g))); min-height: 100px; display: flex; flex-direction: column;
+  pointer-events: auto; color: var(--k-ink); background: var(--zt-grid, none), var(--hk-plate); box-shadow: var(--rn-sh), inset 0 3px 0 var(--hk-yours); animation: rn-sheet-in 160ms var(--k-ease) both;
+  font: 400 var(--k-fs-xs)/1.35 var(--k-font); text-align: left; }
+#k .rn-sheet[hidden] { display: none; }
+@keyframes rn-sheet-in { from { opacity: 0; transform: translateX(-14px); } }
+#k .rn-sheet-head { flex: none; display: flex; align-items: center; gap: 6px; padding: 8px 8px 5px 10px; }
+#k .rn-sheet-title { flex: 1; min-width: 0; margin: 0; font: 400 var(--zt-fs-label, var(--k-fs-s))/1.2 var(--zt-font-label, var(--k-font)); text-transform: uppercase; }
+#k .rn-sheet-head kbd { margin: 0; }
+#k[data-skin] .hk .k-btn.rn-sheet-x { width: calc(20 * var(--k-px)); min-width: calc(20 * var(--k-px)); min-height: calc(20 * var(--k-px)); padding: 0; border-radius: 50%; background: var(--k-ink); color: var(--hk-plate); box-shadow: none; font: 700 var(--k-fs-xs)/1 var(--k-font); }
+#k[data-skin] .hk .k-btn.rn-sheet-x:hover { background: var(--hk-hot); color: var(--k-ink); transform: none; }
+#k .rn-sheet-lead { flex: none; }
+#k .rn-sheet-lead:empty { display: none; }
+#k .rn-sheet-scroll { flex: 1 1 auto; min-height: 0; overflow: hidden auto; padding: 0 10px 8px; scrollbar-width: thin; scrollbar-color: var(--k-ink) transparent; overscroll-behavior: contain; }
+#k .rn-sheet-foot { flex: none; display: flex; justify-content: space-between; gap: 8px; padding: 5px 10px 6px; border-top: 1px dashed var(--k-line);
+  font: 400 var(--zt-fs-label, var(--k-fs-xs))/1.3 var(--zt-font-label, var(--k-font)); text-transform: uppercase; color: var(--k-ink-3); }
+
+/* the panels' parts: a section with its heading, notes, the kit's stat rows, all at the small type */
+#k .rn-sec { padding: 6px 0 5px; display: grid; gap: 5px; }
+#k .rn-sec + .rn-sec { border-top: 1px dashed var(--k-line); }
+#k .rn-sec-h { margin: 0; font: 400 var(--zt-fs-label, var(--k-fs-s))/1.2 var(--zt-font-label, var(--k-font)); text-transform: uppercase; color: var(--k-ink); }
+#k .rn-sheet .k-stats { gap: 0; }
+#k .rn-sheet .k-stat { min-height: calc(20 * var(--k-px)); padding: 2px 0; gap: 10px; }
+#k .rn-sheet .k-stat > span { font-size: var(--k-fs-xs); }
+#k .rn-sheet .k-stat > b { font-size: var(--k-fs-xs); white-space: nowrap; }
+#k .rn-note { font-size: var(--k-fs-xs); color: var(--k-ink-2); line-height: 1.35; }
+#k .rn-note.is-risk { color: var(--k-ink); box-shadow: inset 3px 0 0 var(--hk-hot); padding-left: 8px; }
+#k .rn-lede { padding: 0 0 2px; font-weight: 700; line-height: 1.35; }
+#k .rn-empty { color: var(--k-ink-3); }
+#k .rn-ledger { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+#k .rn-sheet .hk-ledger b { font-size: var(--k-fs-m); }
+#k .rn-owns { display: grid; gap: 3px; }
+#k .rn-owns li { display: grid; gap: 1px; padding: 3px 8px 3px 10px; background: var(--zt-white, var(--hk-paper)); box-shadow: inset 3px 0 0 var(--hk-yours), inset 0 0 0 1px var(--k-line); }
+#k .rn-owns li span { font-size: var(--k-fs-xs); color: var(--k-ink-2); }
+
+/* the character sheet: the dossier's head (the portrait turning, the name, the meta), the kit's tabs under it */
+#k .rn-char-head { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; padding: 0 10px 4px; }
+#k .rn-portrait { position: relative; width: calc(64 * var(--k-px)); height: calc(78 * var(--k-px)); overflow: hidden; background: var(--zt-pink, var(--k-yours)); box-shadow: inset 0 0 0 1px var(--k-ink); }
+#k .rn-portrait canvas { position: absolute; inset: 0; width: 100%; height: 100%; background: center / cover no-repeat; }
+#k .rn-portrait canvas[data-state="ok"] + .rn-portrait-wait { display: none; }
+#k .rn-portrait-wait { position: absolute; inset: auto 0 6px; text-align: center; font: 400 var(--zt-fs-label, var(--k-fs-xs))/1 var(--zt-font-label, var(--k-font)); text-transform: uppercase; }
+#k .rn-char-id { display: grid; align-content: start; gap: 3px; min-width: 0; padding-top: 1px; }
+#k .rn-char-name { margin: 0; font: 400 calc(18 * var(--k-px))/1 var(--k-font-sign, var(--k-font-display)); text-transform: uppercase; }
+#k .rn-char-id p { font-size: var(--k-fs-xs); color: var(--k-ink-2); line-height: 1.3; }
+#k .rn-char-id p b { color: var(--k-ink); text-transform: uppercase; font-size: var(--k-fs-xs); }
+#k .rn-sheet .k-tabs { padding: 4px 10px 5px; gap: 4px; }
+#k[data-skin] .rn-sheet .k-tab { min-height: calc(22 * var(--k-px)); box-shadow: inset 0 0 0 1px var(--k-ink); }
+/* what you are wearing: one column now; a skin picker, when there is one, takes a second column beside it */
+#k .rn-wear { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; align-items: start; }
+#k .rn-wear-list { display: grid; gap: 2px; }
+#k .rn-wear-list li { display: grid; grid-template-columns: calc(70 * var(--k-px)) minmax(0, 1fr) auto; align-items: baseline; gap: 8px; padding: 2px 6px; background: var(--zt-white, var(--hk-paper)); box-shadow: inset 0 0 0 1px var(--k-line); }
+#k .rn-wear-list li b { font-weight: 700; }
+#k .rn-wear-list li code { font: 400 var(--k-fs-xs)/1.2 var(--k-font-mono); color: var(--k-ink-3); }
+#k .rn-wear-list li.is-none { background: none; color: var(--k-ink-3); }
+#k .rn-wear-list li.is-none b { font-weight: 400; }
+#k .rn-people { display: grid; gap: 2px; }
+#k .rn-people li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; align-items: center; gap: 6px; padding: 2px 6px; background: var(--zt-white, var(--hk-paper)); box-shadow: inset 0 0 0 1px var(--k-line); }
+#k .rn-people li b { font-weight: 700; }
+#k .rn-people li.is-out { background: none; color: var(--k-ink-3); }
+#k .rn-people li.is-out b { text-decoration: line-through; text-decoration-thickness: 1.5px; }
+#k .rn-role { font-size: var(--k-fs-xs); color: var(--k-ink-3); text-transform: uppercase; }
+#k .rn-mood { font-style: normal; font-weight: 700; font-size: var(--k-fs-xs); padding: 0 4px; white-space: nowrap; box-shadow: inset 0 0 0 1px var(--k-line); }
+#k .rn-mood.is-sour { background: var(--hk-bad-plate); color: var(--hk-bad-ink); box-shadow: none; }
+#k .rn-mood.is-wary { background: var(--hk-messy); color: var(--k-ink); box-shadow: none; }
+#k .rn-mood.is-friendly { background: var(--hk-clean); color: var(--k-ink); box-shadow: none; }
+
+/* every move: a tile a job, by place; what is on the table now lit; what is locked dashed */
+#k .rn-jobs, #k .rn-stuff { display: grid; gap: 4px; }
+#k .rn-job, #k .rn-thing { display: grid; gap: 2px; padding: 3px 8px 4px; background: var(--zt-white, var(--hk-paper)); box-shadow: inset 0 0 0 1px var(--k-ink); }
+#k .rn-job.is-safe { box-shadow: inset 3px 0 0 var(--hk-clean), inset 0 0 0 1px var(--k-ink); padding-left: 10px; }
+#k .rn-job.is-dealt { box-shadow: inset 0 0 0 2px var(--k-ink), inset 0 -3px 0 var(--hk-hot); }
+#k .rn-job.is-locked { background: none; box-shadow: inset 0 0 0 1px var(--k-ink-3); color: var(--k-ink-2); }
+#k .rn-way { gap: 1px; }
+#k .rn-job-head { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+#k .rn-job-head b { flex: 1; min-width: 0; font-weight: 700; line-height: 1.25; }
+#k .rn-job-odds { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; font-size: var(--k-fs-xs); color: var(--k-ink-2); line-height: 1.3; }
+#k .rn-job-odds .hk-tag { padding: 0 4px; }
+#k .rn-job-odds .hk-mini b { min-width: 0; color: var(--k-ink); font-size: var(--k-fs-xs); }
+#k .rn-job-odds .hk-bar.is-small { width: calc(36 * var(--k-px)); height: 6px; box-shadow: 0 0 0 1px var(--k-ink); }
+#k .rn-ontable { display: inline-flex; align-items: center; gap: 4px; padding: 0 2px 0 6px; background: var(--k-ink); color: var(--hk-clean); font: 700 var(--k-fs-xs)/1.5 var(--k-font); text-transform: uppercase; white-space: nowrap; }
+#k .rn-ontable kbd { margin: 0; background: var(--hk-clean); color: var(--k-ink); }
+#k .rn-job-who, #k .rn-job-better { font-size: var(--k-fs-xs); line-height: 1.35; color: var(--k-ink-2); }
+#k .rn-job-who > span:first-child { color: var(--k-ink-3); }
+#k .rn-who-name { color: var(--k-ink); font-weight: 700; }
+#k .rn-who-name.is-out { color: var(--k-ink-3); font-weight: 400; text-decoration: line-through; }
+#k .rn-who-name em { margin-left: 4px; font-style: normal; }
+#k .rn-thing-does { line-height: 1.35; }
+#k .rn-thing.is-owned { box-shadow: inset 3px 0 0 var(--hk-yours), inset 0 0 0 1px var(--k-ink); padding-left: 10px; }
+#k .rn-gap { font-weight: 700; color: var(--hk-hot-text); }
+#k .rn-gap em { font-style: normal; font-weight: 400; color: var(--k-ink-3); }
+#k .rn-gap.is-go { color: var(--k-ink); background: var(--hk-clean); padding: 0 4px; }
+
+/* ── THE MAP PANEL: the kit's paper map of the island in the panel's body (demo/run/map.js) ───────────────────────── */
+#k .rn-sheet[data-sheet="map"] { width: min(calc(820 * var(--k-px)), calc(100% - var(--rn-side) - 2 * var(--rn-m) - var(--rn-g)));
+  height: calc(100% - var(--rn-body-t) - var(--rn-m) - var(--rn-card-h, 0px) - var(--rn-g)); }
+#k .rn-sheet[data-sheet="map"] .rn-sheet-scroll, #k .rn-sheet:not([data-sheet="map"]) .rn-map { display: none; }
+#k .rn-sheet[data-sheet="map"] .rn-lede { padding: 0 10px 5px; font-weight: 400; color: var(--k-ink-2); }
+/* (no web font asked for by the kit's map: the page's Space Mono is the zte map's face) */
+#k .rn-map { --k-map-fonts: ""; position: relative; flex: 1 1 auto; min-height: 140px; margin: 0 8px 8px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--k-ink); }
+/* the kit's sheet, in our panel: not full screen; its legend down to the scale, the north arrow and the zoom; a city
+   place's card down to what the place is (who is there and what happened there are the simulation's, not the run's) */
+#k[data-skin] .rn-map .mp { top: 0; transform: none; }
+#k[data-skin] .rn-map .mp-legend { top: auto; bottom: 6px; right: 6px; width: auto; max-height: none; box-shadow: 2px 2px 0 var(--k-ink); }
+#k[data-skin] .rn-map .mp-lg-head, #k[data-skin] .rn-map .mp-layers, #k[data-skin] .rn-map .mp-you, #k[data-skin] .rn-map .mp-keys, #k[data-skin] .rn-map .mp-help { display: none; }
+#k[data-skin] .rn-map .mp-lg-body { padding: 5px 7px; gap: 0; }
+#k[data-skin] .rn-map .mp-foot { border-top: 0; padding-top: 0; gap: 8px; }
+#k[data-skin] .rn-map .mp-scale { min-width: calc(60 * var(--k-px)); }
+#k[data-skin] .rn-map .mp-zoom .k-btn { min-height: calc(20 * var(--k-px)); min-width: calc(20 * var(--k-px)); padding: 0 6px; font-size: var(--k-fs-xs); box-shadow: inset 0 0 0 1px var(--k-ink); }
+#k[data-skin] .rn-map .mp-north { font-size: var(--k-fs-xs); }
+#k[data-skin] .rn-map .mp-card-sec, #k[data-skin] .rn-map .mp-card-go { display: none; }
+#k[data-skin] .rn-map .mp-card { width: calc(240 * var(--k-px)); padding: 8px 10px; gap: 6px; box-shadow: 3px 3px 0 var(--k-ink); }
+/* ours over the sheet: the stops' flags (each left of its point, a leader to it) and a stop's card */
+#k .rn-map-over { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+#k .rn-flag { position: absolute; left: 0; top: 0; transform: translate(-100%, -50%); display: inline-flex; align-items: baseline; gap: 6px; padding: 2px 6px; border: 0;
+  background: var(--zt-white, var(--hk-paper)); color: var(--k-ink); box-shadow: inset 0 0 0 1px var(--k-ink), 2px 2px 0 var(--k-ink); font: 400 var(--k-fs-xs)/1.2 var(--k-font);
+  white-space: nowrap; cursor: pointer; pointer-events: auto; }
+#k .rn-flag b { font: 400 var(--zt-fs-label, var(--k-fs-xs))/1 var(--zt-font-label, var(--k-font)); text-transform: uppercase; }
+#k .rn-flag:hover { box-shadow: inset 0 0 0 2px var(--k-ink), 2px 2px 0 var(--k-ink); }
+#k .rn-flag.is-here { background: var(--hk-yours); }
+#k .rn-flag.is-locked { background: var(--hk-paper); color: var(--k-ink-3); }
+#k .rn-flag.is-on { background: var(--k-ink); color: var(--hk-plate); }
+#k .rn-flag[hidden] { display: none; }
+#k .rn-stopcard { position: absolute; left: 0; top: 0; z-index: 2; width: min(calc(290 * var(--k-px)), calc(100% - 16px)); display: grid; gap: 4px; padding: 6px 9px 8px;
+  background: var(--zt-grid, none), var(--zt-bone, var(--hk-plate)); box-shadow: 3px 3px 0 var(--k-ink), inset 0 3px 0 var(--hk-yours); color: var(--k-ink); font: 400 var(--k-fs-xs)/1.35 var(--k-font); pointer-events: auto; }
+#k .rn-stopcard[hidden] { display: none; }
+#k .rn-stopcard header { display: flex; align-items: center; gap: 8px; }
+#k .rn-stopcard header b { flex: 1; font: 400 var(--zt-fs-label, var(--k-fs-s))/1.2 var(--zt-font-label, var(--k-font)); text-transform: uppercase; }
+#k[data-skin] .hk .k-btn.rn-stopcard-x { min-height: calc(18 * var(--k-px)); min-width: calc(18 * var(--k-px)); padding: 0; border-radius: 50%; background: var(--k-ink); color: var(--hk-plate); box-shadow: none; font: 700 var(--k-fs-xs)/1 var(--k-font); }
+#k .rn-stopcard > .hk-tag { justify-self: start; }
+#k .rn-stopcard p { margin: 0; color: var(--k-ink-2); }
+#k .rn-stopcard p b { color: var(--k-ink); }
+#k .rn-stopcard p.is-safe b { background: var(--hk-clean); padding: 0 4px; }
+#k .rn-stopcard p.is-risk b { background: var(--hk-bad-plate); color: var(--hk-bad-ink); padding: 0 4px; }
+#k .rn-stopcard p.is-police b { background: var(--zt-blu, var(--k-accent)); color: var(--zt-white, var(--k-accent-ink)); padding: 0 4px; }
+#k .rn-stopcard .rn-stop-left span { font-weight: 700; color: var(--k-ink); }
+#k .rn-stopcard .rn-stop-left em { font-style: normal; color: var(--k-ink-3); }
+
+/* the day's report and done: the old night screen's plate and ledger */
+#k .rn-report { width: min(100%, calc(620 * var(--k-px))); }
+#k .rn-report .hk-ledger { grid-template-columns: repeat(3, 1fr); }
+#k .rn-done h1 { font-size: calc(36 * var(--k-px)); }
+
+/* ── phone width: the top line, the dock a strip under it (folded by default), the bar at the bottom ───────────────── */
+@media (max-width: 720px) {
+  #k .rn, #k .rn.is-rail { --rn-side: 0px; --rn-m: 6px; }
+  #k .rn-top { gap: 7px; overflow: hidden; }
+  /* (one line: the clock, the day, the line, a new run. "Done in N days" is the dock's goal row) */
+  #k .rn-top .hk-mode, #k .rn-top .rn-where, #k .rn-top .rn-seed, #k .rn-top .hk-clock-note { display: none; }
+  #k .rn-stops { gap: 3px; padding: 1px 4px; }
+  #k .rn-stops kbd, #k .rn-line, #k .rn-stop em { display: none; }
+  #k[data-skin] .hk-top .k-btn.rn-new { padding: 0 4px; }
+  #k .rn-left, #k .rn.is-rail .rn-left { right: var(--rn-m); bottom: auto; width: auto; }
+  #k .rn-dock, #k .rn.is-rail .rn-dock { height: auto; max-height: calc(100vh - var(--rn-body-t) - 40vh); padding: 5px 7px 6px; gap: 5px; }
+  /* open: compact (the room inside the crib still needs its height under it): the head with the panel keys beside
+     it, then two columns */
+  #k .rn-dock:not(.is-rail) { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "head keys" "body body"; align-items: center; gap: 5px 8px; }
+  #k .rn-dock:not(.is-rail) .rn-dock-head { grid-area: head; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 7px; }
+  #k .rn-dock:not(.is-rail) .rn-dock-body { grid-area: body; }
+  #k .rn-dock:not(.is-rail) .rn-keys { grid-area: keys; margin: 0; padding: 0; border: 0; display: flex; gap: 4px; }
+  #k .rn-dock:not(.is-rail) .rn-face { width: calc(26 * var(--k-px)); height: calc(32 * var(--k-px)); }
+  #k .rn-id .rn-id-open { display: none; }
+  #k[data-skin] .hk .rn-dock .k-btn.rn-key { min-width: calc(26 * var(--k-px)); min-height: calc(26 * var(--k-px)); padding: 0 4px; justify-content: center; }
+  #k[data-skin] .hk .rn-dock .k-btn.rn-key span { display: none; }
+  #k .rn-dock-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 4px 10px; }
+  #k .rn-dock-body .rn-owned, #k .rn-dock-body .rn-goal { grid-column: 1 / -1; }
+  #k .rn-dock-body .rn-cash { grid-column: 1 / -1; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
+  #k .rn-dock-body .rn-carried, #k .rn-dock-body .rn-banked { display: grid; gap: 1px; padding: 2px 6px 3px; }
+  #k .rn-dock .hk-heat { grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px; }
+  #k .rn-dock .rn-owned > span:first-child, #k .rn-dock .rn-goal-head > span { width: auto; }
+  /* folded: one line under the top line */
+  /* (one line: the fold, what you carry, your heat, the four panel keys; energy is on the open dock) */
+  #k .rn-dock.is-rail { flex-direction: row; align-items: center; gap: 6px; padding: 4px 6px; overflow: hidden; }
+  #k .rn-dock.is-rail .rn-fold { align-self: center; flex: none; }
+  #k .rn-dock.is-rail .rn-fold kbd { display: none; }
+  #k .rn-dock.is-rail .rn-face { display: none; }
+  /* (what you carry and the heat boxes with their count; the word "heat" is on the open dock. Never over the keys) */
+  #k .rn-dock.is-rail .rn-rail-stats { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 7px; overflow: hidden; }
+  #k .rn-dock.is-rail .rn-carried { display: flex; align-items: baseline; gap: 5px; padding: 2px 6px; flex: none; }
+  #k .rn-dock.is-rail .rn-carried b { font-size: calc(18 * var(--k-px)); }
+  #k .rn-dock.is-rail .hk-heat.rn-heat { display: flex; align-items: center; gap: 4px; flex: none; }
+  #k .rn-dock.is-rail .hk-heat.rn-heat > span:first-child { display: none; }
+  #k .rn-dock.is-rail .hk-heat.rn-energy { display: none; }
+  #k .rn-dock.is-rail .rn-keys { flex: none; margin: 0; padding: 0; border: 0; display: flex; gap: 3px; }
+  #k[data-skin] .hk .rn-dock.is-rail .k-btn.rn-key { flex-direction: row; min-width: calc(26 * var(--k-px)); min-height: calc(26 * var(--k-px)); padding: 0 3px; }
+  #k[data-skin] .hk .rn-dock.is-rail .k-btn.rn-key span { display: none; }
+  /* the bar: the danger's number and what is said on one row, the choices under it, then the ways (they wrap) */
+  #k .rn-card { left: var(--rn-m); right: var(--rn-m); max-height: calc(62vh - var(--rn-body-t) - var(--rn-dock-h, 40px) - 2 * var(--rn-m) - 6px); }
+  #k .rn-card-body { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "pct said said" "top top top" "ways ways ways"; }
+  #k .rn-card-body.is-one-row { grid-template-areas: "pct said ways"; }
+  #k .rn-pct { display: flex; align-items: baseline; gap: 4px; box-shadow: none; padding: 0 2px; }
+  #k .rn-said { height: calc(2 * 1.2em + 2px); }
+  #k .rn-said-line { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+  #k .rn-said-line.rn-chips { display: flex; white-space: nowrap; }
+  /* (folded on a phone: the row of choices the bar's width, the number, Go and the fold under it) */
+  #k .rn-card.is-folded .rn-card-body.is-one-row { grid-template-areas: "said said said" "pct . ways"; }
+  #k .rn-danger-sum { display: flex; flex-wrap: wrap; align-content: center; max-height: 100%; row-gap: 2px; }
+  /* (what just happened: its words run on as text over the two lines, the pay first, the roll at the end) */
+  #k .rn-result { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; }
+  #k .rn-result > .rn-tick, #k .rn-result > .rn-paid { display: inline; margin-right: 6px; }
+  #k .rn-result > .rn-roll { display: inline-flex; vertical-align: middle; }
+  #k .rn-options { grid-template-columns: 1fr; gap: 3px; }
+  #k .rn-ways { flex-wrap: wrap; justify-content: flex-start; row-gap: 4px; }
+  #k .rn-card-body:not(.is-one-row) .rn-ways .rn-move { flex: 1 1 40%; max-width: none; }
+  #k .rn-card-body:not(.is-one-row) .rn-ways .rn-go { margin-left: auto; }
+  /* the panels: as the kit's dossier on a phone, a sheet from the bottom over the bar (a phone has no number keys
+     to choose with while one is open), the picture still in sight above it */
+  #k .rn-sheet, #k .rn-sheet[data-sheet="map"] { left: var(--rn-m); right: var(--rn-m); width: auto; top: auto; bottom: var(--rn-m); max-height: none; height: 62vh; }
+  #k .rn-print { left: var(--rn-m); right: var(--rn-m); width: auto; }
+  #k .rn-sheet-foot { display: none; }
+  #k .rn-portrait { width: calc(56 * var(--k-px)); height: calc(68 * var(--k-px)); }
+  #k .rn-char-head { padding: 0 10px 2px; }
+  #k .rn-sheet-scroll { padding: 0 10px 10px; }
+}
+
+/* THE PEOPLE (demo/run/index.js): who a tile is done to, with their mood when it is not calm; what a place worked dry
+   says; and the mark over the head of anyone not calm, for the rest of the day: sour steams, wary watches, friendly is
+   warm. */
+#k .rn-who { display: inline-flex; align-items: baseline; gap: 0 5px; min-width: 0; color: var(--k-ink-2); }
+#k .rn-who span { font-weight: 700; color: var(--k-ink); overflow: hidden; text-overflow: ellipsis; }
+#k .rn-who em { flex: none; font-style: normal; font-weight: 700; padding: 0 4px; }
+#k .rn-who.is-sour em { background: var(--hk-bad-plate); color: var(--hk-bad-ink); }
+#k .rn-who.is-wary em { background: var(--hk-messy); color: var(--k-ink); }
+#k .rn-who.is-friendly em { background: var(--hk-clean); color: var(--k-ink); }
+#k .rn-who.is-unaware em { box-shadow: inset 0 0 0 1px var(--k-line); }
+
+#k .rn-marks { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+#k .rn-mark { position: absolute; left: 0; top: 0; width: 26px; height: 26px; margin: -26px 0 0 -13px; display: grid; place-items: center;
+  border-radius: 50%; box-shadow: 0 0 0 2px var(--k-ink), 2px 2px 0 2px var(--k-ink); font: 700 16px/1 var(--k-font); color: var(--k-ink); }
+#k .rn-mark[hidden] { display: none; }
+/* (in a place's inside view the room alone is drawn, stage/inside.js: nobody outside is in the picture, nor their mark) */
+body.hk2-inside #k .rn-marks { visibility: hidden; }
+#k .rn-mark.is-sour { background: var(--zt-red, var(--k-wanted)); color: var(--zt-white, var(--k-bg-solid)); }
+#k .rn-mark.is-sour i { position: absolute; bottom: 24px; width: 7px; height: 10px; border-radius: 50%; background: var(--zt-white, #fff); box-shadow: 0 0 0 1.5px var(--k-ink);
+  opacity: 0; animation: rn-steam 1.1s ease-out infinite; }
+#k .rn-mark.is-sour i:nth-child(1) { left: 1px; animation-delay: 0s; }
+#k .rn-mark.is-sour i:nth-child(2) { left: 10px; animation-delay: .37s; }
+#k .rn-mark.is-sour i:nth-child(3) { left: 18px; animation-delay: .74s; }
+#k .rn-mark.is-wary { background: var(--hk-messy); }
+#k .rn-mark.is-wary b { width: 16px; height: 9px; border-radius: 50%; background: var(--zt-white, #fff); box-shadow: 0 0 0 1.5px var(--k-ink), inset 0 0 0 2.5px var(--zt-white, #fff), inset 0 0 0 5px var(--k-ink); }
+#k .rn-mark.is-friendly { background: var(--hk-clean); }
+@keyframes rn-steam {
+  0% { transform: translateY(4px) scale(.6); opacity: 0; }
+  25% { opacity: 1; }
+  100% { transform: translateY(-10px) scale(1.15); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) { #k .rn-mark.is-sour i { animation: none; opacity: 1; } #k .rn-sheet { animation: none; } }
+
+/* ── THE WORLD ANSWERS (rules-2): the street's moves, the heat here, targets, the door, stranded, the regular ───────── */
+/* the row's moves keep one line: a long small print is cut, all of it in the tooltip */
+#k .rn-move .hk-move-text { min-width: 0; overflow: hidden; }
+#k .rn-move .hk-move-text span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#k .hk .rn-move[data-do="rob"] kbd, #k .hk .rn-move[data-do="bins"] kbd, #k .hk .rn-move[data-do="shop"] kbd, #k .hk .rn-move[data-do="rough"] kbd { background: var(--k-ink); color: var(--hk-plate); }
+#k .hk .rn-move.is-on[data-do] kbd { background: var(--hk-clean); color: var(--k-ink); }
+/* (the street's moves give way first when the row is short: the ways on keep their words longest) */
+#k .hk .rn-move[data-do="rob"], #k .hk .rn-move[data-do="bins"], #k .hk .rn-move[data-do="shop"], #k .hk .rn-move[data-do="rough"] { flex-shrink: 3; }
+
+/* THE HEAT HERE under the danger's number, and the police when they are about (the bar keeps its height) */
+#k .rn-pct-heat { display: grid; justify-items: start; gap: 1px; font-size: var(--k-fs-xs); line-height: 1.1; color: var(--k-ink-2); white-space: nowrap; }
+#k .rn-pct-heat .is-bad { color: var(--hk-hot-text); font-weight: 700; }
+#k .rn-pct-heat .rn-pol { font-style: normal; font-weight: 700; padding: 0 2px; color: var(--zt-blu, var(--k-accent)); text-transform: uppercase; }
+#k .rn-card-body:not(.is-one-row) .rn-pct { gap: 0; line-height: 1.1; }
+#k .rn-card-body.is-one-row .rn-pct-heat { display: inline-flex; gap: 4px; }
+#k .rn-pct-heat .rn-pol.is-on { background: var(--zt-blu, var(--k-accent)); color: var(--zt-white, var(--k-accent-ink)); box-shadow: none; }
+#k .rn-card-body.is-one-row .rn-pct-heat { margin-left: 2px; }
+/* the place's word at the start of the row's hint: hot is the bad plate, patrolled the police's blue */
+#k .rn-danger-sum .rn-place-word { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; color: var(--k-ink); }
+#k .rn-danger-sum .rn-place-word.is-hot { background: var(--hk-bad-plate); color: var(--hk-bad-ink); padding: 0 5px; }
+#k .rn-danger-sum.is-quiet { cursor: default; }
+#k .rn-danger-sum.is-quiet > span { color: var(--k-ink-3); }
+
+/* the line's stops on the top line: each one's heat, and a P where the police are about */
+#k .rn-stop-heat { min-width: 9px; padding: 0 2px; font: 700 var(--k-fs-xs)/1.2 var(--k-font); text-align: center; box-shadow: inset 0 0 0 1px var(--k-ink); background: var(--hk-paper); color: var(--k-ink); }
+#k .rn-stop-heat.is-zero { color: var(--k-ink-3); box-shadow: inset 0 0 0 1px var(--k-line); }
+#k .rn-stop-heat.is-hot { background: var(--hk-bad-plate); color: var(--hk-bad-ink); box-shadow: none; }
+#k .rn-stop .rn-stop-pol { padding: 0 2px; font: 700 var(--k-fs-xs)/1.2 var(--k-font); background: var(--zt-blu, var(--k-accent)); color: var(--zt-white, var(--k-accent-ink)); }
+/* and on the map's flags */
+#k .rn-flag i { font-style: normal; font-weight: 700; padding: 0 3px; box-shadow: inset 0 0 0 1px var(--k-ink); }
+#k .rn-flag i.is-zero { font-weight: 400; color: var(--k-ink-3); box-shadow: inset 0 0 0 1px var(--k-line); }
+#k .rn-flag i.is-hot { background: var(--hk-bad-plate); color: var(--hk-bad-ink); box-shadow: none; }
+#k .rn-flag i.rn-flag-pol { background: var(--zt-blu, var(--k-accent)); color: var(--zt-white, var(--k-accent-ink)); box-shadow: none; text-transform: uppercase; }
+#k .rn-stopcard p.is-hot b { background: var(--hk-bad-plate); color: var(--hk-bad-ink); padding: 0 4px; }
+#k .rn-stopcard p.is-police b { background: var(--zt-blu, var(--k-accent)); color: var(--zt-white, var(--k-accent-ink)); padding: 0 4px; }
+#k .rn-stopcard p.is-quiet b { box-shadow: inset 0 0 0 1px var(--k-line); padding: 0 4px; }
+
+/* THE TARGET, picked on the option's own line: ‹ name › and which of how many; a click is the next */
+#k .rn-who.is-pick { cursor: pointer; padding: 0 3px 0 1px; box-shadow: inset 0 0 0 1px var(--k-line); }
+#k .rn-who.is-pick:hover { box-shadow: inset 0 0 0 1px var(--k-ink); }
+#k .rn-who.is-pick i { font-style: normal; font-weight: 700; color: var(--k-ink-3); }
+#k .rn-who.is-pick small { font-size: var(--k-fs-xs); color: var(--k-ink-3); }
+#k .rn-option.is-on .rn-who.is-pick { box-shadow: inset 0 0 0 1px var(--hk-plate); }
+#k .rn-option.is-on .rn-who.is-pick i, #k .rn-option.is-on .rn-who.is-pick small { color: var(--hk-clean); }
+/* a regular: how hooked, in words */
+#k .rn-hooked { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 700; color: var(--k-ink-2); }
+#k .rn-hooked.is-hooked { color: var(--hk-hot-text); }
+#k .rn-option.is-on .rn-hooked { color: var(--hk-messy); }
+#k .rn-hooked-line { grid-column: 1 / -1; font-size: var(--k-fs-xs); line-height: 1.3; color: var(--k-ink-2); }
+#k .rn-hooked-line.is-hooked { color: var(--hk-hot-text); }
+#k .rn-people li.is-regular { row-gap: 1px; }
+
+/* cold: thinks less of you (seen in the bins). Slate, eyes down */
+#k .rn-mood.is-cold, #k .rn-who.is-cold em { background: var(--zt-slate, var(--k-ink-3)); color: var(--zt-white, var(--k-bg-solid)); box-shadow: none; }
+#k .rn-mark.is-cold { background: var(--zt-slate, var(--k-ink-3)); color: var(--zt-white, #fff); }
+
+/* THE DOOR and STRANDED: tiles of the top row; their words on the slim row, said plainly */
+#k .rn-said-line.rn-door-said, #k .rn-said-line.rn-stranded { box-shadow: inset 3px 0 0 var(--hk-hot); }
+#k .rn-ways-out { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+#k .rn-door-note { cursor: default; background: none; box-shadow: inset 0 0 0 1px var(--k-line); }
+#k .rn-door-note.is-off { opacity: 1; }
+#k .rn-door-note:hover { background: none; box-shadow: inset 0 0 0 1px var(--k-line); }
+#k .rn-move-tile .rn-o-main kbd { background: var(--k-ink); color: var(--hk-plate); }
+#k .rn-move-tile.is-on .rn-o-main kbd { background: var(--hk-clean); color: var(--k-ink); }
+
+/* the panels: the street at each place, its supply left today; the shop here with its Buy */
+#k .rn-street-sec { display: grid; gap: 4px; padding-top: 4px; }
+#k .rn-sub-h { font: 700 var(--k-fs-xs)/1.2 var(--k-font); text-transform: uppercase; color: var(--k-ink-2); }
+#k .rn-street { box-shadow: inset 0 0 0 1px var(--k-ink-3); }
+#k .rn-street.is-note { background: none; box-shadow: inset 0 0 0 1px var(--k-line); }
+#k .rn-supply { font-weight: 700; color: var(--k-ink); }
+#k .rn-supply.is-none { color: var(--hk-hot-text); }
+#k button.rn-ontable { border: 0; cursor: pointer; }
+#k button.rn-ontable:hover { background: var(--hk-hot); color: var(--k-ink); }
+#k .rn-thing.is-here { box-shadow: inset 3px 0 0 var(--hk-clean), inset 0 0 0 1px var(--k-ink); padding-left: 10px; }
+#k .rn-thing.is-here.is-off { opacity: .7; }
+#k .rn-thing.is-away { background: none; box-shadow: inset 0 0 0 1px var(--k-line); }
+#k[data-skin] .hk .rn-sheet .k-btn.rn-buy { min-height: calc(18 * var(--k-px)); padding: 0 6px; gap: 5px; box-shadow: inset 0 0 0 1px var(--k-ink); font: 700 var(--k-fs-xs)/1 var(--k-font); background: var(--hk-clean); color: var(--k-ink); }
+#k[data-skin] .hk .rn-sheet .k-btn.rn-buy:hover { transform: none; box-shadow: inset 0 0 0 2px var(--k-ink); }
+#k .rn-here { border-bottom: 1px dashed var(--k-line); }
+
+/* the night's report: what a night on the street took, and a regular at the door */
+#k .rn-report .rn-night { margin-top: 4px; font-weight: 700; }
+#k .rn-report .rn-night.is-bad { display: inline-block; padding: 1px 6px; background: var(--hk-bad-plate); color: var(--hk-bad-ink); }
+#k .rn-report .rn-night.is-door { display: inline-block; padding: 1px 6px; box-shadow: inset 3px 0 0 var(--hk-hot); }
+#k .rn-o-sub .rn-hooked::before { content: "("; }
+#k .rn-o-sub .rn-hooked::after { content: ")"; }
+/* (phone width: the danger's number, its word and the heat here on one line, spaced; the street's moves by their
+   letter and name, their small print in their tooltip, so the ways keep to as few rows as they can) */
+@media (max-width: 720px) {
+  #k .rn-card-body:not(.is-one-row) .rn-pct { gap: 4px; }
+  #k .rn-pct-heat { display: inline-flex; gap: 4px; }
+  #k .rn-card-body:not(.is-one-row) .rn-ways .rn-move[data-do="rob"], #k .rn-card-body:not(.is-one-row) .rn-ways .rn-move[data-do="bins"],
+  #k .rn-card-body:not(.is-one-row) .rn-ways .rn-move[data-do="shop"], #k .rn-card-body:not(.is-one-row) .rn-ways .rn-move[data-do="rough"] { flex: 0 1 auto; }
+  #k .rn-ways .rn-move[data-do="rob"] .hk-move-text span, #k .rn-ways .rn-move[data-do="bins"] .hk-move-text span,
+  #k .rn-ways .rn-move[data-do="shop"] .hk-move-text span, #k .rn-ways .rn-move[data-do="rough"] .hk-move-text span { display: none; }
+  /* (with the street's moves on the row, the ways on take a third each, so the row keeps its two lines) */
+  #k .rn-card-body:not(.is-one-row) .rn-ways:has(.rn-move[data-do="bins"]) .rn-move:not([data-do="rob"]):not([data-do="bins"]):not([data-do="shop"]):not([data-do="rough"]) { flex-basis: 28%; }
+}
+
+/* ── TRUST (trust-1): the mark by a name, its meter in the People tab, the chance of being told on, what it did, and
+   the notice from elsewhere. The kit's plates as the moods and the heat use them: ▼ against you on the bad red, ▲ with
+   you on ink with the lime of a sure thing; neutral quiet. The arrow and the word say it, not the colour alone ── */
+#k .rn-trust { flex: none; display: inline-flex; align-items: baseline; gap: 3px; padding: 0 4px; font-weight: 700; font-size: var(--k-fs-xs); line-height: 1.2; white-space: nowrap; font-style: normal; }
+#k .rn-trust i { font-style: normal; font-size: .78em; }
+#k .rn-trust b { font-weight: 700; margin-left: 2px; }
+#k .rn-trust.is-with { background: var(--k-ink); color: var(--hk-clean); }
+#k .rn-trust.is-with b { color: var(--hk-plate); }
+#k .rn-trust.is-against { background: var(--hk-bad-plate); color: var(--hk-bad-ink); }
+#k .rn-trust.is-neutral { font-weight: 400; color: var(--k-ink-3); box-shadow: inset 0 0 0 1px var(--k-line); }
+#k .rn-option.is-on .rn-trust.is-with, #k .rn-option.is-on .rn-trust.is-with b { background: var(--hk-clean); color: var(--k-ink); }
+#k .rn-who-name .rn-trust, #k .rn-stop-left .rn-trust { margin-left: 4px; }
+/* the number, −3 to +3 from the middle out; the bands' cells ringed darker */
+#k .rn-tmeter { display: inline-flex; align-items: center; gap: 1px; }
+#k .rn-tmeter i { width: 7px; height: 7px; box-shadow: inset 0 0 0 1px var(--k-line); }
+#k .rn-tmeter i.is-zone { box-shadow: inset 0 0 0 1px var(--k-ink-3); }
+#k .rn-tmeter i.is-neg.is-on { background: var(--hk-bad-plate); box-shadow: inset 0 0 0 1px var(--k-ink); }
+#k .rn-tmeter i.is-pos.is-on { background: var(--hk-clean); box-shadow: inset 0 0 0 1px var(--k-ink); }
+#k .rn-tmeter b { width: 2px; height: 11px; margin: 0 1px; background: var(--k-ink); }
+#k .rn-tmeter em { min-width: 2.2ch; margin-left: 4px; font-style: normal; font-weight: 700; }
+/* the People tab: a line of trust under each person; against you and with you ruled down the left */
+#k .rn-trust-line { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; font-size: var(--k-fs-xs); line-height: 1.3; }
+#k .rn-about { color: var(--k-ink-3); }
+#k .rn-about.is-on { color: var(--k-ink); font-weight: 700; }
+#k .rn-off { font-weight: 700; color: var(--hk-hot-text); }
+#k .rn-people li { row-gap: 1px; }
+#k .rn-people li.is-against { box-shadow: inset 3px 0 0 var(--hk-bad-plate), inset 0 0 0 1px var(--k-line); padding-left: 8px; }
+#k .rn-people li.is-with { box-shadow: inset 3px 0 0 var(--k-ink), inset 0 0 0 1px var(--k-line); padding-left: 8px; }
+#k .rn-trust-key { line-height: 1.5; padding-top: 4px; border-top: 1px dashed var(--k-line); }
+#k .rn-told-here { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
+#k .rn-people .rn-tmeter i { width: 8px; height: 8px; }
+#k .rn-trust-key .rn-trust { vertical-align: 1px; }
+/* the chance of being told on: as the odds are shown, its number in the danger's colour, who in the small type */
+#k .rn-tell b { color: var(--hk-hot-text); }
+#k .rn-tell-by { color: var(--k-ink-2); font-weight: 700; }
+#k .rn-option.is-on .rn-tell b { color: var(--hk-hot); }
+#k .rn-option.is-on .rn-tell-by { color: var(--hk-plate); }
+#k .rn-option.is-on .rn-tell .hk-bar { box-shadow: 0 0 0 1px var(--hk-plate); }
+/* (on a card's small line the person keeps their name, up to two fifths of it; who would tell gets what is left) */
+#k .rn-o-sub > .rn-who { flex: 0 0 auto; max-width: 40%; }
+#k .rn-o-sub.has-tell > .rn-who { max-width: 30%; }
+#k .rn-o-sub > .rn-tell { flex: 0 1 auto; min-width: 0; overflow: hidden; }
+#k .rn-tell > .hk-bar, #k .rn-tell > b { flex: none; }
+#k .rn-tell-by { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#k .rn-job-odds .rn-tell .hk-bar.is-small { width: calc(28 * var(--k-px)); height: 6px; box-shadow: 0 0 0 1px var(--k-ink); }
+#k .rn-move .rn-tell-pct { flex: none; margin-left: 5px; font-style: normal; font-weight: 700; color: var(--hk-hot-text); }
+#k .rn-move.is-on .rn-tell-pct { color: var(--hk-hot); }
+#k .rn-card.has-result .rn-move .rn-tell-pct { display: none; }
+/* what it did: a plate per trust change on the row of what just happened (all of it in its tooltip) */
+/* (with trust news the row is shared: a bad line shrinks to a quarter, told on or not to a fifth, a plate to a fifth
+   (up to two fifths); the dice after it are what the row's end cuts first) */
+#k .rn-result.has-chips .rn-bad { flex: 0 1 auto; min-width: 24%; overflow: hidden; text-overflow: ellipsis; }
+#k .rn-result.has-chips .rn-roll.is-told { flex: 0 1 auto; min-width: 22%; overflow: hidden; }
+#k .rn-result.has-chips .rn-roll.is-told .hk-tick-roll { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#k .rn-result.has-chips .rn-roll.is-told .hk-bar { flex: none; }
+#k .rn-result .rn-tchip { flex: 0 1 auto; min-width: 18%; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 5px; font-weight: 700; }
+#k .rn-tchip.is-bad { background: var(--hk-bad-plate); color: var(--hk-bad-ink); }
+#k .rn-tchip.is-luck { background: var(--hk-clean); color: var(--k-ink); }
+#k .rn-tchip.is-with { background: var(--k-ink); color: var(--hk-clean); }
+#k .rn-tchip.is-quiet { box-shadow: inset 0 0 0 1px var(--k-line); color: var(--k-ink-2); }
+/* the heat that just landed on a place: its count beside the place's heat, on the top line and the map */
+#k .rn-stop-rose, #k .rn-flag-rose { font: 700 var(--k-fs-xs)/1.2 var(--k-font); font-style: normal; color: var(--hk-hot-text); }
+#k .rn-report .rn-night.is-trust { display: inline-block; padding: 1px 6px; box-shadow: inset 3px 0 0 var(--k-ink); }
+/* THE NOTICE FROM ELSEWHERE: one slip under the top line, on the right; × puts it away */
+#k .rn-notice { position: absolute; top: var(--rn-body-t); right: var(--rn-m); z-index: 2; box-sizing: border-box;
+  max-width: min(calc(820 * var(--k-px)), calc(100% - var(--rn-side) - 3 * var(--rn-m) - var(--rn-g))); display: flex; align-items: center; gap: 8px;
+  padding: 3px 4px 3px 10px; background: var(--zt-grid, none), var(--hk-plate); box-shadow: var(--rn-sh), inset 3px 0 0 var(--hk-hot);
+  pointer-events: auto; color: var(--k-ink); font: 400 var(--k-fs-xs)/1.3 var(--k-font); }
+#k .rn-notice[hidden] { display: none; }
+#k .rn-notice-h { flex: none; font: 400 var(--zt-fs-label, var(--k-fs-s))/1.2 var(--zt-font-label, var(--k-font)); text-transform: uppercase; }
+#k .rn-notice-text { flex: 0 1 auto; min-width: 0; }
+#k .rn-suggest { flex: none; padding: 0 5px; font-weight: 700; background: var(--hk-yours); white-space: nowrap; }
+#k[data-skin] .hk .k-btn.rn-notice-x { flex: none; min-height: calc(18 * var(--k-px)); min-width: calc(18 * var(--k-px)); padding: 0; border-radius: 50%; background: var(--k-ink); color: var(--hk-plate); box-shadow: none; font: 700 var(--k-fs-xs)/1 var(--k-font); }
+@media (max-width: 720px) {
+  #k .rn-notice { left: var(--rn-m); max-width: none; flex-wrap: wrap; }
+  /* (the street's moves keep to their letter and name here, as their other small print: the chance of being told on
+     is on the crime's card and in the panels) */
+  #k .rn-ways .rn-move .rn-tell-pct { display: none; }
+}

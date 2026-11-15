@@ -47,11 +47,25 @@ export async function createLight(city) {
       U.cityLampX.value.z = 0;
     };
   }
-  // (one lamp of ours: the open pad's, under its missing ceiling. It takes the last of the city's twelve slots)
-  {
-    const place0 = LIGHT.night.place.bind(LIGHT.night);
-    LIGHT.night.place = pts => place0(extra && night > 0 ? [...pts.slice(0, 11), extra] : pts);
-  }
+  // (lamps of ours, in the last of the city's twelve slots: the open pad's, under its missing ceiling, and THE KEY
+  // LAMPS over whoever the picture is about: setKeys below. The city's own are the nearest to the camera, placed
+  // again whenever it has moved a metre; ours are put with them, and again whenever ours move)
+  let keys = [];
+  let cityPts = [];
+  // (THE INSIDE VIEW's lamps, demo/stage/inside.js: while it is up, by night, the room's own lamp and a key over whoever
+  // is in it are the only ones: the street lamps under it and the key lamps over people not in the picture light
+  // nothing of it)
+  let inner = null;
+  const place0 = LIGHT.night.place.bind(LIGHT.night);
+  const put = () => {
+    if (inner && night > 0) return place0(inner);
+    const ours = night > 0 ? [...keys, extra].filter(Boolean) : [];
+    place0(ours.length ? [...cityPts.slice(0, 12 - ours.length), ...ours] : cityPts);
+  };
+  LIGHT.night.place = pts => {
+    cityPts = pts;
+    put();
+  };
 
   function apply() {
     // the city's grader counts from the page's own build: 0 is the build as it is
@@ -68,12 +82,32 @@ export async function createLight(city) {
     },
     /** Night as a number, 0 … 1, for looking at it. */
     setNight(k) {
+      const was = night;
       night = Math.max(0, Math.min(1, +k || 0));
       apply();
+      if ((was > 0) !== (night > 0)) put();
     },
     /** One more lamp, at a world point [x, y, z] (the open pad's ceiling), or null to take it away. */
     setExtra(point) {
       extra = point;
+      put();
+    },
+    /** The inside view's lamps, world points [[x, y, z] …] (or null: the view is down). By night they are the only ones lit. */
+    setInside(points) {
+      inner = points?.length ? points.slice(0, 4) : null;
+      put();
+    },
+    /**
+     * THE KEY LAMPS: up to four world points [x, y, z] that are lit by night as the city's street lamps light (its
+     * own lamp light: the same colour, strength, 15 m reach), wherever the city has no lamp. The stage keeps one
+     * over the person the picture follows. [] takes them away.
+     */
+    setKeys(points) {
+      const next = (points ?? []).slice(0, 4);
+      // (moved less than a hand: left where they are)
+      if (next.length === keys.length && next.every((p, k) => Math.hypot(p[0] - keys[k][0], p[1] - keys[k][1], p[2] - keys[k][2]) < 0.08)) return;
+      keys = next;
+      put();
     },
     setClock({ hour }) {
       this.setNight(nightAt(hour));

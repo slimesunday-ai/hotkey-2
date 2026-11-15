@@ -1,0 +1,329 @@
+// THE RUN ACTED OUT: how each thing the run's engine says happened is played with the stage's own scenes (RUN.md,
+// "What it reuses": the "Plays as" table). THE ONE PLACE this mapping lives, the stand-ins for the clips this copy's
+// pinned city lacks included. Each event of src/run/step.mjs carries a `scene` hint from the same table; this file
+// turns it into src/stage.mjs events (an existing kind, its steps made by buildStage, or a short one of the run's own
+// made of the same actions), with the locals each one needs (demo/run/scenes.js).
+import { buildStage } from '../../src/stage.mjs';
+import { RUN_CONFIG } from '../../src/run/index.mjs';
+import { YOU, endOf } from './scenes.js';
+
+/** The player's own porch, at the trailer's door (the place table's home spots: places.json projects.spots). */
+export const DOOR = `home:${YOU}:door`;
+/** The foot of the player's step, where a regular stands to ask (index.js doorAt). */
+export const STEP = `home:${YOU}:step`;
+
+/**
+ * CLIPS THE RUN WANTS THAT THIS COPY'S PINNED CITY DOES NOT HAVE, and what plays instead until the city is re-pinned
+ * (RUN.md: "`pickpocket_dip` once the city is re-pinned; `hand_off` until then"). Each value is an action of
+ * src/stage.mjs ACTIONS; null is "no clip of its own": the turnstile is the plain subway ride. Swap them here.
+ */
+export const STAND_INS = Object.freeze({ pickpocket_dip: 'hand_off', till_grab: 'grab', turnstile_hop: null });
+const LIFT = STAND_INS.pickpocket_dip;
+const TILL = STAND_INS.till_grab;
+
+// ── the scenes ──────────────────────────────────────────────────────────────────────────────────────────────────────
+/**
+ * A stage event: an existing kind of src/stage.mjs (its steps made by buildStage), or one of the run's own made of
+ * the same actions (`steps`, in the same [role, action, target?, spot?] form). `big` gives an attack its room.
+ */
+function scene(kind, block, who, { spot = 'street', lists = {}, steps = null, big = null } = {}) {
+  const event = { kind, t: 0, block, spot, who, lists: { bystanders: [], ...lists }, data: {}, big: big ?? false };
+  if (!steps) {
+    event.stage = buildStage(event);
+    event.big = big ?? /^(rob|npc:robbers|arrest|collect)/.test(kind);
+    return event;
+  }
+  const out = [];
+  for (const [role, action, target, at, clip] of steps) {
+    const actor = who[role];
+    if (!actor) continue;
+    const s = { actor, action };
+    if (target && who[target]) s.target = who[target];
+    if (at) s.spot = at;
+    // (a clip of the city's named outright: the work of an odd job, a shelf stocked, a look about. director-plan.js)
+    if (clip) s.clip = clip;
+    out.push(s);
+  }
+  event.stage = { t: 0, block, spot, steps: out };
+  return event;
+}
+
+// The run's own short scenes, from the city's clips (RUN.md "Plays as"). EVERY ONE ENDS IN A REACTION, NOT IN IDLING
+// (the owner: "like i just shake the neighbors hand and that's it, then walk up and collect debt"): whoever it was done
+// to or with is changed by it, and it shows (the mark over their head, demo/run/index.js; leaving for the day or
+// standing apart to watch, demo/run/scenes.js). And no two jobs end in the same hand-over:
+//   an odd job is WORK, each neighbour's own (the boxes carried, the hammer, the broom), and a nod of thanks;
+//   a stall shift is WORK AT THE STALL (the owner: "i work a stall i just shake her had, no animation of me going to
+//   the stall and doing anything"): he walks over to it and works it, serving at the counter, stocking, sweeping,
+//   mopping, carrying, and not the same every shift; then a nod of thanks;
+//   a sale is a buyer served who nods and walks off with it;
+//   a debt is PRESSURE: walked up on and crowded first; paid, he hands it over and storms off; refused, he shoves you
+//   off and stands his ground, watching;
+//   a lift is the player walking up to the mark where they stand: one that works is nothing at first; a few steps on
+//   the mark pats their pockets and looks about; one that fails, the mark turns on you and points, and stays;
+//   THE JUMPING ENDS FOR EVERY OUTCOME (the owner: "i hit him and he just vanishes, if i won why didnt he fall to the
+//   ground?"): seen off, the one you hit goes down, stays down a moment while the other comes to him, gets up, and
+//   both run; taken from you, they run off with it. Either way they run on out of the picture (director.js dismiss).
+const WORK = {
+  'npc:neighbour': ['carry', 'carry_box'],
+  'npc:neighbour:2': ['build', 'bench_hammer'],
+  'npc:neighbour:3': ['build', 'sweep'],
+};
+// A stall shift's work, by the shift (the city's work, cleaners and errands clips: [action, clip])
+// (ONE piece of work a shift: with two, the safest job in the game, the one picked most, took 30 s to watch at 1x
+// (15.5 s wall at speed 2, measured 2026-11-13), three times any other hour. The variety is across shifts)
+const SHIFTS = [
+  [['haggle', 'haggle_counter']],
+  [['build', 'stock_shelf']],
+  [['carry', 'carry_box']],
+  [['build', 'sweep']],
+  [['build', 'mop']],
+];
+// THE PLAYER GOES TO THEM (the owner, 2026-11-14: "when you rob someone the npc comes up to you which is weird, you
+// should go up to them"; and of the park: the jobs happen where the person is, at their own trailer, at the bus
+// stop). Every job starts with the player walking up to whoever it is done to or with, where they stand (the scene
+// is where its first step's target is: director.js sceneAt); what follows plays from there. A buyer still comes up
+// to a seller: that is how a sale goes.
+const OWN = {
+  odd: work => [['agent', 'walk', 'neighbour'], ['neighbour', 'talk', 'agent'], ['agent', work[0], null, null, work[1]], ...(work[0] === 'build' ? [['agent', work[0], null, null, work[1]]] : []), ['neighbour', 'listen', 'agent']],
+  sale: [['buyer', 'approach', 'dealer'], ['dealer', 'hand_off', 'buyer'], ['buyer', 'listen', 'dealer'], ['buyer', 'walk']],
+  saleFail: [['buyer', 'approach', 'dealer'], ['dealer', 'talk', 'buyer'], ['buyer', 'deal', null, null, 'deal_lookout']],
+  // (the loose cigarettes are sold AT THE BUS STOP, where Shaky Dee keeps: the player goes to him there)
+  saleAt: [['dealer', 'walk', 'buyer'], ['dealer', 'hand_off', 'buyer'], ['buyer', 'listen', 'dealer'], ['buyer', 'walk']],
+  saleAtFail: [['dealer', 'walk', 'buyer'], ['dealer', 'talk', 'buyer'], ['buyer', 'deal', null, null, 'deal_lookout']],
+  lift: [['agent', 'walk', 'mark'], ['agent', LIFT, 'mark'], ['mark', 'walk'], ['mark', 'pat_down'], ['mark', 'deal', null, null, 'deal_lookout']],
+  liftFail: [['agent', 'walk', 'mark'], ['agent', LIFT, 'mark'], ['mark', 'hands_up'], ['agent', 'walk']],
+  debt: [['agent', 'walk', 'debtor'], ['agent', 'shove', 'debtor'], ['debtor', 'hands_up'], ['debtor', 'hand_off', 'agent'], ['debtor', 'walk']],
+  debtFail: [['agent', 'walk', 'debtor'], ['agent', 'talk', 'debtor'], ['debtor', 'shove', 'agent'], ['agent', 'stumble'], ['debtor', 'deal', null, null, 'deal_lookout']],
+  // (told what to do, he steps along the stall to do it: the work, a mop or a broom going, a head and more from the keeper)
+  stall: shift => [['agent', 'walk', 'shop'], ['shop', 'talk', 'agent'], ['agent', 'walk'], ...shift.map(([action, clip]) => ['agent', action, null, null, clip]), ['shop', 'listen', 'agent']],
+  till: [['agent', TILL, 'shop'], ['shop', 'hands_up'], ['agent', 'run']],
+  tillFail: [['agent', TILL, 'shop'], ['shop', 'shove', 'agent'], ['agent', 'stumble']],
+  jumpFail: [['robber1', 'run', 'target'], ['robber1', 'grab', 'target'], ['target', 'punch', 'robber1'], ['robber1', 'fall'], ['robber2', 'run', 'robber1'], ['robber1', 'get_up'], ['robber1', 'flee'], ['robber2', 'flee']],
+  jumpMessy: [['robber1', 'run', 'target'], ['robber1', 'grab', 'target'], ['target', 'scuffle', 'robber1'], ['robber2', 'punch', 'target'], ['target', 'stumble'], ['robber1', 'flee'], ['robber2', 'flee']],
+  jumpClean: [['robber1', 'run', 'target'], ['robber1', 'hold_up', 'target'], ['target', 'hands_up'], ['robber2', 'grab', 'target'], ['robber1', 'flee'], ['robber2', 'flee']],
+  // (banking, once through the door: a short beat at the floorboard, not the whole lift and close)
+  bank: [['agent', 'stash', null, null, 'floorboard_lift']],
+  sleep: [['agent', 'sleep']],
+
+  // ── THE WORLD ANSWERS (RUN.md rules-2) ──
+  // ROBBING SOMEBODY PASSING: one of ours cast as the passer-by for the hour (demo/run/scenes.js LOCALS, an extra: the
+  // city's own walkers are never taken over), coming along the lane; the player walks up to them and grabs. It worked:
+  // their hands go up, they hand it over and run. It did not: they shove him off, point and shout, and run. Either way
+  // they run on out of the picture (director.js dismiss), as the robbers seen off do
+  rob: [['agent', 'walk', 'passer'], ['agent', 'grab', 'passer'], ['passer', 'hands_up'], ['passer', 'hand_off', 'agent'], ['passer', 'flee']],
+  robFail: [['agent', 'walk', 'passer'], ['agent', 'grab', 'passer'], ['passer', 'shove', 'agent'], ['agent', 'stumble'], ['passer', 'hands_up'], ['passer', 'flee']],
+  // THE BINS: the real ones (the place table's trashcans and dumpsters: binsOf below); he walks over and digs. A find,
+  // he picks it out. Seen in the trailer park: the neighbour comes over, says their piece, and turns their back
+  bins: (spot, find) => [['agent', 'walk', null, spot], ['agent', 'rummage'], ...(find ? [['agent', 'rummage', null, null, 'pick_up']] : [])],
+  binsSeen: [['neighbour', 'walk', 'agent'], ['neighbour', 'talk', 'agent'], ['agent', 'listen', 'neighbour'], ['neighbour', 'walk']],
+  // THE PLACE'S SHOP: up to whoever keeps it, a word, the thing handed over; a drink is drunk there and then
+  shop: [['agent', 'walk', 'shop'], ['agent', 'talk', 'shop'], ['shop', 'hand_off', 'agent']],
+  drink: [['agent', 'build', null, null, 'drink']],
+  // SLEEPING ROUGH: he lies down where he is (on his side, the city's lie_still: not a bed's clip, out here)
+  rough: [['agent', 'sleep', null, null, 'lie_still']],
+  // ROBBED ASLEEP: the Dunn brothers creep up; one goes through his pockets while the other keeps watch; off they run.
+  // Woken in time: he is up, they run, and he lies down again
+  // (`come`: how they come up: a creep where they come on near, a walk in the trailer park, where they come by Elm St)
+  robbed: come => [['robber1', come, 'target'], ['robber2', 'lookout'], ['robber1', 'pat_down', 'target'], ['robber1', 'run'], ['robber2', 'run']],
+  robbedWoke: come => [['robber1', come, 'target'], ['target', 'get_up'], ['robber1', 'flee'], ['robber2', 'flee'], ['target', 'sleep', null, null, 'lie_still']],
+  // THE MORNING ON THE STREET: he gets up where he lay and pats his pockets
+  wake: [['agent', 'get_up'], ['agent', 'pat_down']],
+  // THE REGULAR AT THE DOOR: under the morning's black the player is put out on his porch and the regular at the foot
+  // of the step (index.js doorAt: a cut, so nobody is seen put there); then, seen, he shakes and asks
+  door: [['regular', 'crave'], ['regular', 'talk', 'agent'], ['agent', 'listen', 'regular']],
+  // given: the money handed over at the door, a nod, and he goes, friendly
+  gave: [['agent', 'hand_off', 'regular'], ['regular', 'listen', 'agent'], ['regular', 'walk']],
+  // refused: shut on him (he says no and goes back in: the hour ends at the pad), or walked out past him
+  shut: [['agent', 'talk', 'regular'], ['regular', 'hands_up']],
+  past: [['agent', 'walk']],
+  // the fight at the door, by how it went for him (the contest's bands: his clean win lays into you; messy, a scuffle;
+  // otherwise you see him off)
+  fightClean: [['regular', 'shove', 'agent'], ['regular', 'haymaker', 'agent'], ['agent', 'stumble'], ['regular', 'walk']],
+  fightMessy: [['regular', 'shove', 'agent'], ['regular', 'scuffle', 'agent'], ['agent', 'stumble'], ['regular', 'walk']],
+  fightOff: [['regular', 'shove', 'agent'], ['agent', 'shove', 'regular'], ['regular', 'stumble'], ['regular', 'walk']],
+  // a grudge: he storms off cursing, and the police come round the park
+  grudge: [['regular', 'hands_up'], ['regular', 'walk']],
+  // sore (trust-1): one who was with you, refused, goes off sore with no grudge and no police: the grudge's own steps
+  // (the same clips: he throws up his hands and goes), without the player kept out to watch
+  sore: [['regular', 'hands_up'], ['regular', 'walk']],
+  // (after a grudge, index.js: the player stays out on his porch and watches the regular storm off home. The police
+  // coming round is told, the bar's heat and the line's stops, not acted: an officer at the trailer park can only come
+  // on along Elm St, fifty metres off, out of the porch's picture; measured 2026-11-14, he never reached it in the hour)
+  watch: [['agent', 'lookout']],
+};
+
+// ── THE BINS ARE REAL ONES: the place table's (demo/stage/places.json `near.things`, the city's own trashcans and
+// dumpsters round each place, with their boxes and how far each is from the place's point). The nearest three within
+// BIN_FAR metres become spots of the stage's block (`bins:0` …): a point a step out from the bin's box on the side
+// toward the place's own point, so a dig walks up to it and the director stands him there (stands.js claim: the
+// nearest free standing ground to the point), not in it. The trailer park has one that near (by Pad 22), the flea
+// market three. Added once, by binsOf(map) at mount.
+const BIN_FAR = 30;
+const BINS = {};
+/** The stage's bins at each block (index.js calls it once with the stage's map): { block: ['bins:0', …] }. */
+export function binsOf(map) {
+  for (const [block, T] of Object.entries(map?.TABLE?.places ?? {})) {
+    const B = map.BLOCKS?.[block];
+    if (!B?.spots?.street) continue;
+    const [sx, sz] = B.spots.street;
+    const near = (T.near?.things ?? []).filter(t => /^(trashcan|dumpster)$/.test(t.what) && Number.isFinite(t.far) && t.far <= BIN_FAR).sort((a, b) => a.far - b.far).slice(0, 3);
+    BINS[block] = near.map((t, k) => {
+      const name = `bins:${k}`;
+      const [x0, , z0, x1, , z1] = t.box ?? [t.at[0], 0, t.at[1], t.at[0], 0, t.at[1]];
+      const pad = 0.75;
+      B.spots[name] ??= [Math.min(x1 + pad, Math.max(x0 - pad, sx)), Math.min(z1 + pad, Math.max(z0 - pad, sz))];
+      return name;
+    });
+  }
+  return BINS;
+}
+/**
+ * The places whose way in is their own middle (no sidewalk of the city's near them: the trailer park): whoever comes
+ * on for a scene there comes by the nearest real one (index.js peopleOn: Elm St, by the bus stop), and from there
+ * walks rather than creeps.
+ */
+export const FAR_IN = new Set(['projects']);
+
+/** Who keeps a place's shop: the first person of its safe job's role (the market's stall keeper). */
+function keeperOf(cfg, place) {
+  const p = cfg?.places?.[place];
+  const safe = Object.values(p?.jobs ?? {}).find(j => j.safe);
+  return (p?.people ?? []).find(q => q.role === safe?.role)?.id ?? null;
+}
+/** The passer-by cast for a robbery: one of three, by what is left of the place's strangers (demo/run/scenes.js). */
+const passerOf = e => `npc:passer:${1 + (Math.abs(e.left ?? 0) + (e.hour ?? 0)) % 3}`;
+
+/**
+ * The stage events for one step of the run: what the engine said happened (its events, each with a `scene` hint)
+ * as scenes at the place it happened. → { events, locals: [[id, block]] }
+ */
+export function scenesOf(runEvents) {
+  const events = [];
+  const locals = new Map();
+  const block = place => endOf(place).block;
+  const pad = `pad:${YOU}`;
+  for (const e of runEvents) {
+    const at = block(e.place === 'crib' ? 'crib' : e.place);
+    switch (e.type) {
+      case 'job': {
+        // (cast from the event's own person: a card for Mr. Pruitt plays with Mr. Pruitt)
+        const win = e.outcome === 'win';
+        const k = e.job;
+        const them = e.who?.id ?? null;
+        if (them) locals.set(them, at);
+        if (k === 'odd') {
+          events.push(scene('run:odd', at, { agent: YOU, neighbour: them }, { steps: OWN.odd(WORK[them] ?? WORK['npc:neighbour']) }));
+        } else if (k === 'loosies') {
+          events.push(scene(win ? 'work:deal' : 'work:deal:dry', at, { dealer: YOU, buyer: them }, { steps: win ? OWN.saleAt : OWN.saleAtFail }));
+        } else if (k === 'crowd') {
+          events.push(scene(win ? 'work:deal' : 'work:deal:dry', at, { dealer: YOU, buyer: them }, { steps: win ? OWN.sale : OWN.saleFail }));
+        } else if (k === 'wallet') {
+          events.push(scene(win ? 'run:lift' : 'run:lift:fail', at, { agent: YOU, mark: them }, { steps: win ? OWN.lift : OWN.liftFail }));
+        } else if (k === 'collect') {
+          events.push(scene(win ? 'collect:win' : 'collect:lose', at, { agent: YOU, debtor: them }, { steps: win ? OWN.debt : OWN.debtFail }));
+        } else if (k === 'stall') {
+          events.push(scene('run:stall', at, { agent: YOU, shop: them }, { steps: OWN.stall(SHIFTS[((e.day ?? 1) * 5 + (e.hour ?? 0)) % SHIFTS.length]) }));
+        } else if (k === 'till') {
+          events.push(scene(win ? 'run:till' : 'run:till:fail', at, { agent: YOU, shop: them }, { steps: win ? OWN.till : OWN.tillFail }));
+        } else if (k === 'stickup') {
+          events.push(scene(win ? 'rob:clean' : 'rob:fail', at, { robber: YOU, target: them }));
+        }
+        break;
+      }
+      case 'jumped': {
+        const band = e.outcome === 'clean' ? 'clean' : e.outcome === 'messy' ? 'messy' : 'fail';
+        events.push(scene(`npc:robbers:${band}`, at, { robber1: 'npc:robber1', robber2: 'npc:robber2', target: YOU }, { steps: band === 'clean' ? OWN.jumpClean : band === 'messy' ? OWN.jumpMessy : OWN.jumpFail, big: true }));
+        locals.set('npc:robber1', at);
+        locals.set('npc:robber2', at);
+        break;
+      }
+      case 'stopped':
+        events.push(scene('arrest', at, { agent: YOU, officer: 'npc:police1' }));
+        locals.set('npc:police1', at);
+        break;
+      case 'bank':
+        events.push(scene('stash', 'projects', { agent: YOU }, { spot: pad, steps: OWN.bank }));
+        break;
+      case 'sleep':
+        events.push(scene('run:sleep', 'projects', { agent: YOU }, { spot: pad, steps: OWN.sleep }));
+        break;
+      // ── the world answers ──
+      case 'rob': {
+        const passer = passerOf(e);
+        locals.set(passer, at);
+        // (in the trailer park the passer-by comes along Elm St, by the bus stop: he robs them there, and stays there.
+        // Not a `big` scene: the director would first walk the one robbed out to open ground, off the sidewalk)
+        events.push(scene(e.outcome === 'win' ? 'run:rob' : 'run:rob:fail', at, { agent: YOU, passer }, { spot: FAR_IN.has(at) ? 'bus' : 'street', steps: e.outcome === 'win' ? OWN.rob : OWN.robFail, big: false }));
+        break;
+      }
+      case 'bins': {
+        const spots = BINS[at] ?? [];
+        const spot = spots.length ? spots[Math.abs(e.left ?? 0) % spots.length] : 'street';
+        events.push(scene('run:bins', at, { agent: YOU }, { spot, steps: OWN.bins(spot, e.find === 'find') }));
+        if (e.seen?.id) {
+          locals.set(e.seen.id, at);
+          events.push(scene('run:bins:seen', at, { neighbour: e.seen.id, agent: YOU }, { spot, steps: OWN.binsSeen }));
+        }
+        break;
+      }
+      case 'shop': {
+        const keeper = keeperOf(RUN_CONFIG, e.place);
+        if (keeper) locals.set(keeper, at);
+        const steps = [...(keeper ? OWN.shop : []), ...(e.gives?.energy ? OWN.drink : [])];
+        if (steps.length) events.push(scene('run:shop', at, { agent: YOU, shop: keeper }, { steps }));
+        break;
+      }
+      case 'rough':
+        events.push(scene('run:rough', at, { agent: YOU }, { steps: OWN.rough }));
+        break;
+      case 'robbed': {
+        const woke = e.outcome !== 'clean' && e.outcome !== 'messy';
+        const come = FAR_IN.has(at) ? 'walk' : 'sneak';
+        events.push(scene(woke ? 'run:robbed:woke' : 'run:robbed', at, { robber1: 'npc:robber1', robber2: 'npc:robber2', target: YOU }, { steps: woke ? OWN.robbedWoke(come) : OWN.robbed(come), big: true }));
+        locals.set('npc:robber1', at);
+        locals.set('npc:robber2', at);
+        break;
+      }
+      case 'morning':
+        // (only a morning on the street is played here: one at home is the crib's own cut, index.js)
+        if (e.night === 'street') events.push(scene('run:wake', at, { agent: YOU }, { steps: OWN.wake }));
+        break;
+      case 'door': {
+        const them = e.who?.id;
+        if (!them) break;
+        locals.set(them, 'projects');
+        events.push(scene('run:door', 'projects', { agent: YOU, regular: them }, { spot: DOOR, steps: OWN.door }));
+        break;
+      }
+      case 'gave':
+        if (e.who?.id) events.push(scene('run:gave', 'projects', { agent: YOU, regular: e.who.id }, { spot: DOOR, steps: OWN.gave }));
+        break;
+      case 'refused':
+        if (e.who?.id) events.push(scene(`run:refused:${e.how}`, 'projects', { agent: YOU, regular: e.who.id }, { spot: e.how === 'past' ? 'street' : DOOR, steps: e.how === 'past' ? OWN.past : OWN.shut }));
+        break;
+      case 'fight': {
+        if (!e.who?.id) break;
+        const steps = e.outcome === 'clean' ? OWN.fightClean : e.outcome === 'messy' ? OWN.fightMessy : OWN.fightOff;
+        // (not a `big` scene: the director would first walk the one it is done to out to open ground, off his porch)
+        events.push(scene(`run:fight:${e.outcome}`, 'projects', { regular: e.who.id, agent: YOU }, { steps, big: false }));
+        break;
+      }
+      case 'grudge':
+        if (e.who?.id) events.push(scene('run:grudge', 'projects', { regular: e.who.id, agent: YOU }, { steps: OWN.grudge }));
+        break;
+      case 'sore':
+        if (e.who?.id) events.push(scene('run:sore', 'projects', { regular: e.who.id, agent: YOU }, { steps: OWN.sore }));
+        break;
+      case 'stormed':
+        // (not an engine event: the page's, after a grudge: he watches from his porch as the regular storms off home)
+        events.push(scene('run:watch', 'projects', { agent: YOU }, { spot: DOOR, steps: OWN.watch }));
+        break;
+      default:
+        // the subway is the trip itself (the stage's ride); a purchase, a morning, stepping out: no scene of its own
+        break;
+    }
+  }
+  return { events, locals: [...locals] };
+}
+

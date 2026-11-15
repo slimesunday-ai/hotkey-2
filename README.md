@@ -46,6 +46,37 @@ node run.mjs --ai --fake --lineup ai10 --seeds 1   # a free season with fake AI 
 
 A real AI season costs money and is never run by a builder. It refuses to start without `--max-cost` and `--go`.
 
+**The run** (`RUN.md`, slime's 11-13 direction) is a new way to play beside the old rules, in `src/run/`: one player,
+the trailer park and the flea market, carry it home before the city takes it. Play it in the terminal with
+`node scripts/run-play.mjs --seed 1` (one key per choice: the number, or i inside, o step out, `4=2` to step out with
+$2 for the fare, t the subway, h head home, s sleep, m morning, q quit; `3@2` does option 3 to its second target, r
+robs somebody passing, b digs the bins, d buys the drink, z sleeps rough, g gives and x refuses the regular at your
+door); `--choices 4=2,5,2,h` replays a list of keys.
+Every option names the person it is done to; whoever you work is out for the rest of the day with a mood the view
+shows, so the trailer park runs dry and points you to the market (RUN.md, "People"). Rules-2 makes the world answer
+(RUN.md, "The world answers"): each place has its own heat and police, robbing somebody passing heats the place, the
+bins cost energy, a regular comes to your door, you can stay out and sleep rough, the market sells a drink, and each
+place has a supply the day draws down. A place is data: one entry in `src/run/config.mjs` (RUN.md, "Adding a place").
+`node scripts/run-marks.mjs` measures RUN.md's twelve marks on the real engine, free (3,000 seeded six-day seasons per
+cell, about five minutes; `--seeds 500` for a quick look). In the 3D city it is `/demo/?mode=run&seed=3` (`demo/run/`):
+one frame over the city (the top line, a dock down the left with you in it, a thin bar along the bottom: the danger of
+one more hour as a line on its top edge, the options one line each with their pay and odds, one slim row of what just
+happened and the ways to move), each hour acted out with the stage's own scenes, 1 2 3 and Enter to choose, H
+home, Space to skip a scene (`&scenes=0` plays it with no acting out). C opens your character (your figure turning,
+your stats, what you are wearing, the people), A every move there is, S everything to buy, M the map (the kit's paper
+map of the island, `city/from-trunk/style/city/ui/map/`, fed from the run by `demo/run/map.js`: you on it, the three
+stops, the line, a click on a stop for what it pays, its danger and who is left): one panel at a time beside the dock,
+Esc closes it, and the numbers still choose on the bar. D folds the dock to a rail, F the bar to its one row (where
+the numbers still pick, every option's pay and odds still on it); both kept in this browser, and the dock starts
+folded. Going into the crib is a walk to its real door, a fade
+through black and the whole room alone on the ground of its place (grass at the trailer park); the wheel zooms in on
+it and the camera then follows you (`demo/stage/inside.js`: one contract any place with an inside plugs into). `node demo/tools/run-stage.mjs --policy market --seed 3`
+plays six days on auto with the stage's audit on and ends `run-ok` or `run-fail`. A new run opens over the trailer
+park and comes down to your trailer before the first morning (`demo/stage/opening.js`; Space, Enter or a click skips
+it). The crib is a starter pack in the city's own home format, 7 m by 3.5 m (`demo/stage/set/homes/`, checked with
+`node demo/tools/crib-check.mjs`; `&crib=b` for the second arrangement); the real bed shows in it once bought.
+`node demo/tools/run-crib-shots.mjs --out <dir>` takes its pictures.
+
 ## The demo: watch it, play it, coach it, in the 3D city
 
 ```

@@ -5,6 +5,8 @@
 //
 //   /demo/                          the game: the city, the stage, the panels' start screen
 //   /demo/?mode=watch&seed=4        straight into a season (mode=play&seat=dealer, mode=coach)
+//   /demo/?mode=run&seed=3          the run (RUN.md): one player, the trailer park and the flea market (demo/run/);
+//                                   &runtest=market|park plays it on auto (demo/run/autoplay.js, demo/tools/run-stage.mjs)
 //   /demo/?stagetest=watch|play     a whole season on auto over the real stage; the title ends `stage-ok` or
 //                                   `stage-fail: <why>` (demo/stage/director-test.js)
 //   /demo/?proof=all                the spike's proof scenes, no panels (demo/stage/proof.js)
@@ -161,7 +163,13 @@ if (GAME) {
   const [{ createStage }, { mountHud }] = await Promise.all([import('./stage/index.js'), import('./hud/index.js')]);
   demo.stage = await createStage({ city, CITY, loader: loader ?? null });
   const host = document.getElementById('hud');
-  if (Q.get('stagetest')) {
+  if (Q.get('mode') === 'run') {
+    // THE RUN (RUN.md): its own panels over the same stage (demo/run/). ?runtest=<policy> plays it on auto
+    const { mountRun } = await import('./run/index.js');
+    const opts = { stage: demo.stage, seed: Number(Q.get('seed')) || 1, speed: Number(Q.get('speed')) || 1, scenes: Q.get('scenes') !== '0' };
+    if (Q.get('runtest')) demo.hud = (await import('./run/autoplay.js')).runRunTest({ demo, mountRun, host, opts });
+    else demo.hud = mountRun(host, opts);
+  } else if (Q.get('stagetest')) {
     const { runStageTest } = await import('./stage/director-test.js');
     demo.hud = runStageTest({ demo, mountHud, host, mode: Q.get('stagetest') });
   } else {

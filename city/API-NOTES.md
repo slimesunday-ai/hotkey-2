@@ -1075,3 +1075,295 @@ worst single second 1.9 and 1.8):
   (−232.5, −55.4). Traced: their last walk ends at (−232.3, −55.4) and the next order finds them at (−232.5, −55.4),
   with only the punch and the fall between. Not fixed.
 - `close` 5 playing: three of them are the street buyers at Glasswall Plaza queueing on one lane (round 1's note).
+
+## The big city, round 4 (2026-11-12, night): after the first whole season played
+
+SPEC section 25, item 12. The coordinator played sixty hours on the published build
+(`node demo/tools/stage-run.mjs --mode play --speed 2 --seed 4 --hours 60 --audit`): `stage-ok`, and seven things to
+fix. What each leaned on in the city, and what was done.
+
+**Night.** The city lights its night with the lamp light of the twelve street lamps nearest the camera
+(`render/night.js`: `LIGHT.night.place(points)`, one colour and strength for all, 15 m reach, decay 1.4, lamps
+5.4 m up; `main.js placeLamps`). Glasswall Plaza's middle, the night market's yard and all of Sunny Acres have no
+lamp, and people there were dark shapes. `demo/stage/set/light.js` already took the last slot for the open pad's
+lamp; `setKeys(points)` now takes up to four for KEY LAMPS, put with the city's own whenever either moves. The stage
+(`demo/stage/index.js`, "by night, whoever the picture is about stands in lamp light") keeps one over the followed
+person, or over the middle of the scene they are in when its people are within 4 m, and one over each other scene
+playing on stage: 4.2 m over the ground, 2.4 m toward the camera. Nothing of the city's light is changed: the same
+lamp light, in places the city has not put a lamp. The city's ONE SPOT (`LIGHT.night.spot`, Fit Street's billboard)
+is left alone. The other builder's see-through was not looked at by night.
+
+**Water.** The city's collision world keeps a body out of what is at its waist. The plaza's basin is a step of
+0.3 m (paving 0.3, water 0.6, rim 0.8 by `world.topAt`), the pond is level with its lawn, and the city's surfaces
+call both walkable; neither is a piece of its audit build (the plaza and the park are one `placeholder·structure`
+each) and its water field (`water.js`) is the sea's. A rule on heights alone was tried and taken out: "a low island"
+took every standing spot of Pleasantview Park (its walks are 0.3 m over the lawn), and "a basin" came out different
+from one page load to the next. So `citymap.js` `WET` is three measured boxes, handed to `actors.addSolid`: no
+spot, no mark of a scene and no way over the ground is in them. The hero file's own numbers for the pond
+(`heroes/suburbs-park.js`) are in another frame: a person put at them stands on the sidewalk by the playground.
+
+**The street sale.** Every extra with a scene was brought on at the top of the hour and SENT, at a run, to the free
+spot nearest whoever its scene is with: four buyers at arm's length round the seller. Now (`director.js` `queueUp`,
+`served`, `wings`): each buyer comes on at their own point (by their number: alternate sides, 1.6 m further out
+each pair), the first goes to the seller as before, the others to a mark 2.6 m from the seller and 1.25 m more for
+each place in the line, facing them; the scene's own "the next one comes up while this one is served" brings each
+to the seller at their turn; and a buyer with nothing more to do that hour walks off along the sidewalk as soon as
+their hand-off is done. And a bench seat within 1.6 m of a named counter spot is nobody's (`stands.js`): Glasswall
+Plaza has no shop, its shopkeeper stands at a bench, and the dealer was given that bench's seat.
+
+**Walked through.** Two causes found. A step to a person's own seat or lean point is `exact` (walked to as it is,
+0.2 m off its wall), and was asked for from wherever they stood: eight metres through a stall and a building's
+corner at the night market. `actors.stepTo` now finds the way round for an exact point more than 1.2 m off whose
+line is not free, and only its end is exact. And somebody who is SITTING was asked to "step to clearer ground" for
+another's mark (`markFor`), and slid along the bench still sitting: the audit's `slide` and `unseated`.
+
+**The dealing corner's lane.** `movement.geomOf` returns the lane past the corner's ramps with a break of 0.4 to
+0.5 m (the lane dips into the roadway there). `routeTo` already refused a lane route broken by a metre; it now
+refuses one broken by 0.2 m, or one nearly twice as long as the straight line (`> straight × 1.8 + 12`), when the
+two ends are within 60 m, and lays the walk over the ground (`findWay`, where a roadway costs double). The walks
+that left the corner were 107 m of lane round the block to somewhere 45 m off. And a walk in (`rides/foot.js`)
+never starts on a roadway.
+
+**A watched departure at its cap.** Somebody leaving while the camera stays was taken off stage after 14 s
+wherever they were: at the rides' own pace a walk toward a station 80 m off is still in the picture then, and they
+vanished in plain sight. They now walk on until they are out of the picture (30 s more at the most);
+`travel.count.capped` counts only those cut while the camera could still see them.
+
+**What else was found on the way** (each from the audit of a sixty-hour run; `through` now says which way the body
+was on, with its legs):
+- *A walk taken up again after giving way was one straight line to its end* (`stepYield`): somebody who had stepped
+  aside for a walker went straight to where their way over the ground ended, through what the way had gone round:
+  eight metres through a stall and a building's corner at the night market. It is laid again as a way.
+- *A way over the ground was pulled straight through thin things on its middle legs* (`findWay`'s tail of 0.45 m,
+  meant for the place at the END of a way, was left out on every leg): a served buyer walked off through a bench's
+  end. And the way-finder kept its open cells in a plain list: one search across a street's width of ground held
+  the page for over a second (the worst second of one run: 0.8 frames). It is a heap now.
+- *The step aside for somebody* (`weave`) went into a mailbox post at Sunny Acres, where no sidewalk's edge holds
+  it. It stops where the body's middle would be in a solid.
+- *Open ground was handed to two people*, and at the kerb: two robbed in one hour at the bar stood in each other.
+  It is nobody else's spot, 2.4 m from open ground somebody else has, 1.6 m from a roadway.
+- *A big scene's room filled up again*: somebody set down by a ride after `clearRoom` had run stood 1.4 m from a
+  hold-up. The room is looked over before each step of the scene, and no spot in it is handed out while it plays.
+- *A robbery was not played*: late in a long hour (`CURFEW`, 13 s) `present()` gave up on anyone still walking, and
+  the Dunn brothers' victim was three steps from his spot. A step of an ATTACK done to somebody who is at the place
+  waits two and a half seconds for them whatever the hour. A street sale's hand-offs past the curfew are still not
+  played, as before ("approach 0.0, hand_off 0.0" in the hour's notes): played, a seller on a bench slid to the
+  late buyers and the season was no shorter.
+- `stage.debug().notes` keeps eighty hours, so a sixty-hour run has every hour's.
+
+**Measured, round 4** (headless Chrome 1600 × 1000, this Mac Studio; the same command; before: the coordinator's
+run of `a692892`; after: `dff57a2`, the head but for the fountain's box, made 0.2 m smaller afterwards):
+
+| | before | after |
+|---|---|---|
+| the run | `stage-ok`, 0 page errors | `stage-ok`, 0 page errors |
+| the sixty hours on the stage's clock | 1,118.7 s | 1,062.9 s |
+| frames, and the worst single second | 33,855, 5.9 | 32,206, 2.0 |
+| jumps, pops, drops, squeezes, headingSnaps | 0 | 0 |
+| `unseated` (frames) | 80 | 0 |
+| `slides` | 20 | 0 |
+| `pushes` | 49 | 0 |
+| `close` | 28 | 6 |
+| `through` (frames) | 55 | 15 |
+| `seams` | 63 | 0 |
+| `inRoad` | 3 | 2 |
+| `floating` (frames) | 45 | 39 |
+| `waits` (2 s behind somebody) | 50 | 20 |
+| `speedSteps` | 4 | 6 |
+| `blind` (walked where the collision world was not in) | 277 | 0 |
+| watched departures cut in the picture (`capped`) | 13 | 0 |
+| `shifts`, `flips`, `brushes`, `dodges`, `rounds`, `gaveWay`, `replans`, `short`, `ways` | 7, 79, 14, 19, 28, 54, 20, 94, 399 | 8, 69, 9, 28, 14, 27, 3, 130, 380 |
+
+- `through` is not zero and differs from run to run of the same season (2, 2, 0, 2 and then 15 frames in the last
+  five runs, each a commit or two apart). The five places of the last run: one is the fountain's box itself (0.2 m of paving at
+  its corner counted as fountain: the box was then made the rim's size); two are a step aside into a mailbox post
+  at Sunny Acres, 2 or 3 frames each; two are somebody knocked back 0.3 m past the end of their step into DEAD
+  AIR's front wall.
+- `inRoad` and `floating` are still the dealing corner (people and street buyers on its ramps: (−42.4, 35.3),
+  (−41.8, 38.7), a skateboard rolling in at (−40.2, 33.3)) and, once, somebody at the bar's kerb (−87.3, 33.4).
+- `seams` is 0 because the count is now of routes WALKED: `routeTo` lays a lane route, finds its break and throws it
+  away, and those were counted. Walked with a break in the other runs: three routes at uptown, 0.7 to 1.2 m.
+
+*The eight hours over thirty seconds* (the stage's clock; what the time is spent on now, from the hour's notes):
+
+| hour | before | after | what it is |
+|---|---|---|---|
+| 11 | 37.5 | 28.3 | uptown, two street sales and a guard job. Sale 14.4 (one buyer four times: hand-offs 0.9, 5.2, 2.6), guard 3.1, sale 9.1. The before is not in the log (the tool kept forty hours) |
+| 33 | 32.3 | 26.1 | the bar: an unarmed robbery 16.9 (the grab 11.2, was 15.4: the robber's own arrival and walk up), a crew joined 1.6, the Dunn brothers 6.2 (8.2) |
+| 35 | 45.5 | 36.8 | the bar: an unarmed robbery 15.7 (grab 9.0, was 7.6), a tip 2.2, a street sale 6.8 (17.2: its hand-offs were 1.7, 3.2, 3.0, 4.7 and are 1.5, 1.5, 3.0, 0.8), a second sale 11.8 (13.5) |
+| 37 | 30.7 | 31.8 | the park to uptown: the trip is 23.5 s and the walk to the spot 8. Nothing waits |
+| 45 | 36.7 | 33.6 | uptown to the market: the trip 13.9, then a deal closed on the phone 12.8 (the phone step 10.2 s: not looked into), the Dunn brothers 4.8 |
+| 48 | 44.8 | 44.9 | the market to Sunny Acres: the trip 13.9, then four pick-ups one after another (9.9, 5.7, 1.9, 6.9), a stash 3.1. All of it is played, one scene at a time on the player's block |
+| 55 | 51.4 | 38.4 | the park, two street sales: 27.0 (28.6: the first buyer's walk in 5.3, was 12.8; hand-offs of 4.2 and 7.5 s still wait) and 11.2 (21.6) |
+| 57 | 39.1 | 46.9 | the bar: LONGER. A guard job 8.4 (12.3), the Dunn brothers 7.8 (2.1: it had hardly played), a rival's push 4.1 (2.0), two tolls 11.0 and 7.7 (7.6 and 9.3: a bribe of 6.3 s) |
+
+Six hours are over thirty seconds now (35, 37, 45, 48, 55, 57), eight before. What is left in them is the trips,
+scenes played one after another on the player's block, the unarmed robber's walk up at the bar, and the hand-offs
+of a street sale that wait for a buyer.
+
+## Nobody in anybody, the county orange, blood (2026-11-12/13, branch `jail-1`)
+
+SPEC section 25, item 13. Three things the owner asked for after an arrest and a robbery. What each leaned on in
+the city, what was done, what was measured.
+
+**The city's own people.** slime was cut to the jail and sat in an inmate. The cause, measured on the build
+before (`6d7be18`): the place table read Iron Island's waiting bench as furniture, "a bench: two seats"
+(`place-table.mjs` `seats`), at (289.93, −383.02) and (289.93, −382.18); the yard's hero file
+(`heroes/jail-yard.js`) seats the city's own two inmates on that bench, drawn at (289.5, −383.05) and
+(289.5, −382.0); the first person held was given the first seat, 0.41 m from an inmate's middle. The stage knew
+nothing of such people: they are baked into each block's build (`jobs.js` `castOf` → `charbake.js` `bakeCast`),
+are no walker of `pedsim.js` (the crowd our box keeps off the set is the WALKERS) and are not in the collision
+world (`camera/world.js` is the blocks' boxes). There are many: 174 in the zone round Sunny Acres, 28 on Iron
+Island's.
+
+- *Where they are is read from what is drawn.* Every streamed block keeps its people's far tier on the page
+  (`stream.js` `blocks`, `data.cm.far`: per person up to four boxes, feet to hat, eleven numbers each).
+  `demo/stage/figures.js` makes one figure of each run of boxes (its middle, feet, top; a giant's body is as much
+  wider as it is taller) and keeps them in 2 m cells. Nothing is typed and nothing comes from the place table, so
+  a place the table gets wrong, a new room or a re-pinned city is covered the same way.
+- *They are solid to the stage* (`actors.addSolid`, the way `WET` is): a body's middle keeps 0.62 m from a
+  figure's (0.3 m of its body and `PASS`), so no mark of a scene, no open ground for an attack, no queue mark, no
+  fitted counter point and no way over the ground is in one, and the audit's `through` counts a body whose middle
+  is in one. A test now gets `(x, z, y, sure)`: somebody on a roof, a fire escape or a bleacher's top plank is
+  over nobody's head.
+- *No place is given within a body's width of one* (`stands.js` `crowd`, 0.9 m between the two middles: `SPOT`).
+  Asked EVERY TIME a place is given, of the blocks as they are streamed at that moment (the first try looked the
+  blocks over three times a second at the most, and the place given in the moment after the island's build came
+  in was given blind: the same seat again). Also when the zone's spots are looked over (`vet`, which now waits until
+  the block's people are known), for the named places (a counter: its taker stands at the nearest free spot),
+  and once more when an hour begins for whoever stands still on a place (`director.js` `reseat`, counted:
+  `tally.reseated`, 0 in every run below; tried by hand, with the figures hidden for the cut to the jail and
+  shown again: the bench seat given blind was taken back at the hour's start, with a `[stage]` warning, which
+  fails a `stage-run`).
+- *A place that runs out hands out free ground.* Iron Island has ten places and two are the inmates' bench: the
+  ninth person held, and every one after, was put on the place's own point, all in one another. `stands.js`
+  `spare`: the nearest ground round that point that is 1.3 m from everybody's place and from the city's people
+  and that `vet` does not refuse. The same for a block and its neighbours full.
+- *And nobody's place is in another's, whichever list each came from* (`stands.js` `clash`, 0.7 m: two seats of
+  one bench are 0.84 m apart, everything else 1.25 m and more). Found while proving the above with all ten seats
+  held at once (`stage-scene.mjs jail --held 10 --place clinic`): a block's spots, a held place's own and the named
+  places are three lists, each a body's width apart in itself and not from one another. St. Mercy's medic stands
+  at the forecourt's own point, which is also the first open spot of its patients: the seventh patient was stood
+  in the medic (it takes six on the benches first, so no season had shown it). Every place is asked against
+  everybody's before it is given.
+- *And a place of the director's own making is somebody's place too* (`stands.js` `hold`). Open ground for an
+  attack and a mark in a queue were put on a person without a word to the stands; open ground IS one of the
+  place's spots by its coordinates, and by the book it was nobody's. Found in the robber's seed 5, hour 23, at
+  Precinct 9: a10 was stood on open ground at (41.8, −30.0) to be robbed, the robber who came for a10 was given
+  the spot (41.8, −30.0), and the two were pushed apart for 39 frames and stood 0.3 m apart (`pushes` 39, a `close`
+  of two standing). It was there before this branch (nothing in `6d7be18` tells the stands); the solid figures
+  only changed which ground a10 was sent to.
+- *What it costs the picture*: a held person at Iron Island stands cuffed in the yard (`cuffed_idle`), never sits:
+  the one bench is the inmates'. St. Mercy's forecourt benches are free of the city's people (the nearest is 2.2 m
+  from a seat), so patients sit as before. Glasswall Plaza loses six spots to the people on its benches and
+  Precinct 9 one (`stage.debug().unfit`).
+
+**The audit counts them** (`actors.js`, `--audit`): `overlaps`, times somebody of ours was in one of the city's
+people for more than half a second (two middles under 0.6 m apart, as `close` is for two of ours), `overlapFrames`,
+every frame of it, and `byFigure`, frames somebody of ours was within 1.5 m of one: the proof they were looked for.
+`stage.debug().figures` is how many are known. `?figures=0` plays the stage as it was (blind to them) with the
+audit still counting: the "before" below. AFTER A RE-PIN, LOOK AT `byFigure`: the figures are read from the
+stream's own records (`stream.blocks`, `data.cm.far`), which is not a published contract; if the city moves them
+`figures` reads 0, nobody is kept off anybody, and `overlaps` is 0 because nothing was looked for. `byFigure` 0
+over a season says so.
+
+**The county orange.** `actors.wear(id, outfit)` lays one of the cast's named outfits (`cast.js` `OUTFITS`) over a
+person's own look, bakes it once (`simstate/looks.js` `bake`, `peds.addLook`) and points the walker's `look` at it:
+the city reads a walker's look every frame, so the change is at once and needs no new walker. `citymap.js` `HELD`
+says what a held place issues (`jail: 'county'`, top `iron_island`, bottom `iron_island_issue`: what the yard's
+inmates wear); `director.js` `garb` puts it on wherever `inside` changes: on at the cut into the jail (`enter`),
+off when they are let go (`comeOut`, `settle`). Face, hair and hat stay their own, as the city's inmates keep
+theirs. The portrait in the panels is still their own clothes (`demo/hud/` was not touched).
+
+**Blood.** The city's own (`stage/gorefx.js`, made for `traffic/accident.js`): `createGoreFx(scene)` gives a spray
+of drops with a mist, splats, splats that ride a car, a pool that spreads and dries. `demo/stage/gore.js` makes one
+of its own and only says when and where. The director tells the shot (`'shot'`: who fired, at whom, and `hit`,
+whether the one fired at is shot, falls or lies hurt in what follows: the two scenes that fire today are
+`rob:disaster:shot` and `door:disaster:shot`; a hold-up fires nothing).
+- at the shot: `fx.spray` from the chest the way the bullet went, seven splats where the drops come down, and a
+  wound on the chest front and back that rides the body while it reels (`fx.carSplat`, the body as the "car");
+- as they go down (`fall_back` on): the wound is laid on the chest where the body lies, the pool spreads under it;
+- while they lie: pool and wound are kept (the city's pool dries after 95 s; a player lies hurt until Continue);
+- up, taken away or gone: the wound goes, the pool dries over the city's six seconds.
+What had to be worked round: the city's blood lands on the PLAN's ground (`groundY`: the sidewalk's top or the
+road's), and a yard's lane, a plaza's paving and a park's walk are a step higher (Sunny Acres' lane is 0.3 m, the
+feet of a body on it at 0.2): there the drops' own splats and `fx.pool` are under the paving. So what we lay on
+the ground is laid at the collision world's top (`world.topAt`) and the pool is `fx.splat` with the pool's own
+figures. The drops' own splats still land at the plan's height: seen on a street, lost in a yard.
+A seat that is not the player's is up and limping to the clinic about two seconds after it lands (the scene's own
+`lie_hurt` beat is that long), so its pool is short-lived; the player's stays until they press Continue.
+
+`node demo/tools/stage-scene.mjs jail|shot` stages either on purpose in a played game and takes the pictures
+(a season shows a shot about once, and seed 4's dealer is never jailed: three hours at St. Mercy, none on the
+island). `stage-run.mjs --shots` takes `shot`, `shot-down` and `jail` when a season has them.
+
+**What it moved, and one cap.** With the plaza's bench seats gone to the city's sitters, seed 4's hour 17 gives a5 a
+spot seven metres into Glasswall Plaza from the lane. A watched arrival on foot starts as far as 26 m back
+(`rides/foot.js` `BACK_LANE`) at 1.5 m/s: 35.9 m, 24.4 s, and `travel.js` put an arrival in its place after 24
+(`ARRIVING`): a5 was put there two metres short, in the picture (`capped` 1, was 0). At 30 the dealer's seed 7 still
+capped one in one run of two (hour 52, a7 walking in to the plaza stood behind one of the city's walkers on the
+lane at (5.3, 4.9) with 28.5 m to go). `ARRIVING` is 36.
+
+**Measured** (headless Chrome 1600 × 1000, this Mac Studio, the round 4 command:
+`node demo/tools/stage-run.mjs --mode play --speed 2 --seed 4 --hours 60 --audit`; before: `6d7be18`; "blind": this
+build with `?figures=0`, the stage as it was with the new counts on; after: this build):
+
+| | before | blind | after |
+|---|---|---|---|
+| the run | `stage-ok`, 0 page errors | `stage-ok`, 0 page errors | `stage-ok`, 0 page errors |
+| `overlaps` (somebody of ours in one of the city's people) | not counted | 22 | 0 |
+| `overlapFrames`, `byFigure` | not counted | 6,547, 22,503 | 0, 12,337 |
+| jumps, pops, drops, squeezes, headingSnaps | 0, 0, 0, 0, 0 | 0, 0, 0, 0, 0 | 0, 0, 0, 0, 0 |
+| `unseated`, `slides`, `pushes`, `seams`, `blind` | 0, 0, 0, 0, 0 | 0, 0, 0, 0, 0 | 0, 0, 0, 0, 0 |
+| `close` (two of ours) | 6 | 5 | 6 |
+| `through` (frames) | 2 | 4 | 15 |
+| `inRoad`, `floating` (frames) | 1, 39 | 1, 40 | 2, 33 |
+| `waits`, `speedSteps` | 15, 7 | 18, 8 | 11, 6 |
+| trips cut in the picture (`capped`) | 0 | 0 | 0 |
+| `tally.reseated` | 0 | 0 | 0 |
+| frames, the season on the wall clock | 32,613, 546 s | 32,727, 550 s | 31,567, 528 s |
+| spots found unfit: uptown, precinct, jail | 2, 0, 0 | 2, 0, 0 | 8, 1, 0 |
+
+- The 22 were all at Glasswall Plaza: the dealer, a5 and a9 given bench seats 0.56 m from the city's own sitters at
+  (13.6, −19.0) and (19.0, −24.4), and buyers stood in the sitter to deal with them. Seed 4's dealer is never
+  jailed, so the jail's seat is not among them: that one is the staged picture, and the other seeds below.
+- `close` is two of OURS within 0.6 m for half a second, and every one in every run is somebody walking up to or
+  past somebody (a buyer held up beside the seller, two walkers on one step): none is a shared place. The one at
+  Glasswall Plaza (a buyer beside the dealer on that bench) is gone; one at Pleasantview Park (a buyer held up
+  beside a5) is new. 5 or 6 in five runs of this build.
+- `through` and `inRoad` differ from run to run, as round 4 found (its own after run had 15 and 2). Five runs of
+  this build: `through` 1, 4, 15, 3, 15 and `inRoad` 1, 1, 2, 1, 2. The 15 and the second `inRoad` are one moment at
+  the bar that some runs have and some do not, both in round 4's list: the player knocked back past the end of a
+  step into DEAD AIR's front wall (−85.6, 30.2), and a7 at the bar's kerb (−87.3, 33.4). The rest are the city's
+  solids at Sunny Acres (−241.5, −53.7 and a run past −232.7, −55.4). None is a person. Whether the solid figures
+  make the bar's moment likelier was not settled: it was in two of five runs here and in none of the two without
+  them (before, blind).
+- `capped` was 1 in the first runs of this build (above) and is 0 with `ARRIVING` at 36.
+
+**Two other seeds, for the jail and the clinic** (the same command with `--seed 5 --query "seat=robber"`, whose
+robber is taken to the jail four times and to St. Mercy nine, and `--seed 7`, whose dealer is taken to St. Mercy
+three times and to the jail once; "blind" is `figures=0`):
+
+| | robber, seed 5, blind | robber, seed 5 | dealer, seed 7 |
+|---|---|---|---|
+| the run | `stage-ok`, 0 page errors | `stage-ok`, 0 page errors | `stage-ok`, 0 page errors |
+| `overlaps` (somebody of ours in one of the city's people) | 10 | 0 | 0 |
+| `overlapFrames`, `byFigure` | 1,728, 6,876 | 0, 5,341 | 0, 10,667 |
+| jumps, pops, drops, squeezes, headingSnaps | 0, 0, 0, 0, 0 | 0, 0, 0, 0, 0 | 0, 0, 0, 0, 0 |
+| `unseated`, `slides`, `pushes`, `seams`, `blind` | 0, 0, 0, 0, 0 | 0, 0, 0, 0, 0 | 0, 0, 0, 0, 0 |
+| `close` (two of ours) | 6 | 7 | 3 |
+| `through` (frames) | 0 | 0 | 0 |
+| `inRoad`, `floating` (frames) | 1, 35 | 1, 30 | 2, 26 |
+| `waits`, `speedSteps` | 20, 0 | 22, 0 | 18, 4 |
+| trips cut in the picture (`capped`) | 0 | 0 | 0 |
+| `tally.reseated` | 0 | 0 | 0 |
+| frames, the season on the wall clock | 22,995, 386 s | 22,882, 384 s | 30,409, 509 s |
+| spots found unfit: uptown, precinct, jail | 2, 0, 0 | 8, 1, 2 | 8, 1, 2 |
+
+- Blind, the robber's ten were the owner's own bug (the player on the waiting bench 0.41 m from the inmate at
+  (289.5, −383.0): three of the eight the audit kept word of) and the plaza's bench sitters. After: the player
+  stands cuffed at (291.5, −383.5), 2.03 m from the nearest inmate, in the county orange (watched through the
+  first two stays of a played season).
+- Staged, all ten seats held at once (`stage-scene.mjs jail --held 10`, and `--place clinic`): at Iron Island
+  nobody nearer than 1.37 m to one of the city's people or 1.41 m to one of ours (the ninth and tenth on spare
+  ground); at St. Mercy 2.17 m and 0.84 m (two on one bench, as the bench has it), the medic 1.41 m from anybody.

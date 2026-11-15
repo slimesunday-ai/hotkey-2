@@ -45,7 +45,7 @@ const BEARING = 90;
 /** The lens for a person and for a place, in degrees: the set shot's own. */
 const LENS = 42;
 
-export function createCamera({ city, actors, map, director, rooms = null, home = () => null }) {
+export function createCamera({ city, actors, map, director, rooms = null, home = () => null, inside = null }) {
   const rig = city.cam;
   // WHAT GOES SEE-THROUGH, AND HOW, is seethrough.js's: the whole building, roof or stall that hides the watched
   // person fades evenly, people on the line stay whole, and the city's own cone (the Lock's round patch) is kept
@@ -124,6 +124,8 @@ export function createCamera({ city, actors, map, director, rooms = null, home =
   function cut({ pos, tgt, fov = LENS }, key) {
     count.cuts += 1;
     on = key;
+    // (an inside view draws its own layer alone, inside.js; every other shot the city)
+    inside?.cut?.(key);
     city.clearFixedShadow?.();
     if (rig) rig.toOrbit({ instant: true });
     city.VIEWS.hk2 = { pos, tgt, fov, sh: [(pos[0] + tgt[0]) / 2, (pos[2] + tgt[2]) / 2, Math.max(16, Math.hypot(pos[0] - tgt[0], pos[2] - tgt[2]) * 0.8)] };
@@ -200,6 +202,10 @@ export function createCamera({ city, actors, map, director, rooms = null, home =
   /** What the camera should be on for a watched person: the room they are in, else the Lock on them. */
   function wantFor(id) {
     const P = director.people.get(id);
+    // A PLACE'S INSIDE VIEW, OR ITS DOOR OUTSIDE (inside.js): the room alone while they are in it; a low shot of the
+    // door while they go in or come out of it
+    const io = inside?.shot?.(id);
+    if (io) return `${io.kind}:${io.key}:${id}`;
     if (sceneRoom && rooms?.view?.(sceneRoom)) return `room:${sceneRoom}:${id}`;
     if (P?.inside && rooms?.view?.(P.inside)) return `room:${P.inside}:${id}`;
     return `lock:${id}`;
@@ -209,6 +215,15 @@ export function createCamera({ city, actors, map, director, rooms = null, home =
   function watch(id) {
     const want = wantFor(id);
     const A = actors.get(id);
+    if (/^(inside|door):/.test(want)) {
+      const view = inside.shot(id)?.view();
+      if (view) {
+        openPad(null);
+        count.rooms += 1;
+        cut(view, want);
+        return;
+      }
+    }
     if (want.startsWith('room:')) {
       const key = want.slice(5, want.length - id.length - 1);
       const P = director.people.get(id);
@@ -410,6 +425,17 @@ export function createCamera({ city, actors, map, director, rooms = null, home =
     state() {
       return { on, mode, user, following, place, glance, beat: !!beat, rig: rig?.mode ?? null, ...count, angle: { bearing: +((angle.az * 180) / Math.PI).toFixed(1), down: +((angle.el * 180) / Math.PI).toFixed(1), metres: +angle.d.toFixed(1) } };
     },
+    /**
+     * Where the Lock would put the camera on this person now (the pose watch() cuts to), or null: the run's opening
+     * comes down to it and hands the camera back with arrived(), so nothing is seen to change at the hand-over.
+     */
+    lockPose(id) {
+      const A = id && actors.has(id) ? actors.get(id) : null;
+      if (!A) return null;
+      const height = rig?.people?.heightOf?.(A.w) ?? 1.75;
+      const pivot = [A.w.p[0], Math.max(A.w.p[1], rig?.config?.follow?.floorY ?? 0) + (rig?.config?.lock?.anchorH ?? 0.82) * height, A.w.p[2]];
+      return { pos: out(pivot, angle.az, angle.el, angle.d), tgt: pivot, fov: LENS, az: angle.az, el: angle.el, d: angle.d };
+    },
     /** For the tools: another first angle for the Lock (degrees and metres), taken at once and at every later cut. */
     setAngle({ bearing = BEARING, down = DOWN, high = HIGH } = {}) {
       angle.az = rad(bearing);
@@ -488,7 +514,7 @@ export function createCamera({ city, actors, map, director, rooms = null, home =
         following = target === you && mode !== 'watch' ? null : target;
         glance = mode !== 'watch' && !!following;
         // (asked for the person it is already on: nothing to do, and no cut)
-        if (wantFor(target) === on && (!rig || on.startsWith('room:') || rig.mode === 'lock')) return;
+        if (wantFor(target) === on && (!rig || /^(room|inside|door):/.test(on) || rig.mode === 'lock')) return;
         watch(target);
       } else if (target && (map.BLOCKS[target] || HELD[target])) {
         following = null;

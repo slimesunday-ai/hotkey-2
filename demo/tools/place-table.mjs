@@ -56,15 +56,26 @@ const url = `http://127.0.0.1:${opt('--port', 5470)}/demo/?shot=1&bare=1&plain=1
  *   only     'published': the place stands on the city's published spots and its bench seats alone (the island's
  *            yard is fenced: the maker's spots round it are on both sides of the fence)
  *   missing  what the game needs here that the real place does not have, for the owner
+ *   homes    the place's own homes, the nearest this many trailer pads (the run's neighbours live in them): each
+ *            gets named spots of its own, read off its lot's anchor and its own pieces (homeSpots below)
+ *   around   how far (m) the place's `near` reaches: what stands round it that a scene can use (default 30). Its
+ *            standing spots reach as far, round its named spots, when it has homes or a bus stop
+ *   stalls   the group of the place's market stalls ('market'): each stall's front (its sign's side) and back as named
+ *            spots, 'stall:k' to browse it and 'keep:k' to keep it from behind; each picnic table's free end,
+ *            'table:k'; the place's own kerb, the nearest (its way to a kerb), 'kerb'; and the taxi stop, 'taxi'
+ *   paths    the place's own ways, where the city's walkers' lanes do not go: 'trailer', Sunny Acres' lanes (the
+ *            trailer district's plan: districts/trailer/plan.js LANES and IN), each its middle line from the west
+ *            fence to its mouth on Elm St, and each home's pad (its lot's rectangle) and the lane it fronts
  */
 const SPEC = {
   projects: {
-    city: 'trailer', name: 'Sunny Acres trailer park', reach: 12,
+    city: 'trailer', name: 'Sunny Acres trailer park', reach: 12, homes: 10, around: 56, paths: 'trailer',
     note: 'the swap-meet lane through the middle of the park; the ten pads are the ten trailers nearest it',
   },
   market: {
     city: null, name: 'the Jay St night market', at: ['market·picnic', 'mid'], reach: 9,
     spots: { 'counter:fence': ['market·stall#0', 'in'], 'counter:gunshop': ['market·stall#1', 'in'], 'counter:shop': ['market·stall#2', 'in'] },
+    stalls: 'market',
     face: 'karaoke·structure',
     note: 'the picnic yard among the eight stalls, on the Jay St & Washington St lot (the city block -2,1)',
     missing: ['a gun counter (the gun dealer stands at a food stall)', 'a fence\'s counter (the fence stands at a food stall)'],
@@ -225,6 +236,169 @@ try {
       return s ?? null;
     }
 
+    // ── what stands near a place (near.things, near.stops, near.homes) and the named spots of its homes and its stop
+    // the kinds of piece a scene can use: something to sit on, to wait at, to throw in, to work at
+    const USE = new Set(['bench', 'bus-shelter', 'taxi-sign', 'trashcan', 'dumpster', 'hoop', 'picnic', 'table', 'chair', 'cooler', 'grill', 'firepit', 'mailbox', 'stall', 'cart', 'phonebooth', 'crate', 'couch', 'speaker', 'vending', 'freezer', 'swing', 'slide', 'kiddie-pool', 'pool']);
+    const midOf = it => [r2((it.box[0] + it.box[3]) / 2), r2((it.box[2] + it.box[5]) / 2)];
+    const inBox = (b, x, z, m = 0) => x >= b[0] - m && x <= b[3] + m && z >= b[2] - m && z <= b[5] + m;
+    /** Every piece the audit build stamps within R m of a point (the blocks two round it). */
+    function piecesNear(x, z, R) {
+      const [bi, bj] = blockOf(x, z);
+      const out = [];
+      for (let i = bi - 2; i <= bi + 2; i++) for (let j = bj - 2; j <= bj + 2; j++) for (const it of block(i, j).items) {
+        const m = midOf(it);
+        const far = Math.hypot(m[0] - x, m[1] - z);
+        if (far <= R) out.push({ ...it, mid: m, far: r2(far) });
+      }
+      return out.sort((a, b) => a.far - b.far);
+    }
+    /** Is a standing point clear: on the slab (not the road), in no piece taller than a step? */
+    const clearAt = (x, z, list) => PLAN.kerbOut(x, z) >= 0.45 && !list.some(it => it.box[4] > 0.55 && inBox(it.box, x, z, 0.25));
+    /**
+     * A HOME'S OWN SPOTS, from its lot's anchor (the city's: districts/trailer/pads.js ctx.anchor.lot: the door, a
+     * step out of it; the yard; the FOR RENT sign; the house's box; the way it faces) and its pad's own pieces (group
+     * P<n>: the porch, its swap-meet stall, its mailbox):
+     *   door   on the porch, at the door (the anchor's own point) · step: off the porch, at the foot of its steps
+     *   yard   the anchor's yard point · stall: in front of the pad's swap-meet stall, on its lane side
+     *   front  the pad's front where it meets the lane (the lot's own point), a step into the pad
+     */
+    function homeSpots(l, A, items) {
+      const n = /Pad ([0-9]+)/.exec(l.name ?? '')?.[1];
+      const mine = items.filter(it => n && it.id.split('·')[1] === 'P' + n);
+      const door = [r2(A.door[0]), r2(A.door[2])];
+      const f = A.face ?? [0, 1];
+      const porch = mine.find(it => it.kind.endsWith('structure') && it.box[4] > 0.35 && it.box[4] < 1.7 && inBox(it.box, door[0], door[1], 0.05)) ?? null;
+      // (off the porch: along the way the door faces to the porch's edge, and a step on)
+      let t = 0.6;
+      if (porch) for (t = 0; t < 4 && inBox(porch.box, door[0] + f[0] * t, door[1] + f[1] * t); t += 0.05);
+      const step = [r2(door[0] + f[0] * (t + 0.45)), r2(door[1] + f[1] * (t + 0.45))];
+      const front0 = [l.x, l.z];
+      const dd = Math.hypot(door[0] - front0[0], door[1] - front0[1]) || 1;
+      const front = [r2(front0[0] + ((door[0] - front0[0]) / dd) * 0.8), r2(front0[1] + ((door[1] - front0[1]) / dd) * 0.8)];
+      const stallPiece = mine.filter(it => it.kind.endsWith('stall')).sort((a, b) => b.box[4] - a.box[4])[0] ?? null;
+      const stall = stallPiece ? pointAt(stallPiece, 'in', front0[0], front0[1], 0.9).map(r2) : null;
+      const mailbox = mine.find(it => it.kind.endsWith('mailbox')) ?? null;
+      return {
+        pad: n ? +n : null, door, step, yard: A.yard ? [r2(A.yard[0]), r2(A.yard[1])] : null, stall, front,
+        face: f, house: A.house ?? null, porch: porch ? { id: porch.id, box: porch.box.map(r2) } : null,
+        stallPiece: stallPiece ? { id: stallPiece.id, box: stallPiece.box.map(r2) } : null, mailbox: mailbox ? { id: mailbox.id, at: midOf(mailbox) } : null,
+      };
+    }
+    async function nearOf(id, S, at, spots) {
+      const R = S.around ?? 30;
+      const items = piecesNear(at[0], at[1], R + 6);
+      const things = items.filter(it => it.far <= R && USE.has(it.kind.split('·')[1])).map(it => ({ what: it.kind.split('·')[1], id: it.id, at: it.mid, box: it.box.map(r2), far: it.far }));
+      // the transit stops round it (world.json transit: the bus and taxi stops), each with the piece the build stood
+      // there (its shelter or its sign) and, for a bus stop, the places to wait at it: off each end of the shelter
+      // and behind it, on the slab and in nothing ('bus', 'bus:2', …: the nearest stop's)
+      const stops = WORLD.transit.stops.filter(q => q.built !== false && Math.hypot(q.x - at[0], q.z - at[1]) <= R).map(q => {
+        const piece = items.filter(it => /bus-shelter|taxi-sign/.test(it.kind) && Math.hypot(it.mid[0] - q.x, it.mid[1] - q.z) < 6).sort((a, b) => Math.hypot(a.mid[0] - q.x, a.mid[1] - q.z) - Math.hypot(b.mid[0] - q.x, b.mid[1] - q.z))[0] ?? null;
+        return { id: q.id, name: q.name, kind: q.kind, at: [r2(q.x), r2(q.z)], far: r2(Math.hypot(q.x - at[0], q.z - at[1])), piece: piece ? { id: piece.id, box: piece.box.map(r2) } : null };
+      }).sort((a, b) => a.far - b.far);
+      const bus = stops.find(q => q.kind === 'bus' && q.piece && /bus-shelter/.test(q.piece.id));
+      if (bus && S.homes) {
+        const b = bus.piece.box;
+        const [mx, mz] = [(b[0] + b[3]) / 2, (b[2] + b[5]) / 2];
+        const alongX = b[3] - b[0] > b[5] - b[2];
+        const half = alongX ? (b[3] - b[0]) / 2 : (b[5] - b[2]) / 2;
+        const w = alongX ? (b[5] - b[2]) / 2 : (b[3] - b[0]) / 2;
+        const P2 = (u, v) => (alongX ? [mx + u, mz + v] : [mx + v, mz + u]);
+        const cand = [P2(-half - 0.8, 0), P2(half + 0.8, 0), P2(0, w + 0.9), P2(0, -w - 0.9), P2(-0.9, w + 0.9), P2(0.9, -w - 0.9), P2(0.9, w + 0.9), P2(-0.9, -w - 0.9)].filter(([x, z]) => clearAt(x, z, items));
+        bus.spots = {};
+        cand.slice(0, 3).forEach(([x, z], k) => {
+          spots[k ? 'bus:' + (k + 1) : 'bus'] = [r2(x), r2(z)];
+          bus.spots[k ? 'bus:' + (k + 1) : 'bus'] = [r2(x), r2(z)];
+        });
+      }
+      // A MARKET'S OWN PLACES (S.stalls: the group of its stalls, 'market'): every stall of the group stands with its
+      // sign over its front, the side it sells to (the build stamps sign k on stall k's front face). Each gets two
+      // named spots: 'stall:k', a step out from the middle of its front, where a customer browses it, and 'keep:k', a
+      // step out from the middle of its back, where its keeper stands behind it. Each picnic table of the group its
+      // free end ('table:k': the end away from the stalls round it). And the places round it a crowd goes to: 'kerb',
+      // the sidewalk at the place's own kerb (the nearest kerb lane to its point: its way to a kerb), a step in from
+      // the kerb; and 'taxi', the taxi stop. (Not the kerb in front of the stalls that sell to the street: their
+      // keepers stand there)
+      if (S.stalls) {
+        const own = kind => items.filter(it => it.kind === S.stalls + '·' + kind).sort((a, b) => +a.id.split('·').pop() - +b.id.split('·').pop());
+        const signs = own('sign');
+        const faceOf = (box, x, z) => [['W', Math.abs(x - box[0])], ['E', Math.abs(x - box[3])], ['N', Math.abs(z - box[2])], ['S', Math.abs(z - box[5])]].sort((a, b) => a[1] - b[1])[0][0];
+        const BACK = { W: 'E', E: 'W', N: 'S', S: 'N' };
+        for (const it of own('stall')) {
+          const k = it.id.split('·').pop();
+          const sign = signs.find(q => q.id.split('·').pop() === k);
+          if (!sign) continue;
+          const front = faceOf(it.box, sign.mid[0], sign.mid[1]);
+          spots['stall:' + k] = pointAt(it, front, 0, 0, 1.0).map(r2);
+          spots['keep:' + k] = pointAt(it, BACK[front], 0, 0, 1.1).map(r2);
+        }
+        const stallBoxes = own('stall').map(it => it.box);
+        for (const it of own('picnic')) {
+          const k = it.id.split('·').pop();
+          const [x0, , z0, x1, , z1] = it.box;
+          const ends = (z1 - z0 > x1 - x0 ? ['N', 'S'] : ['W', 'E']).map(side => pointAt(it, side, 0, 0, 0.75));
+          // (the end with the most room: farthest from every stall's box)
+          const room = ([x, z]) => Math.min(...stallBoxes.map(b => Math.hypot(Math.max(b[0] - x, 0, x - b[3]), Math.max(b[2] - z, 0, z - b[5]))));
+          spots['table:' + k] = ends.sort((a, b) => room(b) - room(a))[0].map(r2);
+        }
+        {
+          const k = kerbNear(at[0], at[1]);
+          if (k) {
+            // (from the place's point toward its kerb, as far as the slab goes less a step: the plan's own kerb line)
+            const d = Math.hypot(k.x - at[0], k.z - at[1]) || 1;
+            let last = null;
+            for (let t = 0; t <= d; t += 0.1) {
+              const q = [at[0] + ((k.x - at[0]) / d) * t, at[1] + ((k.z - at[1]) / d) * t];
+              if (PLAN.kerbOut(q[0], q[1]) < 0.6) break;
+              last = q;
+            }
+            if (last) spots.kerb = last.map(r2);
+          }
+        }
+        const taxi = stops.find(q => q.kind === 'taxi');
+        if (taxi) spots.taxi = taxi.at;
+      }
+      // the homes: the nearest trailer pads with a frame (the same ten, in the same order, as the pads below)
+      const homes = [];
+      if (S.homes) {
+        const lots = SIM.lots.filter(l => l.tier === 'trailer').map(l => ({ ...l, far: Math.hypot(l.x - at[0], l.z - at[1]) })).sort((a, b) => a.far - b.far);
+        for (const l of lots) {
+          if (homes.length >= S.homes) break;
+          const [bi, bj] = blockOf(l.x, l.z);
+          let A = null;
+          let frame = null;
+          for (let i = bi - 1; i <= bi + 1 && !frame; i++) for (let j = bj - 1; j <= bj + 1 && !frame; j++) {
+            A = block(i, j).lots[l.lot] ?? block(i, j).lots[l.id];
+            if (A) frame = FRAME.lotEntry(l.id, A, [i, j]);
+          }
+          if (!frame || !A?.door) continue;
+          const seat = 'a' + (homes.length + 1);
+          const H = homeSpots(l, A, items);
+          homes.push({ seat, lot: l.id, name: l.name, far: r2(l.far), ...H });
+          for (const k of ['door', 'step', 'yard', 'stall', 'front']) if (H[k]) spots['home:' + seat + ':' + k] = H[k];
+        }
+      }
+      // THE PLACE'S OWN WAYS (its paths): Sunny Acres has no walkers' lane of the city's inside it, only its own three
+      // lanes of patched asphalt between the pad fronts (the district's plan). Each lane any of the homes fronts, as
+      // its middle line from a metre in from the west fence to its mouth on Elm St (the district's MOUTHS: all three
+      // open there), its half-width, and each home's pad and lane: whoever walks from one home to another, or out to
+      // the bus stop, goes down their own pad to its front and along the lane, not across the yards between
+      let paths = null;
+      if (S.paths === 'trailer' && homes.length) {
+        const TP = await import(CITY + 'districts/trailer/plan.js');
+        const lanes = new Map();
+        for (const h of homes) {
+          const pad = TP.PADS.find(p => p.n === h.pad);
+          if (!pad) continue;
+          h.rect = pad.rect.map(r2);
+          h.lane = pad.lane;
+          const L = TP.LANES[pad.lane];
+          if (L && !lanes.has(pad.lane)) lanes.set(pad.lane, { lane: pad.lane, line: [[r2(TP.IN.x0 + 1), r2(L.zc)], [r2(TP.IN.x1), r2(L.zc)]], half: r2((L.z1 - L.z0) / 2) });
+        }
+        paths = [...lanes.values()];
+      }
+      return { reach: R, things, stops, homes, ...(paths ? { paths } : {}) };
+    }
+
     // ── each place: where it is, its named spots, what the camera faces, its ways
     const table = {};
     const asks = [];
@@ -257,6 +431,11 @@ try {
         spots[name] = pointAt(it, how, at[0], at[1]).map(r2);
         fixtures[name] = { id: it.id, box: it.box.map(r2) };
       }
+      // ── WHAT STANDS NEAR IT THAT A SCENE CAN USE (the owner: "the game needs to know what's around it"): the
+      // pieces the city's own build stamps round the place that people use (a bench, a bus shelter, bins, a hoop,
+      // a table, a stall), the transit stops, and, for a place with homes, each home with its door, porch, yard,
+      // stall and front. Read, not typed: the audit build's boxes and the lots' own anchors
+      const near = await nearOf(id, S, at, spots);
       let look = null;
       if (S.face) {
         const it = pieces(S.face, at[0], at[1], 1)[0];
@@ -288,11 +467,13 @@ try {
       table[id] = {
         held: !!S.held, cityPlace: S.city, name: S.name, place: S.note, at, spots, fixtures, look, reach: S.reach, seats, only: S.only ?? null, hole: S.hole ?? 0,
         ways: { walk, kerb: kerbNear(at[0], at[1]), subway: subwayNear(at[0], at[1]) },
-        missing: S.missing ?? [],
+        near, missing: S.missing ?? [],
       };
-      // what the maker is asked: the place's own point, its named spots, and a ring 5 m round it
+      // (a place with homes or a stop stands its people round them too: its spots reach as far as its near)
+      if (near.homes.length || near.stops.some(q => q.spots)) table[id].reach = Math.max(S.reach, S.around ?? 30);
+      // what the maker is asked: the place's own point, its named spots (of a home, its yard), and a ring 5 m round it
       const ask = (x, z) => asks.push({ id: 'hk2:' + id + ':' + asks.length, name: id, kind: 'hangout', x, z });
-      for (const q of Object.values(spots)) ask(q[0], q[1]);
+      for (const [name, q] of Object.entries(spots)) if (!/^home:/.test(name) || /:yard$/.test(name)) ask(q[0], q[1]);
       for (const [dx, dz] of [[5, 0], [-5, 0], [0, 5], [0, -5], [9, 0], [-9, 0], [0, 9], [0, -9]]) ask(at[0] + dx, at[1] + dz);
     }
     for (const id of Object.keys(HELD)) if (table[id]) table[id].held = true;
@@ -341,7 +522,7 @@ try {
     for (const id of ids) {
       stands[id].sort((a, b) => a.far - b.far);
       // (the nearest CAP, and every seat: a place's people are a couple of dozen at most)
-      stands[id] = stands[id].filter((s, k) => k < CAP || s.kind === 'bench');
+      stands[id] = stands[id].filter((s, k) => k < (table[id].near?.homes?.length ? CAP * 3 : CAP) || s.kind === 'bench');
       delete table[id].seats;
       delete table[id].only;
       delete table[id].hole;
@@ -400,6 +581,14 @@ try {
     const n = kind => S.filter(s => s.kind === kind).length;
     console.log(`${(id + (T.held ? ' (held)' : '')).padEnd(16)} ${String(T.name).padEnd(26)} at ${String(T.at).padEnd(16)} ${String(S.length).padStart(2)} spots · wall ${n('wall')} · ledge ${n('stoop')} · bench ${n('bench')} · blocks ${T.blocks.map(b => b.join(',')).join(' ')} · walk ${T.ways.walk?.metres} m · subway ${T.ways.subway?.name} ${T.ways.subway?.metres} m`);
     for (const [name, f] of Object.entries(T.fixtures)) console.log(`${''.padEnd(16)} ${name.padEnd(16)} ${f.id} [${f.box}]${T.spots[name] ? ' → stands at ' + T.spots[name] : ''}`);
+    // (what stands near it that a scene can use)
+    const N = T.near;
+    if (N) {
+      const kinds = {};
+      for (const t of N.things) kinds[t.what] = (kinds[t.what] ?? 0) + 1;
+      console.log(`${''.padEnd(16)} near (${N.reach} m): ${Object.entries(kinds).map(([k, n]) => `${k} ${n}`).join(', ') || 'nothing'}; stops ${N.stops.map(q => `${q.kind} ${q.name} ${q.far} m${q.piece ? '' : ' (no piece)'}${q.spots ? ' → ' + Object.keys(q.spots).join(' ') : ''}`).join(', ') || 'none'}`);
+      for (const h of N.homes) console.log(`${''.padEnd(16)} home ${h.seat} ${h.name} (${h.far} m): door ${h.door} step ${h.step} yard ${h.yard} stall ${h.stall ?? '-'} front ${h.front}${h.porch ? ' porch ' + h.porch.id : ''}`);
+    }
   }
   console.log(`homes: ${Object.entries(made.pads).map(([seat, p]) => `${seat} ${p.name} (${p.far} m)`).join(', ') || 'NONE'}${Object.keys(made.pads).length ? '' : ' · lot keys seen: ' + made.lotKeys.join(' ')}`);
   const places = {};

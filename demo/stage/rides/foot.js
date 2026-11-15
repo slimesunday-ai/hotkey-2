@@ -18,8 +18,9 @@ const WALK_IN = 5;
 /** A place farther than this from any walkers' lane is set back: its walks are over the ground (m). */
 const SET_BACK = 9;
 /** How far back a watched arrival may start so as to come in from out of the picture: along a lane, over the ground (m). */
-const BACK_LANE = [5, 9, 14, 20, 26];
-const BACK_GROUND = [24, 17, 12, 8, 6];
+// (the game's camera takes in more than 26 m of a lane: further back still when nothing nearer is out of the picture)
+const BACK_LANE = [5, 9, 14, 20, 26, 34, 44, 56];
+const BACK_GROUND = [40, 32, 24, 17, 12, 8, 6];
 /** Whoever a scene is waiting for starts no farther back than this (m), and runs in. */
 const RUSH = 14;
 /** And the followed person's over the ground (the camera cuts with them: a few steps). */
@@ -46,7 +47,16 @@ export function createFoot({ actors, kit }) {
       }
       return false;
     });
-    walking.then(() => {
+    const from = [A.x, A.z];
+    walking.then(async () => {
+      // (STILL IN THE PICTURE at the end of the walk: on up the lane, the way they were going, a few legs more. The
+      // game's camera takes in more than the walk's forty metres, and nobody is taken off where they can be seen)
+      for (let k = 0; k < 4 && J.live() && kit.inView(A.x, 1, A.z, 1); k++) {
+        const d = Math.hypot(A.x - from[0], A.z - from[1]) || 1;
+        const q = actors.laneAlong(A.x + ((A.x - from[0]) / d) * 20, A.z + ((A.z - from[1]) / d) * 20, 0);
+        if (Math.hypot(q[0] - A.x, q[1] - A.z) < 3) break;
+        await actors.walkTo(id, q[0], q[1], { v: 1.9 * kit.haste });
+      }
       if (!J.live()) return;
       stop();
       // (still in the picture at the end of the walk: they stand there until the camera leaves them)
@@ -152,9 +162,11 @@ export function createFoot({ actors, kit }) {
       }
       S = kit.along(back.points, m0);
       // (two walking in together: the second a body's length further back)
-      for (const more of [0, 1.2, 2.4, 3.6]) {
+      // (and never ON A ROADWAY: at the dealing corner the walkers' lane dips into the street on its ramps, and
+      // somebody put down there stood in the road for the first moment of their walk in. A few steps further back)
+      for (const more of [0, 1.2, 2.4, 3.6, 4.8, 6, 7.2]) {
         const p = kit.along(back.points, Math.min(m0 + more, back.metres));
-        if (kit.clearOf(id, p[0], p[1], 0.9)) {
+        if (kit.clearOf(id, p[0], p[1], 0.9) && !actors.onRoad?.(p[0], p[1])) {
           S = p;
           break;
         }

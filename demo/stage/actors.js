@@ -31,6 +31,15 @@
 
 // the top of a head above the feet, in metres: where a name tag sits and where the panels hang a bubble
 const HEAD = 2.3;
+/** A head as the city's figures have it when a look's own cannot be read (its median: actors.js headOf). */
+const HEAD_TYPICAL = Object.freeze({ hw: 0.5, hd: 0.45, y0: 0.9, y1: 1.8 });
+/**
+ * HOW FAR APART TWO OF OURS STAND, middle to middle, when neither is doing a thing to the other: their two heads'
+ * half widths and this much between (headGap). The widest head the game's pools roll (the agents', 1.9 m) is
+ * HEAD_WIDEST: for a place given before anyone is known to stand there.
+ */
+export const HEAD_ROOM = 0.5;
+export const HEAD_WIDEST = 1.9;
 const STEP_SPEED = 1.2;
 const PROP_SHOW = 0.6;
 
@@ -50,6 +59,7 @@ export const FURNITURE = Object.freeze({
 const LOW = new Set(['lie_hurt', 'lie_still', 'fall_back', 'shove_fall', 'shot_hit', 'shot_hit_dead', 'death_collapse', 'sleep', 'sit_stoop', 'sit_bench', 'cuffed_idle', 'get_up', 'cower']);
 
 const sleepFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
+import { createSurface } from './surface.js';
 
 export async function createActors({ city, CITY }) {
   const THREE = city.THREE;
@@ -118,9 +128,31 @@ export async function createActors({ city, CITY }) {
   }
   function bakeLook(spec) {
     const look = lookOf(spec);
-    const index = peds.addLook(LOOKS.bake(CH, look));
+    const baked = LOOKS.bake(CH, look);
+    const index = peds.addLook(baked);
     if (index < 0) throw new Error('actors: the walker batches refused a look');
-    return { index, look };
+    return { index, look, head: headOf(baked.full) };
+  }
+  /**
+   * THE HEAD AND HAT OF A LOOK, measured off its bake (anim/cast/bake.js: every vertex tagged with the body part it
+   * rides, PART.head 5, the hat and the hair with it): half its width across the body (hw), half its depth (hd), its
+   * bottom and top (y0, y1), in metres from the feet. The city's figures are drawn big-headed: over 200 rolls of each
+   * pool a head is 1.0 m across (the median), 1.3 m at the agents' 90th percentile and 1.9 m at their widest (the
+   * locals' pool: 1.2), from 0.9 m up to 1.8. Two bodies a body's width apart have their heads in one another.
+   * Measured 2026-11-14; the shoes are at the bake's own origin (its lowest vertex is y 0 in every roll measured).
+   */
+  function headOf(full) {
+    const P = full?.P;
+    const K = full?.K;
+    if (!P || !K) return { ...HEAD_TYPICAL };
+    let [x0, x1, z0, z1, y0, y1] = [Infinity, -Infinity, Infinity, -Infinity, Infinity, -Infinity];
+    for (let k = 0; k < K.length; k++) {
+      if (Math.floor(K[k]) !== 5) continue;
+      const [x, y, z] = [P[k * 3], P[k * 3 + 1], P[k * 3 + 2]];
+      [x0, x1, z0, z1, y0, y1] = [Math.min(x0, x), Math.max(x1, x), Math.min(z0, z), Math.max(z1, z), Math.min(y0, y), Math.max(y1, y)];
+    }
+    if (!(x1 > x0)) return { ...HEAD_TYPICAL };
+    return { hw: +Math.max(-x0, x1).toFixed(3), hd: +Math.max(-z0, z1).toFixed(3), y0: +y0.toFixed(3), y1: +y1.toFixed(3) };
   }
 
   // ── the gait hook: clips ────────────────────────────────────────────────────────────────────────────────────────
@@ -131,6 +163,8 @@ export async function createActors({ city, CITY }) {
   const QY = new THREE.Quaternion();
   const UP = new THREE.Vector3(0, 1, 0);
   const V = new THREE.Vector3();
+  /** Frames drawn (the picture's checks ask the camera once a frame). */
+  let frameNo = 0;
   const ONE = new THREE.Vector3(1, 1, 1);
 
   // A clip may carry a prop (a work tool, the pistol, the cook's set). Two shapes exist in the city's clips:
@@ -432,8 +466,23 @@ export async function createActors({ city, CITY }) {
   const FT = [0.2, 0.4, 0.6, 0.8, 1, 1.2, 1.4, 1.6];
   const SIDE_AXIS = { N: [0, 1], S: [0, -1], W: [1, 0], E: [-1, 0] };
   const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
-  /** The ground under a point that is on no lane: the road's surface on a carriageway, else the sidewalk's. */
-  const groundAt = (x, z) => (PLAN.kerbOut(x, z) > 0 ? GROUND : 0);
+  /** The plan's ground under a point: the road's surface on a carriageway, else the sidewalk's slab (ground.js). */
+  const planGround = (x, z) => (PLAN.kerbOut(x, z) > 0 ? GROUND : 0);
+  /**
+   * THE GROUND UNDER A POINT AS IT IS DRAWN (surface.js: the up-facing faces of the city's own pieces there, to the
+   * city's voxel): a lane, a pad's ground, a porch, a lawn, a mat, a step. Whatever is drawn within STEP_UP of the
+   * plan's ground there is stood on; anything higher is a thing standing on the ground (a chair's seat, a cooler, a
+   * table), never ground. Where nothing of the city's is drawn, or its pieces are not here, the plan's own ground.
+   */
+  const STEP_UP = 0.35;
+  const surface = createSurface({ city, P: PLAN.P });
+  const drawnGround = (x, z) => {
+    const base = planGround(x, z);
+    const s = surface.at(x, z, base + STEP_UP);
+    return s === null || s < base ? base : s;
+  };
+  // (?ground=plan puts feet back on the plan's two heights, to measure what this changed: the audit's `feet`)
+  const groundAt = new URLSearchParams(location.search).get('ground') === 'plan' ? planGround : drawnGround;
 
   /** The point of a route `d` metres along it → out [x, y, z, heading]. */
   function poseOf(R, d, out) {
@@ -450,8 +499,9 @@ export async function createActors({ city, CITY }) {
       movement.at(part.G, d - part.c0, out);
       R.seg = part.G.segs[part.G.k];
       R.segD = d - part.c0;
-      // (a straight stretch inside the city's geometry is drawn at the sidewalk's height wherever it runs)
-      if (!R.seg.E) out[1] = groundAt(out[0], out[2]);
+      // (on the ground as it is drawn wherever it runs: a lane's own heights are the plan's, the sidewalk's slab and
+      // the road's, and Sunny Acres' lanes are a voxel over the slab)
+      out[1] = groundAt(out[0], out[2]);
     } else {
       const u = (d - part.c0) / part.len;
       out[0] = part.ax + (part.bx - part.ax) * u;
@@ -543,12 +593,14 @@ export async function createActors({ city, CITY }) {
     for (let k = 1; k <= n; k++) R.seam = Math.max(R.seam ?? 0, Math.hypot(X[k] - X[k - 1], Z[k] - Z[k - 1]));
     // (a seam: two points of the geometry 5 cm apart along it and more than 20 cm apart on the ground. The audit
     // counts them: each is a place where the city's pieces, or ours and the city's, do not meet)
+    // (kept on the route and counted when it is WALKED, follow(): a route laid and thrown away for its seam, as
+    // routeTo does, counted all the same)
     if (audit) {
+      R.seams = [];
       for (let k = 1; k <= n; k++) {
         const gap = Math.hypot(X[k] - X[k - 1], Z[k] - Z[k - 1]);
         if (gap <= 0.2) continue;
-        audit.seams += 1;
-        if (audit.examples.length < 400) audit.examples.push(`seam ${gap.toFixed(2)} m at ${X[k].toFixed(1)}, ${Z[k].toFixed(1)} (${(k * TABLE).toFixed(1)} of ${R.len.toFixed(1)} m; parts ${R.parts.map(q => (q.G ? `lane ${q.len.toFixed(1)}` : `step ${q.len.toFixed(1)}`)).join(' + ')})`);
+        R.seams.push(`seam ${gap.toFixed(2)} m at ${X[k].toFixed(1)}, ${Z[k].toFixed(1)} (${(k * TABLE).toFixed(1)} of ${R.len.toFixed(1)} m; parts ${R.parts.map(q => (q.G ? `lane ${q.len.toFixed(1)}` : `step ${q.len.toFixed(1)}`)).join(' + ')})`);
       }
     }
     const [XS, ZS] = [even(X), even(Z)];
@@ -760,7 +812,9 @@ export async function createActors({ city, CITY }) {
     // is stood in the road for that. A step down off the kerb is for two walkers passing: wayAside)
     // (to the side they are on first, and well to it; across the walker's way only when they stand almost on it)
     const ways = [[side, 1, 0], [side, 1.3, 0], [side, 1, 0.7], [side, 1.3, 0.7], [side, 1, -0.5]];
-    if (Math.abs(lat) < 0.3) ways.push([-side, 1, 0], [-side, 1.3, 0], [-side, 1, 0.7]);
+    // (and across it when their own side has nowhere to step: a keeper with the stall at their back on the flea
+    // market's sidewalk held the player up behind him, his head in the keeper's, until the walk was given up)
+    ways.push([-side, 1, 0], [-side, 1.3, 0], [-side, 1, 0.7]);
     for (const gutter of [PLAN.kerbOut(B.x, B.z) <= 0]) {
       for (const [sd, far, fwd] of ways) {
         const move = sd * far - lat;
@@ -797,6 +851,9 @@ export async function createActors({ city, CITY }) {
     }
     Y.t += dt;
     const go = (x, z, yaw) => {
+      // (the step back to where they stood is a straight step like any other: it ends short of whatever is on it.
+      // A buyer at the dealing corner stepped back through a signal's post)
+      [x, z] = freeEnd(B.x, B.z, x, z);
       const R = makeRoute([{ line: [B.x, B.z, x, z] }]);
       if (R) {
         // (a step out of the way is not held up by the bodies it is stepping away from: a shoulder's width, see BRUSH)
@@ -830,7 +887,10 @@ export async function createActors({ city, CITY }) {
         // its end still does)
         const W = Y.walk;
         const end = endOf(W);
-        const R2 = W.goal ? routeTo(B, W.goal.x, W.goal.z, W.goal.entry) : makeRoute([{ line: [B.x, B.z, end[0], end[1]] }]);
+        // (a walk with no lane to it, a way over the ground round a stall: laid again AS A WAY from where they
+        // stepped to. It was laid as one straight line to its end, through whatever the way had gone round: eight
+        // metres through a stall and a building's corner at the night market, the audit's `through`)
+        const R2 = W.goal ? routeTo(B, W.goal.x, W.goal.z, W.goal.entry) : makeRoute(stepsBetween(B.x, B.z, end[0], end[1]).parts);
         if (R2) {
           Object.assign(W, R2, { v: W.v, endYaw: W.endYaw, clip: W.clip, clipFrom: W.clipFrom, clipOn: false, goal: W.goal, done: false, arrived: false, pass: 0, held: 0, stood: 0, blocker: null, aside: null, asideFor: null });
           B.route = W;
@@ -1187,7 +1247,8 @@ export async function createActors({ city, CITY }) {
           const q = poseOf(R, R.d + u, Q4);
           const [qx, qz, hx, hz] = [q[0] + R.wx + R.ox, q[2] + R.wz + R.oz, Math.sin(q[3]), Math.cos(q[3])];
           // (in it, or its edge within a hand of the line: then only a small lean to the other side)
-          const [inL, inC, inR] = [-0.16, 0, 0.16].map(o => !!solidAt(qx + hz * o, q[1], qz - hx * o, true));
+          // (in it at the waist, or in something lower: a chair, a low table, a planter on the line, lowAt)
+          const [inL, inC, inR] = [-0.16, 0, 0.16].map(o => !!(solidAt(qx + hz * o, q[1], qz - hx * o, true) || lowAt(qx + hz * o, qz - hx * o, q[1])));
           if (!inL && !inC && !inR) continue;
           const tries = inC ? [0.4, -0.4, 0.65, -0.65, 0.9, -0.9] : inL && !inR ? [0.3] : inR && !inL ? [-0.3] : [];
           for (const off of tries) {
@@ -1228,16 +1289,29 @@ export async function createActors({ city, CITY }) {
     R.m = Math.min(R.metres, R.m + stride);
     R.d = lineAt(R, R.m, L4);
     // the ground: down off a kerb a moment early and up it a moment late, never in one frame and never floating
-    const aheadY = poseOf(R, Math.min(R.len, R.d + Math.max(0.25, A.vc * 0.1)), Q4)[1];
+    // (a tenth of a second ahead at the pace it goes: a walker braking at the edge of a step down is not held under
+    // the ground it still stands on for as long as it takes to get there)
+    const aheadY = poseOf(R, Math.min(R.len, R.d + A.vc * 0.1), Q4)[1];
     // (the geometry is asked for the height and for where on its edges the walker is; the place and the heading are
     // the walked line's)
     const p = poseOf(R, R.d, P4);
     [p[0], p[2], p[3]] = [L4[0], L4[2], L4[3]];
+    // (THE STEP ASIDE FOR SOMEBODY NEVER GOES INTO ANYTHING. Off the lanes there is no sidewalk's edge to hold it: a
+    // walker at Sunny Acres stepped 0.6 m aside for a neighbour, into a mailbox post. Where the body's middle would
+    // be in a solid the step aside goes no further this frame (it is left as it was, its sideways speed taken
+    // away); and where it is in one even so, the walk having carried it there, it eases back a little a frame)
+    const [wx0, wz0] = [R.wx, R.wz];
     weave(A, R, p[0], p[2], p[3], A.vc, dt);
+    if ((R.wx || R.wz) && !R.part?.G && (solidAt(p[0] + R.wx + R.ox, p[1], p[2] + R.wz + R.oz, true) || lowAt(p[0] + R.wx + R.ox, p[2] + R.wz + R.oz, p[1]))) {
+      [R.wx, R.wz, R.wvx, R.wvz] = [wx0, wz0, 0, 0];
+      if ((wx0 || wz0) && solidAt(p[0] + wx0 + R.ox, p[1], p[2] + wz0 + R.oz, true)) [R.wx, R.wz] = [wx0 * 0.92, wz0 * 0.92];
+    }
     A.x = p[0] + R.wx + R.ox + (R.out ? Math.sin(p[3]) * R.out : 0);
     A.z = p[2] + R.wz + R.oz + (R.out ? Math.cos(p[3]) * R.out : 0);
     // (a step aside may be down off the kerb: the ground is the ground under the body)
-    const y = Math.min(p[1], aheadY, R.wx || R.wz ? Math.min(groundAt(A.x, A.z), groundAt(A.x + Math.sin(p[3]) * 0.3, A.z + Math.cos(p[3]) * 0.3)) : Infinity);
+    // (the ground under the BODY, which is off the walked line by a step aside or a clip's shift: a walker by a
+    // porch's edge stood on the porch's height while the line it walked was on it and its feet were not)
+    const y = Math.min(groundAt(A.x, A.z), R.wx || R.wz || R.ox || R.oz ? groundAt(A.x + Math.sin(p[3]) * A.vc * 0.1, A.z + Math.cos(p[3]) * A.vc * 0.1) : aheadY);
     A.y += Math.max(-2.4 * dt, Math.min(2.4 * dt, y - A.y));
     // it faces the way it is really going: along its route, leaning into a step aside
     if (A.vc > 0.3) A.ry = Math.atan2(Math.sin(p[3]) * A.vc + R.wvx * Wyaw, Math.cos(p[3]) * A.vc + R.wvz * Wyaw);
@@ -1269,12 +1343,56 @@ export async function createActors({ city, CITY }) {
     }
     A.route = R;
     A.room = false;
+    endPath(A, false);
+  }
+
+  // ── A WAY OF ONE'S OWN MAKING THROUGH A ROOM (walkPath below): the city's way into a home (interiors/city/plan.js:
+  // the step, the stoop, the doorway, the room's grid round its furniture). No lanes and no solids are asked: the room
+  // stands where the city holds a solid building, and the plan's grid has the furniture. The body keeps the way's own
+  // height (the stoop, the trailer's floor) and counts as in a room while it walks it (A.room: the audit's ground
+  // tests leave it be, as they do anybody put in a room)
+  const PATH_ACC = 2.2;
+  const PATH_TURN = 5.5;
+  function endPath(A, ok) {
+    const W = A.path;
+    if (!W) return;
+    A.path = null;
+    W.resolve(ok);
+  }
+  function stepPath(A, dt) {
+    const W = A.path;
+    if (A.goId !== W.mine) return endPath(A, false);
+    const left = W.len - W.s;
+    const want = Math.min(W.v, Math.max(0.25, Math.sqrt(2 * BRAKE * left)));
+    A.vc = Math.max(0, A.vc + Math.max(-BRAKE * dt, Math.min(PATH_ACC * dt, want - A.vc)));
+    W.s = Math.min(W.len, W.s + A.vc * dt);
+    let s = W.s;
+    let k = 1;
+    for (; k < W.P.length - 1 && s > W.seg[k]; k++) s -= W.seg[k];
+    const [a, b] = [W.P[k - 1], W.P[k]];
+    const f = W.seg[k] > 1e-6 ? Math.min(1, s / W.seg[k]) : 1;
+    A.x = a[0] + (b[0] - a[0]) * f;
+    A.y = a[1] + (b[1] - a[1]) * f;
+    A.z = a[2] + (b[2] - a[2]) * f;
+    if (W.seg[k] > 1e-6) {
+      const turn = wrap(Math.atan2(b[0] - a[0], b[2] - a[2]) - A.ry);
+      A.ry += Math.max(-PATH_TURN * dt, Math.min(PATH_TURN * dt, turn));
+    }
+    W.onStep?.(A.x, A.z);
+    if (W.s >= W.len - 1e-3) {
+      A.vc = 0;
+      A.room = W.room;
+      if (!W.room) A.y = groundAt(A.x, A.z);
+      if (W.yaw !== null) A.ry = W.yaw;
+      endPath(A, true);
+    }
   }
 
   // ── per frame: move our people, keep them on the near tier, answer the waits ────────────────────────────────────
   function moveFree(A, dt) {
     const w = A.w;
-    if (A.route) {
+    if (A.path) stepPath(A, dt);
+    else if (A.route) {
       // (a long frame is walked in steps of a fiftieth of a second: a walker brakes on to its mark over them, it
       // does not reach it in one stride at speed)
       const n = Math.max(1, Math.ceil(dt / 0.021));
@@ -1370,6 +1488,7 @@ export async function createActors({ city, CITY }) {
       if (!w.tier) w.tier = 1;
       if (performance.now() - A.nearAt > 400) for (const mesh of A.props.values()) mesh.visible = false;
     }
+    frameNo += 1;
     const pushed = separate(dt);
     for (const A of actors.values()) publish(A);
     hideCrowd();
@@ -1432,7 +1551,14 @@ export async function createActors({ city, CITY }) {
   // walker that exists but is not shown). Outside it the street has its crowd as before.
   let keepOut = null;
   let crowdTick = 0;
+  // THE CITY'S WALKERS STAY ON THE SET NOW. The owner, 2026-11-14, of the flea market: "theres no npcs on the sidewalks
+  // and they just sometimes pop in and out of the game and disappear". That was this box: a walker was hidden the
+  // moment it stepped in and shown the moment it stepped out, in plain sight, and the sidewalks inside it stood
+  // empty. Left on, the city's crowd steps round ours as it does round its own (market seed 3 and park seed 35, two
+  // days each: overlaps 0). ?crowd=0 hides them as before.
+  const CROWD_STAYS = new URLSearchParams(location.search).get('crowd') !== '0';
   function hideCrowd() {
+    if (CROWD_STAYS) return;
     if (OLD || !keepOut || ++crowdTick % 6) return;
     const [x0, z0, x1, z1] = keepOut;
     for (const w of sim.walkers) {
@@ -1476,7 +1602,7 @@ export async function createActors({ city, CITY }) {
    */
   function solidAt(x, y, z, sure = false) {
     for (const test of solidTests) {
-      const name = test(x, z);
+      const name = test(x, z, y, sure);
       if (name) return name;
     }
     const W = city.cam?.world;
@@ -1484,7 +1610,30 @@ export async function createActors({ city, CITY }) {
     [WAIST.x, WAIST.y, WAIST.z] = [x, y + 0.9, z];
     if (sure) return W.inside(WAIST, W.STATIC) ? `a city solid ${W.topAt(x, z).toFixed(1)} m high` : null;
     const hit = W.overlap(WAIST, 0.2, W.STATIC);
-    return hit && hit.kind !== 'ground' && hit.depth > 0.04 ? `a city solid ${W.topAt(x, z).toFixed(1)} m high` : null;
+    if (hit && hit.kind !== 'ground' && hit.depth > 0.04) return `a city solid ${W.topAt(x, z).toFixed(1)} m high`;
+    // (and what is below the waist: a lawn chair, a low table, a planter, a step up. The waist alone never saw them,
+    // and a standing spot in a cluster of lawn chairs put the player in the red one: lowAt, over a body's width)
+    const low = lowAt(x, z, y, LOW_R);
+    return low ? `something ${(low - y).toFixed(2)} m high` : null;
+  }
+  /**
+   * SOMETHING SOLID BETWEEN ANKLE AND HEAD at a point (the collision world's columns: the highest solid top under a
+   * standing head there, above a step's height over the ground the body stands on), at the point and round it at
+   * `r` m. → that top, or 0. A kerb or a sidewalk's edge is under a step; a chair's seat, a table, a bench, a crate
+   * are not. Where the city's columns are not the real ones yet, nothing can be said: 0.
+   */
+  const LOW_R = 0.35;
+  const LOW_STEP = 0.32;
+  const LOW_HEAD = 1.75;
+  function lowAt(x, z, y, r = 0) {
+    const W = city.cam?.world;
+    if (!W?.floorAt || !W.ready?.(x, z)) return 0;
+    const pts = r ? [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]] : [[0, 0]];
+    for (const [dx, dz] of pts) {
+      const top = W.floorAt(x + dx, z + dz, y + LOW_HEAD);
+      if (top > y + LOW_STEP) return top;
+    }
+    return 0;
   }
   /**
    * Where a straight step from a to b ends: at b, or 30 cm short of the first solid on the way. THE LAST STEPS TO ANY
@@ -1503,6 +1652,15 @@ export async function createActors({ city, CITY }) {
     return [bx, bz];
   }
   /** Is the straight line between two points on the ground free of solids (asked every 15 cm, the first 30 cm apart: a body may be leaving a tight place)? */
+  /** lineFree, but for the last `tail` metres: the end is a place of its own (a seat on its ledge, a lean 0.2 m off its wall). */
+  function lineFreeTo(ax, az, bx, bz, tail) {
+    const len = Math.hypot(bx - ax, bz - az);
+    for (let d = 0.3; d <= len - tail; d += 0.15) {
+      const [x, z] = [ax + ((bx - ax) * d) / len, az + ((bz - az) * d) / len];
+      if (solidAt(x, groundAt(x, z), z)) return false;
+    }
+    return true;
+  }
   function lineFree(ax, az, bx, bz) {
     const len = Math.hypot(bx - ax, bz - az);
     for (let d = 0.3; d <= len; d += 0.15) {
@@ -1545,14 +1703,45 @@ export async function createActors({ city, CITY }) {
     for (const [i, j] of [[si, sj], [ti, tj]]) if (i >= 0 && j >= 0 && i < nx && j < nz && ask(i, j) === 3) kind[i + j * nx] = 1;
     const g = new Float32Array(nx * nz).fill(Infinity);
     const from = new Int32Array(nx * nz).fill(-1);
+    // (the open cells as a heap, the best on top. It was a plain scan for the best, right for a few hundred open
+    // cells: a way asked across a street's width of ground opens thousands, and one such search held the page for
+    // over a second: the worst second of a sixty-hour season had 0.8 frames in it)
     const open = [[Math.hypot(ti - si, tj - sj), si + sj * nx]];
+    const push = e => {
+      open.push(e);
+      for (let i = open.length - 1; i > 0; ) {
+        const up = (i - 1) >> 1;
+        if (open[up][0] <= open[i][0]) break;
+        [open[up], open[i]] = [open[i], open[up]];
+        i = up;
+      }
+    };
+    const pop = () => {
+      const top = open[0];
+      const last = open.pop();
+      if (open.length) {
+        open[0] = last;
+        for (let i = 0; ; ) {
+          const [l, r] = [2 * i + 1, 2 * i + 2];
+          let m = i;
+          if (l < open.length && open[l][0] < open[m][0]) m = l;
+          if (r < open.length && open[r][0] < open[m][0]) m = r;
+          if (m === i) break;
+          [open[m], open[i]] = [open[i], open[m]];
+          i = m;
+        }
+      }
+      return top;
+    };
+    const closed = new Uint8Array(nx * nz);
     g[si + sj * nx] = 0;
     let found = false;
-    for (let guard = 0; open.length && guard < 30000; guard++) {
-      // (a plain scan for the best: a few hundred cells are open at most)
-      let b = 0;
-      for (let k = 1; k < open.length; k++) if (open[k][0] < open[b][0]) b = k;
-      const [, c] = open.splice(b, 1)[0];
+    for (let guard = 0; open.length && guard < 30000; ) {
+      const [, c] = pop();
+      // (a cell reached again by a shorter way is in the heap twice: taken once)
+      if (closed[c]) continue;
+      closed[c] = 1;
+      guard += 1;
       const [ci, cj] = [c % nx, Math.floor(c / nx)];
       if (ci === ti && cj === tj) {
         found = true;
@@ -1569,7 +1758,7 @@ export async function createActors({ city, CITY }) {
         if (cost >= g[n]) continue;
         g[n] = cost;
         from[n] = c;
-        open.push([cost + Math.hypot(ti - i, tj - j), n]);
+        push([cost + Math.hypot(ti - i, tj - j), n]);
       }
     }
     if (!found) return null;
@@ -1591,9 +1780,9 @@ export async function createActors({ city, CITY }) {
     // stall's pole is one quarter-metre column, and a 0.4 m cell whose middle is ground holds it. A way pulled
     // straight through one ended short at it, the walker standing a metre and a half from their spot with the post
     // between. The last 0.45 m are the spot's own: a place to lean is 0.2 m off its wall)
-    const thinFree = (p, q) => {
+    const thinFree = (p, q, tail = 0.45) => {
       const len = Math.hypot(q[0] - p[0], q[1] - p[1]);
-      for (let d = 0.3; d <= len - 0.45; d += 0.15) {
+      for (let d = 0.3; d <= len - tail; d += 0.15) {
         const [x, z] = [p[0] + ((q[0] - p[0]) * d) / len, p[1] + ((q[1] - p[1]) * d) / len];
         if (solidAt(x, groundAt(x, z), z)) return false;
       }
@@ -1603,7 +1792,9 @@ export async function createActors({ city, CITY }) {
     for (let k = 0; k < cells.length - 1; ) {
       let far = k + 1;
       for (let m = Math.min(cells.length - 1, k + 60); m > k + 1; m--) {
-        if (gridFree(cells[k], cells[m]) && thinFree(cells[k], cells[m])) {
+        // (the last 0.45 m are left out only where the line ENDS AT THE PLACE ITSELF: on a leg in the middle of the
+        // way they hid a bench's end, and a buyer walked off through it)
+        if (gridFree(cells[k], cells[m]) && thinFree(cells[k], cells[m], m === cells.length - 1 ? 0.45 : 0)) {
           far = m;
           break;
         }
@@ -1616,7 +1807,9 @@ export async function createActors({ city, CITY }) {
   /** The straight steps from a to b as parts of a route: one when the line is free, else by the way round (findWay). */
   function stepsBetween(ax, az, bx, bz) {
     if (Math.hypot(bx - ax, bz - az) < 0.6 || lineFree(ax, az, bx, bz)) return { parts: [{ line: [ax, az, bx, bz] }], end: [bx, bz] };
-    const way = findWay(ax, az, bx, bz);
+    // (asked on more than one grid: from a point 0.2 m off a wall the first cell can be the wall's own, and the way
+    // then comes out null on one grid and whole on the next)
+    const way = findWay(ax, az, bx, bz) ?? findWay(ax, az, bx, bz, 6) ?? findWay(ax, az, bx, bz, 12);
     if (!way) {
       const [ex, ez] = freeEnd(ax, az, bx, bz);
       return { parts: [{ line: [ax, az, ex, ez] }], end: [ex, ez] };
@@ -1653,13 +1846,93 @@ export async function createActors({ city, CITY }) {
   //   through       frames in which somebody moving on foot is inside a solid (solidAt above). People put in a room
   //                 are not walking and do not count. `blind`: frames a walker was where the city's solids were not
   //                 loaded, so nothing could be said. `short`: straight steps cut short because a solid stood on them
+  //   overlaps      times somebody of ours was in one of the CITY'S OWN PEOPLE (setCrowd: the inmates on a bench, a
+  //                 clerk, whoever the city itself stands or seats in its places) for more than half a second: the two
+  //                 middles nearer than 0.6 m, as `close` is for two of ours (each spell counted once).
+  //                 `overlapFrames`: every frame of it. And the proof that they were looked for at all: `byFigure`,
+  //                 frames somebody of ours was within a metre and a half of one (stage.debug().figures: how many
+  //                 of the city's people are known now)
+  //   furniture     times somebody of ours stood or walked in something LOW of the city's (lowAt: a chair, a low
+  //                 table, a planter, solid between ankle and head) for more than half a second, not sat or lying in
+  //                 what is theirs to (each spell counted once). `furnitureFrames`: every frame of it
+  //   vanish        times somebody of ours CAME ON, WENT OFF or WAS MOVED AT ONCE (place(), a jump) where the camera's
+  //                 picture shows them, with no cut of the whole picture to cover it: the picture black (a trip's
+  //                 fade, `pictureDark`), or the camera itself cut to somewhere else that frame (it moved more than
+  //                 6 m or turned more than 30 degrees at once). People do not appear or disappear in plain sight:
+  //                 they walk or run past the edge of the picture. (`jumps` and `cuts` count a move by distance alone,
+  //                 wherever it is and whether anyone could see it: a cut there is on purpose, and is not counted as a
+  //                 fault. `pops` are clips. Neither counts a body shown or hidden, which is what a person put off
+  //                 the stage where they stood is.) In a room of the set (place() with a floor) is not counted
   // Everyone on stage is counted, in the camera's view or not; the heading alone is counted only for a body the
   // city drew this frame and the last (its own tier: nobody else is being turned). A declared cut (place(), show())
   // excuses that frame and the next for speed and heading: the drawn heading follows a frame behind.
   /** Is this point on a carriageway or a junction box (the city's plan: 0 m off the road surface)? */
   const onRoad = (x, z) => PLAN.kerbOut(x, z) <= 0;
+  /** Clips whose body is not on its feet (the audit's `feet` leaves them be): down, sat, getting up, riding. */
+  const OFF_FEET = /^(sit|lie|sleep|fall|shove_fall|shot_hit|death|crash|get_up|stairs|van_|car_|get_in|bike|scooter|skate|cower|cuffed)/;
   const turnOf = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
   let audit = null;
+  let crowd = null;
+  let crowdTouch = 0.3;
+  // ── the camera's picture ─────────────────────────────────────────────────────────────────────────────────────────
+  const PIC = { M: new THREE.Matrix4(), F: new THREE.Frustum(), S: new THREE.Sphere(), cam: null, cutAt: -1, frame: 0 };
+  /** Is a body standing at (x, z) in the camera's picture now (its sphere, feet to head, against the frustum)? */
+  function inPicture(x, z, y = GROUND) {
+    // (a place's inside view draws its own layer alone, inside.js: whoever stands outside that inside is not in the
+    // picture, though the camera's frustum passes over them on its way down to the room twelve metres up. The stage
+    // says so, index.js: without it, a neighbour taken off below the room counted as going in plain sight)
+    if (api.pictureHides?.(x, y, z)) return false;
+    const cam = city.camera;
+    if (PIC.frame !== frameNo) {
+      cam.updateMatrixWorld();
+      PIC.F.setFromProjectionMatrix(PIC.M.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
+      PIC.frame = frameNo;
+    }
+    PIC.S.center.set(x, y + 0.9, z);
+    PIC.S.radius = 0.9;
+    return PIC.F.intersectsSphere(PIC.S);
+  }
+  /** This frame, is the whole picture cut (black, or the camera put somewhere else at once)? */
+  function pictureCut() {
+    const c = city.camera;
+    const now = [c.position.x, c.position.y, c.position.z, c.quaternion.x, c.quaternion.y, c.quaternion.z, c.quaternion.w];
+    const was = PIC.cam;
+    PIC.cam = now;
+    if (was) {
+      const moved = Math.hypot(now[0] - was[0], now[1] - was[1], now[2] - was[2]);
+      const dot = Math.min(1, Math.abs(now[3] * was[3] + now[4] * was[4] + now[5] * was[5] + now[6] * was[6]));
+      if (moved > 6 || 2 * Math.acos(dot) > 0.52) PIC.cutAt = frameNo;
+    }
+    // (the frame of the camera's cut and the one after it: what was put in place for the new picture is new in it.
+    // And the frame after the black: what was put on under it is first seen here, as the veil starts to lift)
+    if (api.pictureDark?.()) PIC.darkAt = frameNo;
+    return frameNo - (PIC.darkAt ?? -9) <= 1 || frameNo - PIC.cutAt <= 1;
+  }
+  /** Who put a body on, off or somewhere (while the audit is on): the functions that called, for the `vanish` notes. */
+  function callers() {
+    return (new Error().stack ?? '').split('\n').slice(3, 9).map(l => `${/at (?:async )?([\w.$<>]+)/.exec(l)?.[1] ?? '?'}${(/([\w-]+\.js):(\d+)/.exec(l) ?? []).slice(1).join(':').replace(/^(.+)$/, '@$1')}`).join(' < ');
+  }
+  function auditPicture(dt, note) {
+    const cut = pictureCut();
+    for (const A of actors.values()) {
+      const on = !A.w.hide;
+      const was = A.pOn;
+      const [px, pz] = [A.pX ?? A.x, A.pZ ?? A.z];
+      const room = A.room || A.pRoom;
+      let what = null;
+      if (!cut && !room && was !== undefined) {
+        if (on && !was && inPicture(A.x, A.z, A.y)) what = 'came on';
+        else if (!on && was && inPicture(px, pz)) what = 'went off';
+        // (a clip that ends a step away handing that step to the walker, `shifted`, moves nobody on the picture)
+        else if (on && was && !A.shifted && Math.hypot(A.x - px, A.z - pz) > Math.max(0.5, 6.5 * dt + 0.15) && (inPicture(A.x, A.z, A.y) || inPicture(px, pz))) what = 'was moved at once';
+      }
+      if (what) {
+        audit.vanish += 1;
+        note(`vanish ${A.id} ${what} in the picture at ${A.x.toFixed(1)}, ${A.z.toFixed(1)}${A.clipName ? ' (' + A.clipName + ')' : ''}${A.by ? ' by ' + A.by : ''}${PIC.darkAt !== undefined ? `, ${frameNo - PIC.darkAt} frames after black` : ''}${api.noteAt ? ', ' + api.noteAt() : ''}`);
+      }
+      Object.assign(A, { pOn: on, pX: A.x, pZ: A.z, pRoom: A.room, by: null });
+    }
+  }
   function auditFrame(realDt, dt, pushed) {
     audit.frames += 1;
     const now = performance.now();
@@ -1670,6 +1943,7 @@ export async function createActors({ city, CITY }) {
       audit.kinds[kind] = (audit.kinds[kind] ?? 0) + 1;
       if (audit.kinds[kind] <= 8) audit.examples.push(text);
     };
+    auditPicture(dt, note);
     if (pushed) {
       audit.pushes += 1;
       if (pushed !== audit.lastPush) {
@@ -1703,7 +1977,10 @@ export async function createActors({ city, CITY }) {
         const name = solidAt(A.x, A.y, A.z, true);
         if (name) {
           audit.through += 1;
-          if (!A.inSolid) note(`through ${A.id} in ${name} at ${A.x.toFixed(1)}, ${A.z.toFixed(1)}${A.route ? (A.route.part?.G ? ' (on the lane)' : ' (on a straight step)') : ''}`);
+          // (with the way it is on: its parts, which of them it is in, and where that one runs from and to)
+          const Rt = A.route;
+          const Pt = Rt?.part;
+          if (!A.inSolid) note(`through ${A.id} in ${name} at ${A.x.toFixed(1)}, ${A.z.toFixed(1)}${Rt ? (Pt?.G ? ' (on the lane)' : ' (on a straight step)') + `; ${Rt.m.toFixed(1)} of ${Rt.metres.toFixed(1)} m${Rt.exact ? ', exact' : ''}${A.clipName ? ', ' + A.clipName : ''}; parts ${Rt.parts.map(q => (q.G ? `lane ${q.len.toFixed(1)}` : `step ${q.len.toFixed(1)} [${q.ax.toFixed(1)},${q.az.toFixed(1)} > ${q.bx.toFixed(1)},${q.bz.toFixed(1)}]`)).join(' + ')}` : ''}`);
         } else if (city.cam?.world && !city.cam.world.ready(A.x, A.z)) audit.blind += 1;
         A.inSolid = !!name;
       } else A.inSolid = false;
@@ -1713,6 +1990,48 @@ export async function createActors({ city, CITY }) {
         if (A.unseatNoted !== A.clipName) note(`unseated ${A.id} in ${A.clipName} at ${A.x.toFixed(1)}, ${A.z.toFixed(1)}: ${FURNITURE[A.clipName] === 'room' ? 'not indoors' : A.stand ? `its spot is ${A.stand.kind}${A.stand[FURNITURE[A.clipName]] ? ', and the point is ' + Math.hypot(A.x - A.stand[FURNITURE[A.clipName]][0], A.z - A.stand[FURNITURE[A.clipName]][1]).toFixed(2) + ' m off' : ''}` : 'on no spot'}`);
         A.unseatNoted = A.clipName;
       } else A.unseatNoted = null;
+      // in one of the city's own people (their body's own half width is theirs: crowd gives the figure)
+      const F = crowd ? crowd(A.x, A.z, A.y, 1.2) : null;
+      if (F) audit.byFigure += 1;
+      if (F && Math.hypot(F.x - A.x, F.z - A.z) - F.r < crowdTouch) {
+        audit.overlapFrames += 1;
+        const t = (A.inFigure ?? 0) + realDt;
+        if (t > 0.5 && (A.inFigure ?? 0) <= 0.5) {
+          audit.overlaps += 1;
+          note(`overlap ${A.id} in one of the city's own people at ${F.x.toFixed(1)}, ${F.z.toFixed(1)} (${Math.hypot(F.x - A.x, F.z - A.z).toFixed(2)} m between them${A.clipName ? ', ' + A.clipName : ''}${A.route ? ', walking' : A.stand ? `, on a ${A.stand.kind ?? 'spot'} of its own` : ', standing'}${A.room ? ', in a room' : ''})`);
+        }
+        A.inFigure = t;
+      } else A.inFigure = 0;
+      // IN SOMETHING LOW (lowAt: a chair, a low table, a planter, standing or walking): not whoever sits or lies in
+      // what is theirs to (a bench seat, a bed), nor anybody in a room. `furniture`: each spell of half a second once
+      const lowT = !A.room && !LOW.has(A.clipName) && !/^(sit|lie|sleep)/.test(A.clipName ?? '') && !(A.stand && (A.stand.sit || A.stand.kind === 'bench')) ? lowAt(A.x, A.z, A.y) : 0;
+      if (lowT) {
+        audit.furnitureFrames += 1;
+        const t = (A.inLow ?? 0) + realDt;
+        if (t > 0.5 && (A.inLow ?? 0) <= 0.5) {
+          audit.furniture += 1;
+          note(`furniture ${A.id} in something ${(lowT - A.y).toFixed(2)} m high at ${A.x.toFixed(1)}, ${A.z.toFixed(1)}${A.clipName ? ', ' + A.clipName : ''}${A.route ? ', walking' : A.stand ? `, on a ${A.stand.kind ?? 'spot'} of its own` : ', standing'}`);
+        }
+        A.inLow = t;
+      } else A.inLow = 0;
+      // FEET ON THE GROUND AS IT IS DRAWN (surface.js, drawnGround): standing or walking outdoors, more than 3 cm
+      // under it or 5 cm over it for more than a quarter of a second (each spell once). Not whoever lies, sits, falls
+      // or gets up (their clip is not on its feet), not a ride's body or anybody in a room (A.room: their own floor),
+      // and nobody where the city's pieces are not here to say (surface.at null)
+      if (!A.room && A.mode === 'free' && !LOW.has(A.clipName) && !OFF_FEET.test(A.clipName ?? '')) {
+        const base = planGround(A.x, A.z);
+        const s = surface.at(A.x, A.z, base + STEP_UP);
+        const off = s === null ? 0 : A.y - (s < base ? base : s);
+        if (off < -0.03 || off > 0.05) {
+          audit.feetFrames += 1;
+          const t = (A.offGround ?? 0) + realDt;
+          if (t > 0.25 && (A.offGround ?? 0) <= 0.25) {
+            audit.feet += 1;
+            note(`feet ${A.id} ${Math.abs(off).toFixed(2)} m ${off < 0 ? 'under' : 'over'} the ground as drawn (${(A.y - off).toFixed(2)}) at ${A.x.toFixed(1)}, ${A.z.toFixed(1)}${A.clipName ? ', ' + A.clipName : ''}${A.route ? ', walking' : ', standing'}`);
+          }
+          A.offGround = t;
+        } else A.offGround = 0;
+      } else A.offGround = 0;
       const road = !A.room && onRoad(A.x, A.z);
       if (road && A.y > 0.03 && !LOW.has(A.clipName)) {
         audit.floating += 1;
@@ -1780,6 +2099,59 @@ export async function createActors({ city, CITY }) {
         } else if (audit.near.has(key)) audit.near.delete(key);
       }
     }
+    auditHeads(realDt, list, note);
+  }
+  /**
+   * HEADS OVER EACH OTHER IN THE PICTURE (`heads`): two of ours STANDING (no way under them, not down, sat, riding
+   * or in a room, both in the camera's picture) whose heads as the camera draws them (headOf's box, turned with the
+   * body, its eight corners through the camera) overlap by more than a fifth of the smaller for more than half a
+   * second (each spell once). Not two in a CONTACT step with each other (contact(): a hand-off, a shove, a lift, a
+   * grab, a punch, a cuffing: the clip has hands meet at its own short reach; two of one scene's contact steps, for
+   * that scene: a fight is three people at arm's length) nor the two halves of a pair clip.
+   * `headFrames`: every frame of it.
+   */
+  const HV = new THREE.Vector3();
+  function headRect(A) {
+    const H = A.head ?? HEAD_TYPICAL;
+    const yaw = A.w.yawS ?? A.ry;
+    const [c, s] = [Math.cos(yaw), Math.sin(yaw)];
+    const r = [Infinity, Infinity, -Infinity, -Infinity];
+    for (const bx of [-H.hw, H.hw]) {
+      for (const bz of [-H.hd, H.hd]) {
+        for (const by of [H.y0, H.y1]) {
+          HV.set(A.x + bx * c + bz * s, A.y + by, A.z - bx * s + bz * c).project(city.camera);
+          [r[0], r[1], r[2], r[3]] = [Math.min(r[0], HV.x), Math.min(r[1], HV.y), Math.max(r[2], HV.x), Math.max(r[3], HV.y)];
+        }
+      }
+    }
+    return r;
+  }
+  function auditHeads(realDt, list, note) {
+    const standing = list.filter(A => !A.room && A.mode === 'free' && !A.route && !(A.moving > 0.1) && !LOW.has(A.clipName) && !OFF_FEET.test(A.clipName ?? '') && inPicture(A.x, A.z, A.y));
+    const rects = new Map(standing.map(A => [A, headRect(A)]));
+    const seen = new Set();
+    for (let i = 0; i < standing.length; i++) {
+      for (let j = i + 1; j < standing.length; j++) {
+        const [A, B] = [standing[i], standing[j]];
+        if ((A.contact && A.contact === B.contact) || (A.paired && B.paired)) continue;
+        const [a, b] = [rects.get(A), rects.get(B)];
+        const w = Math.min(a[2], b[2]) - Math.max(a[0], b[0]);
+        const h = Math.min(a[3], b[3]) - Math.max(a[1], b[1]);
+        if (w <= 0 || h <= 0) continue;
+        const small = Math.min((a[2] - a[0]) * (a[3] - a[1]), (b[2] - b[0]) * (b[3] - b[1]));
+        if ((w * h) / small <= 0.15) continue;
+        const key = `${A.id}|${B.id}`;
+        seen.add(key);
+        audit.headFrames += 1;
+        const t = (audit.heads2.get(key) ?? 0) + realDt;
+        if (t > 0.5 && (audit.heads2.get(key) ?? 0) <= 0.5) {
+          audit.heads += 1;
+          note(`heads ${key} over each other in the picture at ${A.x.toFixed(1)}, ${A.z.toFixed(1)} and ${B.x.toFixed(1)}, ${B.z.toFixed(1)} (${Math.hypot(A.x - B.x, A.z - B.z).toFixed(2)} m apart, ${((100 * w * h) / small).toFixed(0)}% of the smaller head${A.clipName ? ', ' + A.clipName : ''}${B.clipName ? ' / ' + B.clipName : ''}${A.firm || B.firm ? ', in a scene' : ''})`);
+        }
+        audit.heads2.set(key, t);
+      }
+    }
+    for (const key of [...audit.heads2.keys()]) if (!seen.has(key)) audit.heads2.delete(key);
   }
 
   const driver0 = peds.driver;
@@ -2015,10 +2387,29 @@ export async function createActors({ city, CITY }) {
     let R = makeRoute([...on.parts, { path: way.metres > 0.05 ? way.path : null }, ...off.parts]);
     // (THE LANES' GEOMETRY BROKEN BY A METRE OR MORE on this stretch: not walked. The way is found over the ground
     // instead, round whatever stands on it, when the two ends are near enough for that)
-    if (R && R.seam > 1 && Math.hypot(gx - A.x, gz - A.z) < 60) {
-      const ground = stepsBetween(A.x, A.z, gx, gz);
-      const R2 = makeRoute(ground.parts);
-      if (R2 && !(R2.seam > 1)) R = R2;
+    // (AND BROKEN BY A HAND OR MORE, or twice the way it need be: the same. The dealing corner's own lane has a break
+    // of 0.4 to 0.5 m where it dips into the roadway on its ramp, and every walk that left the corner by it was laid
+    // the other way round the block: 107 m of lane to somewhere 45 m off, and a 0.4 m skip three metres in. Over
+    // more than a dozen metres the way is always LOOKED for (findWay: a roadway costs double), never the bare
+    // straight line, which would cut across the street)
+    const straight = Math.hypot(gx - A.x, gz - A.z);
+    if (R && straight < 60 && (R.seam > 0.2 || R.metres > straight * 1.8 + 12)) {
+      const far = straight > 12 ? findWay(A.x, A.z, gx, gz, 12) : null;
+      let ground = null;
+      if (far) {
+        ground = { parts: [], end: [gx, gz] };
+        let [px, pz] = [A.x, A.z];
+        for (const [qx, qz] of far) {
+          ground.parts.push({ line: [px, pz, qx, qz] });
+          [px, pz] = [qx, qz];
+        }
+        if (audit) audit.ways += 1;
+      } else if (straight <= 12 || R.seam > 1) ground = stepsBetween(A.x, A.z, gx, gz);
+      const R2 = ground && Math.hypot(ground.end[0] - gx, ground.end[1] - gz) < 0.5 ? makeRoute(ground.parts) : null;
+      if (R2 && !(R2.seam > 0.2) && (R2.metres < R.metres || R.seam > 1)) {
+        R = R2;
+        [x, z] = [gx, gz];
+      }
     }
     // (someone standing a hair off the lane's own line: no step on to it is laid, under 3 cm, and the walk takes
     // that hair with it instead of the body hopping it in its first frame)
@@ -2117,6 +2508,11 @@ export async function createActors({ city, CITY }) {
    * for it (walk_hurt, cuffed_walk). → true on arrival, false when another order took its place.
    */
   async function follow(A, R, mine, { v, clip = null, clipFrom = 0, yaw = null, count = null }) {
+    if (audit && R.seams?.length) {
+      audit.seams += R.seams.length;
+      for (const e of R.seams) if (audit.examples.length < 400) audit.examples.push(e);
+      R.seams = null;
+    }
     const over = overOf(clip);
     // (`clipFrom`: the clip belongs to a pace, a run, and waits for the body to reach it: advance() above)
     if (over && !clipFrom) A.want = { name: over, loop: true, t: 0, walk: true };
@@ -2163,6 +2559,30 @@ export async function createActors({ city, CITY }) {
     CITYLIFE: { LIFE: CITYLIFE.LIFE, NAMES: CITYLIFE.NAMES, roleOf: CITYLIFE.roleOf },
     FURNITURE,
     GROUND,
+    /** The ground under a point as it is drawn (surface.js): what a body standing there stands on. */
+    groundAt: (x, z) => groundAt(x, z),
+    /** A person's head and hat (headOf: hw, hd half its width and depth, y0 y1 its bottom and top), or the typical one. */
+    headOf: id => (actors.get(id)?.head ?? HEAD_TYPICAL),
+    /**
+     * HOW FAR APART TWO OF OURS STAND when neither is doing a thing to the other (m, middle to middle): their heads'
+     * widest half each, and HEAD_ROOM between. `b` null: the widest head the game's pools roll (HEAD_WIDEST).
+     */
+    headGap(a, b = null) {
+      const r = id => {
+        const H = id ? actors.get(id)?.head : null;
+        return H ? Math.max(H.hw, H.hd) : HEAD_WIDEST / 2;
+      };
+      return r(a) + r(b) + HEAD_ROOM;
+    },
+    /**
+     * Somebody of ours is in a scene's CONTACT steps (a hand-off, a shove, a lift, a grab, a punch, a cuffing: the
+     * clip has hands meet), `key` naming the scene: two with the same key may have their heads close for it, and the
+     * audit's `heads` leaves them be. Null: the scene is over.
+     */
+    contact(id, key = null) {
+      const A = actors.get(id);
+      if (A) A.contact = key;
+    },
     get clock() {
       return clock;
     },
@@ -2184,6 +2604,7 @@ export async function createActors({ city, CITY }) {
     /** Puts an actor on stage or takes it off (off: it is not drawn, and nobody is kept clear of it). */
     show(id, on) {
       const A = get(id);
+      if (audit && on === A.w.hide) A.by = callers();
       A.w.hide = !on;
       A.cut = true;
       if (!on) A.tagged = false;
@@ -2199,20 +2620,45 @@ export async function createActors({ city, CITY }) {
     },
     /** Starts or stops the audit (the counts are listed above auditFrame); returns the counts so far. */
     audit(on) {
-      if (on === true) audit = { frames: 0, scenes: 0, walks: 0, steps: 0, jumps: 0, cuts: 0, shifts: 0, flips: 0, pops: 0, drops: 0, unseated: 0, close: 0, slides: 0, speedSteps: 0, headingSnaps: 0, floating: 0, inRoad: 0, pushes: 0, squeezes: 0, brushes: 0, dodges: 0, rounds: 0, keptRight: 0, waits: 0, gaveWay: 0, replans: 0, seams: 0, through: 0, blind: 0, short: 0, ways: 0, near: new Map(), kinds: {}, examples: [] };
-      const out = audit ? { ...audit, near: undefined, kinds: undefined, lastPush: undefined, examples: audit.examples.slice() } : null;
+      if (on === true) audit = { frames: 0, scenes: 0, walks: 0, steps: 0, jumps: 0, cuts: 0, shifts: 0, flips: 0, pops: 0, drops: 0, unseated: 0, close: 0, slides: 0, speedSteps: 0, headingSnaps: 0, floating: 0, inRoad: 0, pushes: 0, squeezes: 0, brushes: 0, dodges: 0, rounds: 0, keptRight: 0, waits: 0, gaveWay: 0, replans: 0, seams: 0, through: 0, blind: 0, short: 0, ways: 0, overlaps: 0, overlapFrames: 0, byFigure: 0, furniture: 0, furnitureFrames: 0, vanish: 0, feet: 0, feetFrames: 0, heads: 0, headFrames: 0, heads2: new Map(), near: new Map(), kinds: {}, examples: [] };
+      // (the picture's count starts from what is on stage now: nobody came on at the moment it was turned on)
+      if (on === true) for (const A of actors.values()) Object.assign(A, { pOn: !A.w.hide, pX: A.x, pZ: A.z, pRoom: A.room });
+      const out = audit ? { ...audit, near: undefined, heads2: undefined, kinds: undefined, lastPush: undefined, examples: audit.examples.slice() } : null;
       if (on === false) audit = null;
       return out;
     },
     /**
-     * Adds a test for solids the city does not know (the set's pieces): fn(x, z) → the name of what a body there
-     * stands in, or null. Nobody is walked through one, and the audit counts anyone found in one (`through`).
+     * Adds a test for solids the city does not know (the set's pieces): fn(x, z, y, sure) → the name of what a body
+     * there (its feet at y) stands in, or null; `sure`: asked by the audit, of the body's own middle. Nobody is
+     * walked through one, and the audit counts anyone found in one (`through`).
      */
     addSolid(fn) {
       solidTests.push(fn);
     },
+    /**
+     * The city's own people, for the audit's `overlaps`: fn(x, z, y, reach) → the figure { x, z, r } whose body is
+     * within `reach` of a body's middle there, or null (figures.js); `touch`: how near is in one another.
+     */
+    setCrowd(fn, touch = 0.3) {
+      [crowd, crowdTouch] = [fn, touch];
+    },
     /** The name of the solid a body at (x, z) would stand in, or null (the city's solids and the added ones). */
     solidAt: (x, z) => solidAt(x, groundAt(x, z), z),
+    /**
+     * Is something low of the city's (a chair, a low table, a cooler: lowAt) within `r` m of a point, on a ring of
+     * eight and one of four at half? For a standing place: a body has elbows, and a spot by a chair is in it.
+     */
+    lowNear(x, z, r = 0.6) {
+      const y = groundAt(x, z);
+      if (lowAt(x, z, y)) return true;
+      for (const [f, n] of [[0.5, 4], [1, 8]]) {
+        for (let k = 0; k < n; k++) {
+          const a = (k / n) * 2 * Math.PI;
+          if (lowAt(x + Math.sin(a) * r * f, z + Math.cos(a) * r * f, y)) return true;
+        }
+      }
+      return false;
+    },
     /** Says who a person is walking up to (an actor's id, or null): that person is not in their way (bodyAhead). */
     meeting(id, other = null) {
       get(id).meet = other !== null && actors.has(other) ? get(other) : null;
@@ -2262,23 +2708,29 @@ export async function createActors({ city, CITY }) {
       return scale;
     },
     has: id => actors.has(id),
+    /** Is a body standing at (x, z) in the camera's picture now? (Nobody comes on or goes off where it is: director.js) */
+    inPicture: (x, z) => inPicture(x, z),
+    /** Is this actor on stage and in the camera's picture now? */
+    seen: id => actors.has(id) && !actors.get(id).w.hide && inPicture(actors.get(id).x, actors.get(id).z, actors.get(id).y),
 
     /** Puts a standing person somewhere else at once (through a door, or to settle a skipped hour). */
     place(id, x, z, ry = 0, y = null) {
       const A = get(id);
+      if (audit) A.by = callers();
       // (a height of its own means a room's floor: a cot in the tent, a pad upstairs. The audit leaves such a body be)
       A.room = y !== null;
       // NOBODY IS PUT DOWN INSIDE ANYBODY. A door, a held place's exit and the wings are points several people are
       // cut to; two in one hour came out on top of each other. Where someone of ours stands within a body's width,
       // or is on their way to, the place is the nearest free one along the sidewalk, three steps off at most
       if (y === null) [x, z] = clearNear(A, x, z);
-      y ??= GROUND;
+      y ??= groundAt(x, z);
       if (A.mode !== 'free') {
         sim.offAgent(A.w, [x, y, z, ry]);
         A.mode = 'free';
       }
       A.goId += 1;
       A.cut = true;
+      endPath(A, false);
       if (A.route) A.route.done = true;
       Object.assign(A, { x, y, z, ry, route: null, vc: 0, stand: null, faceTo: null, snap: true, lastX: x, lastZ: z });
       A.w.fix = [x, y, z, ry];
@@ -2442,15 +2894,16 @@ export async function createActors({ city, CITY }) {
     add({ id, name = id, x, z, ry = 0, look = {}, far = true }) {
       if (actors.has(id)) throw new Error(`actors: ${id} is already here`);
       const baked = bakeLook({ seed: id, ...look });
-      const w = sim.putAgent({ id: `hk2:${id}`, look: baked.index, fix: [x, GROUND, z, ry] });
+      const y0 = groundAt(x, z);
+      const w = sim.putAgent({ id: `hk2:${id}`, look: baked.index, fix: [x, y0, z, ry] });
       if (!w) throw new Error(`actors: could not place ${id}`);
       // the city's own mark for "always full detail while in view" (peds.js draws such walkers first)
       if (far) w.cleaner = 'hk2';
       // pieces asked for that the cast doesn't have are skipped by the cast without a word: keep a note of them
       const missing = Object.entries(look.wear ?? {}).filter(([slot, piece]) => piece !== 'none' && (baked.look[slot]?.id ?? baked.look[slot]) !== piece).map(([, piece]) => piece);
       const A = {
-        id, name, w, look: baked.look, missing, mode: 'free',
-        x, y: GROUND, z, ry, route: null, vc: 0, stand: null, room: false, moving: 0, faceTo: null, snap: true, goId: 0,
+        id, name, w, look: baked.look, head: baked.head, missing, mode: 'free', spec: look, own: baked.index, suits: {},
+        x, y: y0, z, ry, route: null, vc: 0, stand: null, room: false, moving: 0, faceTo: null, snap: true, goId: 0,
         want: null, asked: null, clipName: null, clipT: 0, nearAt: 0, rate: 1, props: new Map(),
         bubble: null, tag: null, metres: 0, lastX: x, lastZ: z, portrait: null,
       };
@@ -2462,6 +2915,27 @@ export async function createActors({ city, CITY }) {
       layer.append(A.tag);
       actors.set(id, A);
       return A;
+    },
+
+    /**
+     * Puts an actor in one of the cast's named outfits over their own look (`county`: the jail's orange issue, as the
+     * city's inmates wear it), or back in their own clothes (null). Their face, hair and hat stay theirs. The look is
+     * baked the first time it is asked for and kept; a walker's look is read by the city every frame, so it changes
+     * at once. An outfit the cast does not have leaves them as they are.
+     */
+    wear(id, outfit = null) {
+      const A = actors.get(id);
+      if (!A) return false;
+      if (outfit && !CH.OUTFITS?.[outfit]) outfit = null;
+      if (outfit && A.suits[outfit] === undefined) {
+        const look = CH.wear(lookOf({ seed: id, ...A.spec }), CH.OUTFITS[outfit]);
+        const index = peds.addLook(LOOKS.bake(CH, look));
+        A.suits[outfit] = index < 0 ? null : index;
+      }
+      const index = (outfit ? A.suits[outfit] : null) ?? A.own;
+      if (A.w.look !== index) A.w.look = index;
+      A.outfit = index === A.own ? null : outfit;
+      return true;
     },
 
     remove(id) {
@@ -2533,6 +3007,16 @@ export async function createActors({ city, CITY }) {
       // spot's place to lean 0.2 m off its wall or to sit on its ledge, checked by its stand-spot maker with a
       // walker's discs: it is walked to as it is)
       if (!exact) [x, z] = freeEnd(A.x, A.z, x, z);
+      else if (Math.hypot(x - A.x, z - A.z) > 1.2 && !lineFreeTo(A.x, A.z, x, z, 0.45)) {
+        // (AN EXACT POINT IS WALKED TO AS IT IS, its last steps. Asked for from across a yard, a seat eight metres
+        // off with a stall between, the straight line went through the stall: the way round is found, and only its
+        // end is the exact point)
+        // (asked on more than one grid: from a point 0.2 m off a wall the first cell can be the wall's own, and the
+        // way then comes out null on one grid and whole on the next)
+        let way = null;
+        for (const room of [9, 6, 12, 7.5]) if ((way = findWay(A.x, A.z, x, z, room))) break;
+        if (way) return api.stepVia(id, way, { v, clip, clipFrom, yaw, exact: true });
+      }
       const R = makeRoute([{ line: [A.x, A.z, x, z] }]);
       if (R && exact) R.exact = true;
       if (!R) {
@@ -2551,10 +3035,36 @@ export async function createActors({ city, CITY }) {
     },
 
     /**
+     * WALKS A WAY THROUGH A ROOM (the section above stepPath): points [x, y, z] in turn (y null: the ground there), at
+     * `v` m/s, the body turning the way it goes. `room`: whether it ends indoors (its height kept) or out on the ground.
+     * `onStep(x, z)` every frame of it (the door's leaf reads where they are). → true at the last point, false when
+     * something else took the walker (a place(), another walk).
+     */
+    async walkPath(id, points, { v = 1.1, room = true, yaw = null, onStep = null } = {}) {
+      const A = get(id);
+      if (A.mode !== 'free') api.place(id, A.x, A.z, A.ry);
+      const mine = ++A.goId;
+      const up = upright(A, mine, null);
+      if (up !== true && !(await up)) return false;
+      if (A.route) A.route.done = true;
+      A.route = null;
+      const P = [[A.x, A.y, A.z], ...points.map(([x, y, z]) => [x, y ?? groundAt(x, z), z])];
+      const seg = P.map((q, k) => (k ? Math.hypot(q[0] - P[k - 1][0], q[2] - P[k - 1][2]) : 0));
+      const len = seg.reduce((a, b) => a + b, 0);
+      endPath(A, false);
+      A.room = true;
+      A.faceTo = null;
+      A.stand = null;
+      return new Promise(resolve => {
+        A.path = { P, seg, len, s: 0, v, room, yaw, onStep, mine, resolve };
+      });
+    },
+
+    /**
      * Straight steps through a few points in turn, the corners between them rounded (the city's corner arc): a way
      * round somebody to a mark on their far side. As stepTo otherwise.
      */
-    async stepVia(id, points, { v = STEP_SPEED, clip = null, clipFrom = 0, yaw = null } = {}) {
+    async stepVia(id, points, { v = STEP_SPEED, clip = null, clipFrom = 0, yaw = null, exact = false } = {}) {
       const A = get(id);
       if (A.mode !== 'free') api.place(id, A.x, A.z, A.ry);
       const mine = ++A.goId;
@@ -2563,11 +3073,12 @@ export async function createActors({ city, CITY }) {
       const parts = [];
       let [ax, az] = [A.x, A.z];
       for (const [k, [px, pz]] of points.entries()) {
-        const [bx, bz] = k === points.length - 1 ? freeEnd(ax, az, px, pz) : [px, pz];
+        const [bx, bz] = k === points.length - 1 && !exact ? freeEnd(ax, az, px, pz) : [px, pz];
         parts.push({ line: [ax, az, bx, bz] });
         [ax, az] = [bx, bz];
       }
       const R = makeRoute(parts);
+      if (R && exact) R.exact = true;
       if (!R) {
         api.count('steps');
         return true;
@@ -2660,8 +3171,24 @@ export async function createActors({ city, CITY }) {
      */
     async play(id, name, { loop, t = 0, hold = null, after = 0 } = {}) {
       const A = get(id);
-      const clip = CLIPS.CLIP[name];
+      let clip = CLIPS.CLIP[name];
       if (!clip) throw new Error(`actors: the city has no clip ${name}`);
+      // A CLIP THAT ENDS A STEP AWAY (a stumble back, a lunge: its `shift`, handed to the walker when it ends) IS NOT
+      // PLAYED INTO SOMETHING: a debtor shoved at Sunny Acres stumbled back into a trailer's side and stood in it for
+      // the rest of the hour. Where the step lands in a solid or something low, the clip's stand-in on the spot
+      // (a stagger) is played instead, or none
+      if (clip.shift && !A.room) {
+        const yaw = A.w.yawS ?? A.ry;
+        const [sx, sz] = clip.shift;
+        const [x, z] = [A.x + sx * Math.cos(yaw) + sz * Math.sin(yaw), A.z - sx * Math.sin(yaw) + sz * Math.cos(yaw)];
+        const y = groundAt(x, z);
+        if (solidAt(x, y, z) || lowAt(x, z, y, 0.25)) {
+          const alt = CLIPS.CLIP.stagger && !CLIPS.CLIP.stagger.shift && name !== 'stagger' ? 'stagger' : null;
+          if (!alt) return { clip: null, seconds: 0, waited: 0, kept: name };
+          name = alt;
+          clip = CLIPS.CLIP[alt];
+        }
+      }
       // (`after`: at a seam on the clock, not before the playing clip is this far in. `began`: when it really
       // started, which is later than now when it waits for a seam or for the clip before it to blend out)
       const want = { name, loop, t, after, began: null };
