@@ -181,14 +181,14 @@ test('world: a dealt job lists who it could be done to; the choice may name one,
 
 test('world: a regular keeps count and pays more; past a point they turn up at your door, and you give or refuse', () => {
   const dee = 'npc:buyer:projects:1';
-  let s = { ...dealtAt(cfg, 'park', 'loosies'), regulars: { [dee]: 2 } };
+  let s = { ...dealtAt(cfg, 'park', 'loosies', { goods: { smokes: 5 } }), regulars: { [dee]: 2 } };
   const o = view(cfg, s).options.find(x => x.id === 'loosies');
   assert.equal(o.who.id, dee);
   assert.deepEqual(o.pay, cfg.jobs.park.loosies.pay.map(x => x + 2 * cfg.regulars.payUp), 'a regular pays more as they get hooked');
   const sold = step(cfg, { ...s, rig: { chances: [0] } }, { do: 'job', id: 'loosies' });
   assert.equal(sold.state.regulars[dee], 3);
   assert.equal(sold.events[0].regular.sold, 3);
-  assert.match(sold.events[0].text, /Shaky Dee has had 3 from you and may come to your door for more\.$/);
+  assert.match(sold.events[0].text, /Shaky Dee has had 3 from you and may come to your door for more\. 4 left on you\.$/);
   assert.equal(sold.state.supply.park.custom, 1, 'the place\'s custom is drawn on');
   // the next morning, the door roll 0: Dee is at the door
   s = { ...at('crib', { regulars: { [dee]: 3 } }), rig: { chances: [0] } };
@@ -273,7 +273,8 @@ test('world: the market sells one energy drink a day, from what you carry: one m
   assert.match(move(view(cfg, at('market', { energy: 1 })), 'shop').why, /you carry \$0/);
   // stranded at 0 with the price on you: the drink is the way home
   const stuck = view(cfg, carrying(at('market', { energy: 0 }), 9));
-  assert.deepEqual(stuck.choices.filter(c => c.available).map(c => c.choice.do).sort(), ['rough', 'shop']);
+  // (and the errands that cost no hour: a thing off the rail you can pay for)
+  assert.deepEqual(stuck.choices.filter(c => c.available && c.choice.do !== 'get').map(c => c.choice.do).sort(), ['rough', 'shop']);
   assert.equal(choiceForKey(stuck, 'd').choice.item, 'drink');
 });
 

@@ -5,12 +5,31 @@
 // made of the same actions), with the locals each one needs (demo/run/scenes.js).
 import { buildStage } from '../../src/stage.mjs';
 import { RUN_CONFIG } from '../../src/run/index.mjs';
-import { YOU, endOf } from './scenes.js';
+import { YOU, endOf, CARD_WITH } from './scenes.js';
 
 /** The player's own porch, at the trailer's door (the place table's home spots: places.json projects.spots). */
 export const DOOR = `home:${YOU}:door`;
 /** The foot of the player's step, where a regular stands to ask (index.js doorAt). */
 export const STEP = `home:${YOU}:step`;
+/** Where the player's pad meets the lane (home-1: where somebody casing the crib loiters, and comes in from). */
+export const FRONT = `home:${YOU}:front`;
+/**
+ * THE PORCH'S OWN PLACES (home-1), each apart from the others and from the player's way in and out of his door (door,
+ * step, the lane): whoever comes for the crib (casing it, waiting, at the door) stands south-west of the step, VISIT;
+ * Cousin Earl keeps his post east of the door, POST. index.js says both from the trailer's own door.
+ */
+export const VISIT = `porch:${YOU}:visit`;
+export const POST = `porch:${YOU}:post`;
+/** Where whoever comes waits while the notice is up, off the player's way home (home-1: index.js porch). */
+export const WAIT = `porch:${YOU}:wait`;
+/** Where they wait while Cousin Earl is on, on his side of the door (home-1). */
+export const WAIT_EAST = `porch:${YOU}:wait-east`;
+/** The player's yard (home-1: where Cousin Earl stands while a regular has the step). */
+export const YARD = `home:${YOU}:yard`;
+/** Cousin Earl, the guard of home-1 (src/run/config.mjs `guard.who`): the stage's own person for him. */
+export const GUARD = RUN_CONFIG.guard?.who ?? 'npc:connect:projects';
+/** WHO COMES FOR THE CRIB, as the stage casts them (home-1): a person of the trailer park as themselves; "somebody nobody here knows" (config pressure.stranger) is one of ours in the crowd's plain clothes, an extra (scenes.js LOCALS `npc:caser`). */
+export const homeWho = id => (!id ? null : id === RUN_CONFIG.pressure?.stranger?.id ? 'npc:caser' : id);
 
 /**
  * CLIPS THE RUN WANTS THAT THIS COPY'S PINNED CITY DOES NOT HAVE, and what plays instead until the city is re-pinned
@@ -151,6 +170,61 @@ const OWN = {
   // coming round is told, the bar's heat and the line's stops, not acted: an officer at the trailer park can only come
   // on along Elm St, fifty metres off, out of the porch's picture; measured 2026-11-14, he never reached it in the hour)
   watch: [['agent', 'lookout']],
+
+  // ── THE STOP'S CARDS (routes-1, RUN.md "Routes": Fit Street, outside DEAD AIR). Each played with the person it is
+  // done with, where they stand (scenes.js DAYS: the stop's own people), and each ends in what it did to them:
+  // CRATES FOR THE BARKEEPER: up to him at the bar's front, a word, a crate lifted and carried round the corner to
+  // the cellar; a nod from him
+  errand: [['agent', 'walk', 'keeper'], ['keeper', 'talk', 'agent'], ['agent', 'build', null, null, 'crate_lift'], ['agent', 'carry', null, 'fit:cellar'], ['keeper', 'listen', 'agent']],
+  // A LOOKOUT AT THE ALLEY MOUTH: up to the stranger there, a word, he keeps watch up and down the street and waves it
+  // clear; paid. Gone wrong (somebody saw: heat +1), the stranger points and runs, and so does he (`flee`, RUN.md)
+  lookout: [['agent', 'walk', 'stranger'], ['stranger', 'talk', 'agent'], ['agent', 'lookout', null, null, 'deal_lookout'], ['agent', 'lookout', null, null, 'lookout_wave'], ['stranger', 'hand_off', 'agent'], ['agent', 'listen', 'stranger']],
+  lookoutFail: [['agent', 'walk', 'stranger'], ['stranger', 'talk', 'agent'], ['agent', 'lookout', null, null, 'deal_lookout'], ['stranger', 'hands_up'], ['stranger', 'flee'], ['agent', 'run']],
+  // THE ONE WHO HAD ONE TOO MANY, walked up Ivy St toward the FIT ST stairs, adrift, and the tip at the end. Gone wrong
+  // (`shove`), he shoves you off and staggers where he stands
+  // (he leads, the drunk drifts after him: `approach` is the city's unsteady walks)
+  tipsy: [['agent', 'walk', 'drunk'], ['agent', 'walk', null, 'fit:stairs'], ['drunk', 'approach', 'agent'], ['drunk', 'hand_off', 'agent']],
+  tipsyFail: [['agent', 'walk', 'drunk'], ['agent', 'talk', 'drunk'], ['drunk', 'shove', 'agent'], ['agent', 'stumble'], ['drunk', 'stumble']],
+  // A SMOKE SOLD (`work:deal`): up to him, handed over, and he lights it there. Gone wrong (`work:deal:dry`), he takes it
+  // and walks off without paying; you throw up your hands
+  smoke: [['dealer', 'walk', 'buyer'], ['dealer', 'hand_off', 'buyer'], ['buyer', 'listen', 'dealer'], ['buyer', 'smoke']],
+  smokeFail: [['dealer', 'walk', 'buyer'], ['dealer', 'hand_off', 'buyer'], ['buyer', 'walk'], ['dealer', 'hands_up']],
+  // THE DUMPSTER IN THE ALLEY (`rummage`): round into the passage, up to it, and a dig; a find, picked out
+  dumpster: find => [['agent', 'walk', null, 'fit:dumpster'], ['agent', 'rummage'], ...(find ? [['agent', 'rummage', null, null, 'pick_up']] : [])],
+
+  // ── HOME PRESSURE (home-1, RUN.md "Home pressure"): all of it at the player's own trailer, in the city's clips, with
+  // the people the city already has. Each `who` names the player first, so he stays where the scene is (on his porch,
+  // DOOR) until the hour takes him in
+  // (a look round is `watch` with the city's deal_lookout: `lookout` is a background action, started and passed over, and
+  // whoever is only seen doing it is never seen doing anything)
+  // SEEN CASING YOUR CRIB (the morning's warning): out on his porch he looks round; whoever it is, where his pad meets
+  // the lane (index.js puts them there, facing the trailer), looks it over once more and has a smoke over it while he
+  // watches them, and they walk off
+  casing: [['agent', 'watch', null, null, 'deal_lookout'], ['caser', 'watch', null, null, 'deal_lookout'], ['caser', 'smoke'], ['caser', 'walk']],
+  // THE NOTICE: word reaches him where he is, on his phone
+  alarm: [['agent', 'phone']],
+  // HOME IN TIME: up the lane and to his door at a run (they are at the foot of his step: index.js)
+  meet: [['agent', 'run', null, DOOR]],
+  // MET AT THE DOOR: the regular's fight at the door (fightClean and the rest, above), by how it went for him. They got
+  // in: laid into him, and off at a run with it; a scuffle: they grab what they can and run; seen off: shoved back, off
+  // (one beat fewer than the regular's: with the walk out to them and back in, the hour kept under 15 s at 1x)
+  // (off at a run to the waiting place by the lane, south-west, away from Earl's post and the door: a few steps "along
+  // the lane", the run went past Earl and stood head on head with him in the picture, 2026-11-16)
+  doorClean: [['raider', 'haymaker', 'agent'], ['agent', 'stumble'], ['raider', 'run', null, WAIT]],
+  doorMessy: [['raider', 'scuffle', 'agent'], ['agent', 'stumble'], ['raider', 'run', null, WAIT]],
+  doorOff: [['raider', 'shove', 'agent'], ['agent', 'shove', 'raider'], ['raider', 'run', null, WAIT]],
+  // COUSIN EARL ON THE STEP: they come up to him; he squares up (guard_post) and shoves them off. Beaten: a haymaker,
+  // he goes down, gets up and limps off hurt (and the door decides it after)
+  guardHeld: [['agent', 'watch', null, null, 'deal_lookout'], ['raider', 'walk', 'guard'], ['guard', 'guard'], ['guard', 'shove', 'raider'], ['raider', 'stumble'], ['raider', 'run', null, WAIT_EAST]],
+  guardBeaten: [['agent', 'watch', null, null, 'deal_lookout'], ['raider', 'walk', 'guard'], ['raider', 'haymaker', 'guard'], ['guard', 'fall'], ['guard', 'get_up'], ['guard', 'limp']],
+  // HIRED FOR YOUR STEP: out on the porch as he comes up from his truck, his three days' money handed over; his post (guard_post)
+  // is his to keep after, while the player goes back in
+  guardOn: [['agent', 'hand_off', 'guard']],
+  // COMING HOME AFTER AN ATTEMPT YOU WERE NOT THERE FOR: at his door he stops and looks round (the door, them gone);
+  // Earl there, he tells him how it went. Then inside at the floorboard: what is missing, and he throws up his hands
+  after: [['agent', 'walk', null, DOOR], ['agent', 'watch', null, null, 'deal_lookout']],
+  afterGuard: [['agent', 'walk', 'guard'], ['guard', 'talk', 'agent'], ['agent', 'listen', 'guard']],
+  missing: [['agent', 'stash', null, null, 'floorboard_rummage'], ['agent', 'hands_up']],
 };
 
 // ── THE BINS ARE REAL ONES: the place table's (demo/stage/places.json `near.things`, the city's own trashcans and
@@ -257,7 +331,23 @@ export function scenesOf(runEvents) {
         events.push(scene(e.outcome === 'win' ? 'run:rob' : 'run:rob:fail', at, { agent: YOU, passer }, { spot: FAR_IN.has(at) ? 'bus' : 'street', steps: e.outcome === 'win' ? OWN.rob : OWN.robFail, big: false }));
         break;
       }
+      // ── routes-1: a card of the stop's hand, played with its own person where they stand (scenes.js CARD_WITH) ──
+      case 'card': {
+        const win = e.outcome === 'win';
+        const them = CARD_WITH[e.card] ?? null;
+        if (them) locals.set(them, at);
+        if (e.card === 'errand') events.push(scene('run:card:errand', at, { agent: YOU, keeper: them }, { steps: OWN.errand }));
+        else if (e.card === 'lookout') events.push(scene(win ? 'run:card:lookout' : 'run:card:lookout:fail', at, { agent: YOU, stranger: them }, { steps: win ? OWN.lookout : OWN.lookoutFail }));
+        else if (e.card === 'tipsy') events.push(scene(win ? 'run:card:tipsy' : 'run:card:tipsy:fail', at, { agent: YOU, drunk: them }, { steps: win ? OWN.tipsy : OWN.tipsyFail }));
+        else if (e.card === 'sell') events.push(scene(win ? 'work:deal' : 'work:deal:dry', at, { dealer: YOU, buyer: them }, { steps: win ? OWN.smoke : OWN.smokeFail }));
+        break;
+      }
       case 'bins': {
+        // (routes-1: the stop's dumpster card is the street's bins, at the dumpster in the alley)
+        if (e.card) {
+          events.push(scene('run:card:dumpster', at, { agent: YOU }, { spot: 'fit:dumpster', steps: OWN.dumpster(e.find === 'find') }));
+          break;
+        }
         const spots = BINS[at] ?? [];
         const spot = spots.length ? spots[Math.abs(e.left ?? 0) % spots.length] : 'street';
         events.push(scene('run:bins', at, { agent: YOU }, { spot, steps: OWN.bins(spot, e.find === 'find') }));
@@ -268,10 +358,22 @@ export function scenesOf(runEvents) {
         break;
       }
       case 'shop': {
-        const keeper = keeperOf(RUN_CONFIG, e.place);
+        // (goods-1: the errand's own keeper, at their own spot: the sandwich from Gloria, the drink from Mrs. Bao.
+        // Only a drink is drunk there and then: there is no clip of eating, so the sandwich is handed over and kept)
+        const keeper = e.keeper?.id ?? keeperOf(RUN_CONFIG, e.place);
         if (keeper) locals.set(keeper, at);
-        const steps = [...(keeper ? OWN.shop : []), ...(e.gives?.energy ? OWN.drink : [])];
+        const steps = [...(keeper ? OWN.shop : []), ...(e.item === 'drink' ? OWN.drink : [])];
         if (steps.length) events.push(scene('run:shop', at, { agent: YOU, shop: keeper }, { steps }));
+        break;
+      }
+      // A PACK FROM THE CONNECT, A THING FROM ITS KEEPER (goods-1): walked up to where they stand, a word, handed over.
+      // No hour passes; Space skips it as any scene
+      case 'pack':
+      case 'thing': {
+        const them = e.type === 'pack' ? e.who?.id : e.keeper?.id;
+        if (!them) break;
+        locals.set(them, at);
+        events.push(scene(`run:${e.type}`, at, { agent: YOU, shop: them }, { steps: OWN.shop }));
         break;
       }
       case 'rough':
@@ -318,6 +420,62 @@ export function scenesOf(runEvents) {
       case 'stormed':
         // (not an engine event: the page's, after a grudge: he watches from his porch as the regular storms off home)
         events.push(scene('run:watch', 'projects', { agent: YOU }, { spot: DOOR, steps: OWN.watch }));
+        break;
+      // ── home-1 (RUN.md "Home pressure"): each at the player's own trailer, with whoever it is cast as themselves ──
+      case 'casing': {
+        const caser = homeWho(e.who?.id);
+        if (!caser) break;
+        locals.set(caser, 'projects');
+        events.push(scene('run:casing', 'projects', { agent: YOU, caser }, { spot: DOOR, steps: OWN.casing }));
+        break;
+      }
+      case 'alarm':
+        events.push(scene('run:alarm', at, { agent: YOU }, { steps: OWN.alarm }));
+        break;
+      case 'raid': {
+        // (only what happened at his door with him there: met coming home, or in the night. Settled while he was out,
+        // it is seen when he next comes home: index.js `homeAfter`)
+        if (e.place !== 'crib' && e.place !== 'park') break;
+        const raider = homeWho(e.who?.id);
+        if (!raider) break;
+        locals.set(raider, 'projects');
+        if (e.guard && (e.fight || e.how === 'guard')) {
+          locals.set(GUARD, 'projects');
+          events.push(scene(e.guard.beaten ? 'run:raid:guard:beaten' : 'run:raid:guard', 'projects', { agent: YOU, raider, guard: GUARD }, { spot: DOOR, steps: e.guard.beaten ? OWN.guardBeaten : OWN.guardHeld }));
+        }
+        if (e.fight) {
+          const band = e.fight.outcome === 'clean' ? 'clean' : e.fight.outcome === 'messy' ? 'messy' : 'off';
+          // (not a `big` scene: the director would first walk the one it is done to out to open ground, off his porch)
+          events.push(scene(`run:raid:door:${band}`, 'projects', { agent: YOU, raider }, { spot: DOOR, steps: band === 'clean' ? OWN.doorClean : band === 'messy' ? OWN.doorMessy : OWN.doorOff, big: false }));
+        }
+        break;
+      }
+      case 'guard':
+        // (hired at the crib: out on the porch, paid for his stretch, and he takes up his post. Kept on from his last day
+        // (`scene: { action: 'hand_off' }`): nothing, he is on the step already. His last day and his going are the report's)
+        if (e.on && e.scene?.action === 'guard') {
+          locals.set(GUARD, 'projects');
+          events.push(scene('run:guard:on', 'projects', { agent: YOU, guard: GUARD }, { spot: DOOR, steps: OWN.guardOn }));
+        }
+        break;
+      // (the page's own, not the engine's: home in time, up to the door at a run; home after an attempt he was not there
+      // for, the look at the door and Earl's word; what is missing at the floorboard)
+      case 'homeMeet':
+        events.push(scene('run:meet', 'projects', { agent: YOU }, { spot: DOOR, steps: OWN.meet }));
+        break;
+      // (under the morning's cut, the player out on his porch for what the morning shows at the trailer: only where he
+      // ends is read from it, a cut plays no steps)
+      case 'porch':
+        events.push(scene('run:porch', 'projects', { agent: YOU }, { spot: DOOR, steps: OWN.watch }));
+        break;
+      case 'homeAfter': {
+        const guard = e.raid?.how === 'guard' ? GUARD : null;
+        if (guard) locals.set(guard, 'projects');
+        events.push(scene('run:after', 'projects', { agent: YOU, ...(guard ? { guard } : {}) }, { spot: DOOR, steps: [...OWN.after, ...(guard ? OWN.afterGuard : [])] }));
+        break;
+      }
+      case 'homeMissing':
+        events.push(scene('run:missing', 'projects', { agent: YOU }, { spot: pad, steps: OWN.missing }));
         break;
       default:
         // the subway is the trip itself (the stage's ride); a purchase, a morning, stepping out: no scene of its own

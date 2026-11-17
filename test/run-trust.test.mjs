@@ -50,7 +50,7 @@ test('trust: it moves up for work and sales, down for taking from people, and ri
   assert.ok(v.trustHere.offTable.some(p => p.id === te.who.id && p.days === 2));
   assert.match(viewText(v), /Won't deal with you at the flea market: .*\(2 days\)/);
   // a sale that went wrong moves nothing; a wallet lifted clean moves nothing (they do not know yet)
-  const crowd = step(CALM, { ...dealtAt(CALM, 'market', 'crowd'), rig: { chances: [99] } }, { do: 'job', id: 'crowd' });
+  const crowd = step(CALM, { ...dealtAt(CALM, 'market', 'crowd', { goods: { discs: 4 } }), rig: { chances: [99] } }, { do: 'job', id: 'crowd' });
   assert.equal(crowd.events.find(e => e.type === 'job').trust, undefined);
   // giving at your door: +1
   const crib = at('crib');

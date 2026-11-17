@@ -18,7 +18,12 @@ export function endOf(place, from = null) {
     case 'market': return { block: 'market', spot: 'street', held: null };
     case 'jail':
     case 'clinic': return { block: from ?? 'market', spot: 'street', held: place };
-    default: return { block: 'projects', spot: 'street', held: null };
+    default: {
+      // (routes-1: a stop on a way between two places is a place on the stage of its own: its block and spot,
+      // src/run/config.mjs `stops`. Fit Street is DEAD AIR's block, `bar`)
+      const s = RUN_CONFIG.stops?.[place];
+      return s ? { block: s.block, spot: s.spot ?? 'street', held: null } : { block: 'projects', spot: 'street', held: null };
+    }
   }
 }
 
@@ -36,8 +41,75 @@ const STAGE = {
   'npc:stallholder': { look: 'shopkeeper' },
   'npc:stallholder:2': { look: 'shopkeeper' },
   'npc:stallholder:3': { look: 'shopkeeper' },
+  // (goods-1's two connects, in looks the stage already has: Cousin Earl in the dock vest and beanie of a man with a
+  // truck to load; Teo in an old hoodie and bandana, a duffel man. stage/index.js LOOKS)
+  'npc:connect:projects': { look: 'supplier' },
+  'npc:connect:market': { look: 'snitch' },
 };
 const BLOCK = { park: 'projects', market: 'market' };
+
+// ── FIT STREET, OUTSIDE DEAD AIR (routes-1: the stop on the walk between the trailer park and the flea market) ──────
+// Nobody there is a person of the game (RUN.md "Routes": no trust, no mood, nobody to tell on you), so its people are
+// the stage's alone: the barkeeper the crates are carried for, a stranger at the alley mouth who wants a lookout, one
+// who had one too many and wants walking to the FIT ST stairs, and one who wants a smoke. They keep to the bar's
+// block with a small day each, as the park's and the market's people do (DAYS below), at its own spots (STOP_SPOTS).
+const STOP_FOLK = [
+  { id: 'npc:fit:barkeep', name: 'the barkeeper', look: 'shopkeeper' },
+  { id: 'npc:fit:stranger', name: 'a stranger', look: 'buyer' },
+  { id: 'npc:fit:drunk', name: 'a stranger who had one too many', look: 'buyer' },
+  { id: 'npc:fit:smoker', name: 'a stranger', look: 'courier' },
+];
+/** Who each card of the stop is played with (src/run/config.mjs `stops.fitst.cards`): the stage's person for it. */
+export const CARD_WITH = { errand: 'npc:fit:barkeep', lookout: 'npc:fit:stranger', tipsy: 'npc:fit:drunk', sell: 'npc:fit:smoker' };
+/**
+ * THE STOP'S SPOTS, on DEAD AIR's block: each the place table's own standing place (places.json bar.stands: the city's
+ * stand-spot maker's, clear of the walkers' lane and the kerb) nearest a point said from the block's own `street`
+ * spot, where the player stands. The bar's front faces Fit Street's sidewalk; its north side is a strip of pavement
+ * between it and the next building (the alley mouth); its east side is on Ivy St, the way the FIT ST stairs lie.
+ * Added once to the stage's map (stopSpots, index.js at mount), as acted.js binsOf adds the bins.
+ */
+const STOP_SPOTS = {
+  bar: {
+    'fit:door': [-4, -1], // (the barkeeper's: on the sidewalk by the bar's front, four metres up from you)
+    'fit:cellar': [-6, -3], // (round the bar's west corner, where the crates go down)
+    'fit:alley': [-7.5, -4], // (the alley mouth, the passage up the bar's west side: where the lookout stands)
+    'fit:alley:in': [-9, -4.5], // (a step into the passage: the stranger's)
+    'fit:corner': [6.5, -3.5], // (the corner of Ivy St at the crossing: the one who had one too many)
+    'fit:kerb': [-8.5, -0.5], // (up Fit Street past the alley mouth: the one who wants a smoke)
+    'fit:stairs': [6.5, -8], // (up Ivy St, the way the FIT ST stairs lie: as far as the drunk is walked in an hour's scene)
+    // (the dumpster in the alley behind the bar: the place table's own, a step out from its box on the passage's side)
+    'fit:dumpster': { thing: 'alley·dumpster', side: [-1, 0] },
+  },
+};
+export function stopSpots(map) {
+  const out = {};
+  for (const [block, spots] of Object.entries(STOP_SPOTS)) {
+    const B = map?.BLOCKS?.[block];
+    const T = map?.TABLE?.places?.[block];
+    const stands = T?.stands ?? [];
+    if (!B?.spots?.street) continue;
+    const [sx, sz] = B.spots.street;
+    const taken = new Set();
+    for (const [name, at] of Object.entries(spots)) {
+      if (!Array.isArray(at)) {
+        const t = (T?.near?.things ?? []).find(q => q.id.includes(at.thing));
+        if (!t?.box) continue;
+        const [x0, , z0, x1, , z1] = t.box;
+        const [cx, cz] = [(x0 + x1) / 2, (z0 + z1) / 2];
+        B.spots[name] ??= [at.side[0] ? (at.side[0] > 0 ? x1 + 0.75 : x0 - 0.75) : cx, at.side[1] ? (at.side[1] > 0 ? z1 + 0.75 : z0 - 0.75) : cz];
+        out[name] = B.spots[name];
+        continue;
+      }
+      const [dx, dz] = at;
+      const [x, z] = [sx + dx, sz + dz];
+      const near = stands.filter(q => !taken.has(q)).sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z))[0];
+      if (near && Math.hypot(near.x - x, near.z - z) < 2.5) taken.add(near);
+      B.spots[name] ??= near && Math.hypot(near.x - x, near.z - z) < 2.5 ? [near.x, near.z] : [x, z];
+      out[name] = B.spots[name];
+    }
+  }
+  return out;
+}
 
 // ── the trailer park's people at home ───────────────────────────────────────────────────────────────────────────────
 // THE OWNER, 2026-11-14: "i wish the npcs at the trailer park moved around more, they all hang in the same place, like
@@ -59,6 +131,8 @@ const HOME = {
   'npc:debtor': 'a6',
   'npc:mark:projects': 'a7',
   'npc:mark:projects:2': 'a8',
+  // (goods-1: Cousin Earl sells cartons out of his truck, parked where pad 31 meets the lane, two pads up from yours)
+  'npc:connect:projects': 'a10',
 };
 export const DAYS = {
   // Mrs. Alvarez, across the lane: her yard swept, her swap-meet stall stocked, a smoke on the porch, a call at night
@@ -73,6 +147,9 @@ export const DAYS = {
   'npc:buyer:projects:1': [[12, 'bus:3', ['withdrawal_shake']], [14, 'bus:3', ['smoke']], [17, 'bus:3', ['phone_type']], [20, 'bus:3', ['smoke']]],
   // the man and the woman at the bus stop: waiting for a bus that does not come (the shelter's board says NO SVC)
   'npc:mark:projects': [[12, 'bus', ['wait_stop']], [15, 'bus', ['phone_call']], [18, 'bus', ['wait_stop']], [21, 'bus', ['drink']]],
+  // Cousin Earl (goods-1, the park's connect): at his truck where his pad meets the lane all day, a smoke, the phone,
+  // stock shifted; his porch at night. Never in the lane itself: `front` is a step into the pad
+  'npc:connect:projects': [[12, 'front', ['smoke']], [14, 'front', ['phone_type']], [16, 'front', ['stock_shelf']], [18, 'front', ['smoke']], [21, 'door', ['drink']]],
   'npc:mark:projects:2': [[12, 'bus:2', ['phone_type']], [14, 'bus:2', ['wait_stop']], [17, 'bus:2', ['phone_call']], [20, 'bus:2', ['wait_stop']]],
 
   // ── the flea market's people ──────────────────────────────────────────────────────────────────────────────────────
@@ -93,6 +170,9 @@ export const DAYS = {
   'npc:stallholder': [[12, 'stall:6', ['smoke']], [16, 'stall:6', ['stock_shelf']], [19, 'stall:6', ['drink']], [21, 'stall:6', ['smoke']]],
   'npc:stallholder:2': [[12, 'keep:2', ['sweep']], [14, 'keep:2', ['haggle_counter']], [17, 'keep:2', ['smoke']], [20, 'keep:2', ['haggle_counter']]],
   'npc:stallholder:3': [[12, 'keep:5', ['phone_type']], [13, 'keep:5', ['mop']], [15, 'keep:5', ['rummage']], [18, 'keep:5', ['phone_call']], [21, 'keep:5', ['mop']]],
+  // Teo (goods-1, the market's connect): the back row, behind the west row's first stall (`keep:0`, as Mr. Okafor keeps
+  // stall 2 from behind), his duffel at his feet: on the phone, sorting stock, a smoke
+  'npc:connect:market': [[12, 'keep:0', ['phone_type']], [14, 'keep:0', ['stock_shelf']], [17, 'keep:0', ['smoke']], [20, 'keep:0', ['phone_type']]],
   // THE CROWD has three places each and walks between them: no two at one place at one hour, nor at two stalls facing
   // each other across the aisle (stall 0 and 3, 2 and 5; Mr. Ferraro stands at 4, across from 1). Lola: browsing the
   // west row, a drink at the picnic table, on the phone at the kerb
@@ -103,6 +183,22 @@ export const DAYS = {
   'npc:mark:market': [[12, 'stall:2', ['pick_up', 'rummage']], [14, 'taxi', ['phone_type', 'wait_stop']], [16, 'stall:3', ['rummage']], [18, 'stall:2', ['rummage', 'pick_up']], [20, 'taxi', ['hail_taxi', 'phone_type']]],
   // the man with a camera: filming from the kerb, filming the stalls, hailing at the taxi stop
   'npc:mark:market:2': [[12, 'kerb', ['film_phone']], [14, 'stall:3', ['film_phone', 'rummage']], [16, 'taxi', ['hail_taxi', 'wait_stop']], [18, 'kerb', ['film_phone']], [20, 'stall:3', ['film_phone']]],
+  // (goods-1: the crowd's two new buyers, with the crowd and by the same rule: the picnic tables' free ends, the kerb,
+  // Mrs. Kowalski's stall, never where another of the crowd is that hour nor across the aisle from one)
+  // Tiny: a drink at the second picnic table, on the phone at the kerb
+  'npc:buyer:market:3': [[12, 'table:1', ['drink', 'phone_type']], [14, 'kerb', ['smoke', 'phone_call']], [16, 'table:1', ['phone_type']], [18, 'table:0', ['drink']], [20, 'kerb', ['phone_call', 'smoke']]],
+  // the man with a shopping cart: the picnic tables, then browsing Mrs. Kowalski's stall
+  'npc:buyer:market:4': [[12, 'table:0', ['phone_type']], [14, 'table:1', ['drink']], [16, 'stall:5', ['rummage', 'pick_up']], [18, 'table:1', ['phone_type', 'drink']], [20, 'table:1', ['drink']]],
+
+  // ── Fit Street, outside DEAD AIR (routes-1) ───────────────────────────────────────────────────────────────────────
+  // the barkeeper, at the bar's front all day: the sidewalk swept, a smoke, a call to the brewery, on the phone, a drink
+  'npc:fit:barkeep': [[12, 'fit:door', ['sweep']], [14, 'fit:door', ['smoke']], [16, 'fit:door', ['phone_call']], [18, 'fit:door', ['phone_type']], [20, 'fit:door', ['smoke']], [22, 'fit:door', ['sweep']]],
+  // the stranger who wants a lookout: a step into the alley, on the phone, pacing, a smoke
+  'npc:fit:stranger': [[12, 'fit:alley:in', ['phone_call']], [15, 'fit:alley:in', ['deal_pace']], [18, 'fit:alley:in', ['smoke']], [21, 'fit:alley:in', ['phone_type']]],
+  // the one who had one too many: at the corner of Ivy St, a drink, unsteady, adrift
+  'npc:fit:drunk': [[12, 'fit:corner', ['drink']], [14, 'fit:corner', ['stagger']], [17, 'fit:corner', ['spaced_drift']], [20, 'fit:corner', ['drink']], [22, 'fit:corner', ['stagger']]],
+  // the one who wants a smoke: waiting up Fit Street, on the phone, patting his pockets for one he has not got
+  'npc:fit:smoker': [[12, 'fit:kerb', ['wait_stop']], [14, 'fit:kerb', ['phone_type']], [17, 'fit:kerb', ['pat_pockets']], [20, 'fit:kerb', ['phone_call']]],
 };
 /**
  * EACH ONE'S OWN PLACE, where the sour keep their backs to you: a park person's porch, a keeper's stall. (The market's
@@ -114,6 +210,7 @@ const OWN = {
   'npc:stallholder': 'stall:6',
   'npc:stallholder:2': 'keep:2',
   'npc:stallholder:3': 'keep:5',
+  'npc:connect:market': 'keep:0',
 };
 /** The spot a day names: a home's own (`door`, `yard` …) for whoever has a home, else the place's own spot as named. */
 const spotOf = (id, where) => (HOME[id] && /^(door|step|yard|stall|front)$/.test(where) ? `home:${HOME[id]}:${where}` : where);
@@ -137,12 +234,19 @@ const LOCALS = [
     id: p.id, name: p.name, block: BLOCK[place], role: STAGE[p.id]?.look ?? 'buyer', spot: DAYS[p.id] ? dayOf(p.id, 12).spot : 'street',
     action: 'idle', keep: true, home: HOME[p.id] ?? null, days: !!DAYS[p.id],
   }))),
+  // (routes-1: the stop's own people, the stage's alone, on DEAD AIR's block)
+  ...STOP_FOLK.map(p => ({ id: p.id, name: p.name, block: 'bar', role: p.look, spot: dayOf(p.id, 12).spot, action: 'idle', keep: true, home: null, days: true })),
   { id: 'npc:medic', role: 'medic', name: 'Doc Imani', held: 'clinic', spot: 'bed' },
   // (somebody passing, robbed: one of ours cast as a passer-by for the hour, walking on along the lane as an extra
   // does; the city's own walkers are never taken over. demo/run/acted.js `rob`)
   { id: 'npc:passer:1', role: 'buyer', name: 'a man passing', block: 'projects' },
   { id: 'npc:passer:2', role: 'buyer', name: 'a woman passing', block: 'projects' },
   { id: 'npc:passer:3', role: 'buyer', name: 'somebody passing', block: 'projects' },
+  // (home-1: "somebody nobody here knows", who cases your crib when nobody of the trailer park fits: one of ours in the
+  // crowd's plain clothes. He keeps to the place of the city that is not loaded (GONE, below: away, as anyone out for
+  // the day is); index.js peopleOn puts him by your trailer for the warning and the attempt, under the morning's cut
+  // like anyone who keeps a place, and the next hour without him walks him off again. demo/run/acted.js homeWho
+  { id: 'npc:caser', role: 'buyer', name: 'somebody nobody here knows', block: 'park', keep: true },
   { id: 'npc:robber1', role: 'npcRobber', name: 'Mick Dunn', block: 'market' },
   { id: 'npc:robber2', role: 'npcRobber', name: 'Lyle Dunn', block: 'market' },
   { id: 'npc:police1', role: 'police', name: 'Officer Hale', block: 'market' },
@@ -184,7 +288,7 @@ export function stageGame() {
     state: { t: 0, phase: 'day', order: [YOU], agents: { [YOU]: { id: YOU, name: 'You', block: 'projects', state: 'free', cls: null } }, npcs },
     // the stage reads a held place's way out (it starts building the zone there) and which block has the pads
     map: {
-      blocks: { projects: { name: 'the trailer park', pads: true }, market: { name: 'the flea market' } },
+      blocks: { projects: { name: 'the trailer park', pads: true }, market: { name: 'the flea market' }, bar: { name: 'Fit Street, outside DEAD AIR' } },
       held: { jail: { name: 'the jail', exit: 'projects' }, clinic: { name: 'the clinic', exit: 'projects' } },
     },
   };

@@ -26,13 +26,27 @@
 //       person against you, and always to the target who trusts you most (with you: more pay); robs only unwatched
 //     'burner': takes the best-paying option it is dealt and ignores trust (refuses a regular at the door)
 //     'farm': odd jobs in the trailer park for farmDays days (trust built for nothing), then plays as the burner
+//   GOODS (RUN.md, "Goods, the connect and errands"): a crime policy buys a pack from the connect of a place it plays
+//     (the trailer park only: the park's; the market only: the market's; both places: both), when it has fewer than
+//     `restock` sales of that good (on you and at home) and the cash on it (leaving the fare); it takes the pack's price
+//     out of the crib when it means to buy in the park. A sale counts at its expected pay less what the sale cost.
+//   sell: false never buys a pack, so never sells (a selling job is only dealt with goods on you)
+//   sell: 'lean' (the dealer) takes a selling option whenever it is dealt one, before anything else
+//   carry: on a market trip, take out at most this many sales of each good (default 2: the crowd buys twice a day);
+//     the rest stay at the crib, safe (a carton bought on the way out is left home first, for nothing)
+//   ROUTES (RUN.md, "Routes"): walk: 'both' | 'out' | 'home' goes those ways on foot along the route (no fare), the
+//     subway otherwise; skate: true goes every way on the board once it owns one. stops: at a stop, 'play' ('home')
+//     plays the best card of the hand on the way home, 'out' on the way out (at most cardsOut, default 1), 'all' every
+//     card it can; a card counts at what it pays an energy less what an hour there could cost (the view's danger),
+//     and only above cardMin (default $8, the trailer park's odd job). Otherwise it passes them all by.
+//   eat: buys the day's sandwich in the park (or wherever the place's food is) at the last hour, and works one more
 // Options go away as the day's people are worked (RUN.md, "People"); the safe one is always dealt first, so a policy
 // picks from whatever is left and, with a place worked dry, takes the safe one (test/run-people.test.mjs).
 
 import { view } from './view.mjs';
 import { step } from './step.mjs';
 import { newRun } from './state.mjs';
-import { fullEnergy, heatHere, doneToday, ITEMS } from './rules.mjs';
+import { fullEnergy, heatHere, doneToday, ITEMS, goodsWorth, pressureOf } from './rules.mjs';
 
 const NEVER = Infinity;
 const homeAt = stopAt => ({ where: 'market', crime: true, heatMax: 2, stopAt, heatHome: 3 });
@@ -47,9 +61,96 @@ export const POLICIES = Object.freeze({
   neighbour: stopAt => ({ ...mixed(stopAt), trust: 'neighbour', buildDays: 2 }),
   burner: stopAt => ({ ...mixed(stopAt), trust: 'burner', door: 'refuse' }),
   farm: stopAt => ({ ...mixed(stopAt), trust: 'farm', farmDays: 3, door: 'refuse' }),
+  // goods: both places, home at $X, as `mixed`; the dealer buys at both connects, carries more, and sells first
+  dealer: (stopAt, carry = 2) => ({ ...mixed(stopAt), sell: 'lean', restock: 2 * carry, carry }),
+  noSell: stopAt => ({ ...mixed(stopAt), sell: false }),
+  // routes (RUN.md, "Routes"): the market, home at $X, as homeAt; on foot (`walk`: 'both', 'out' or 'home', the
+  // subway the other way), passing every stop or playing them (`stops`: 'play' on the way home, 'all' every card it
+  // can, 'out' on the way out); the skater goes every way on the board, when it owns one
+  walker: (stopAt, stops = null, walk = 'both') => ({ ...homeAt(stopAt), walk, ...(stops ? { stops } : {}) }),
+  skater: (stopAt, stops = 'play') => ({ ...homeAt(stopAt), skate: true, stops }),
+  // home pressure (RUN.md, "Home pressure"): the quiet one plays both places but only the safe jobs (odd jobs, the
+  // stall): nothing that brings pressure on at home. The others are `mixed` (both places, crime at home too) with one
+  // way of meeting an attempt: `defend` 'guard' hires the guard (a stretch, paid up front) on the morning an attempt is
+  // due, and with `guardWhen: 'worth'` only when what an attempt stands to take is more than his price (the deadbolt and
+  // the floor safe are owned from the start, as a kit); `race` heads home on a notice by the quickest way in time; the
+  // plain `mixed` ignores it all. `carryAll` takes everything banked out every time it steps out (never leaves it home).
+  quiet: stopAt => ({ ...mixed(stopAt), crime: false }),
+  defender: (stopAt, defend = 'guard') => ({ ...mixed(stopAt), defend }),
+  racer: stopAt => ({ ...mixed(stopAt), race: true }),
+  carrier: stopAt => ({ ...mixed(stopAt), carryAll: true }),
+  // the one who brings pressure on and is away too: both places, the trailer park's crimes first, then the market
+  homeFirst: stopAt => ({ ...mixed(stopAt), parkFirst: true }),
 });
 
-const ev = o => (o.odds / 100) * ((o.pay[0] + o.pay[1]) / 2);
+// an option's worth: its expected pay, less what one sale of its good cost (a sale uses one, win or lose)
+const ev = o => (o.odds / 100) * ((o.pay[0] + o.pay[1]) / 2) - (o.uses?.cost ?? 0);
+
+/** The places whose connects a policy buys from: the places it plays. */
+function buysAt(policy) {
+  if (!policy.crime || policy.sell === false) return [];
+  if (policy.buyAt) return policy.buyAt;
+  if (policy.mixed || policy.marketOnce) return ['park', 'market'];
+  return [policy.where];
+}
+/**
+ * A good worth buying: at a place the policy plays, what a sale of it beats an hour of that place's safe job by (its
+ * odds × its pay there, less what a sale cost, less the safe job's pay) is more than one bad jump could take there:
+ * the whole pack where people jump you, nothing where nobody does. (Measured, RUN.md: the market's dear discs, carried
+ * through its jumps, lost every player who bought them money; the park's cheap cartons paid.)
+ */
+function worthSelling(cfg, v, policy, good) {
+  const g = (v.goods ?? []).find(x => x.good === good);
+  const mean = r => (r[0] + r[1]) / 2;
+  // (not a second good for the same buyers: with a cheaper one to be had from a connect the policy buys from, sold at
+  // the same job, the dearer pack is only more to lose. Measured 2026-11-14 with discs at $26: the two-place players
+  // bought discs on top of their cartons and mark 12 fell from +12% to +7%.)
+  const cheaper = !!g && (v.goods ?? []).some(h => h.good !== good && h.perSale < g.perSale
+    && (v.connects ?? []).some(c => c.good === h.good && c.sells && buysAt(policy).includes(c.place))
+    && h.sellsAt.some(s => buysAt(policy).includes(s.place) && g.sellsAt.some(t => t.place === s.place && t.job === s.job)));
+  if (cheaper) return false;
+  return !!g && g.sellsAt.some(s => {
+    if (!buysAt(policy).includes(s.place)) return false;
+    const jobs = cfg.places[s.place].jobs;
+    const safe = Object.values(jobs).find(j => j.safe);
+    const atStake = cfg.tiers[cfg.places[s.place].tier]?.jump ? g.price : 0;
+    return (jobs[s.job].odds / 100) * mean(s.pay) - g.perSale - mean(safe.pay) > atStake;
+  });
+}
+/** A pack the policy wants from the connect where it stands (no hour), or null. */
+function packNow(cfg, v, state, policy) {
+  const c = (v.connects ?? []).find(x => x.here && x.available);
+  if (!c || !buysAt(policy).includes(state.place) || !worthSelling(cfg, v, policy, c.good)) return null;
+  const have = (state.goods?.[c.good] ?? 0) + (state.stash?.[c.good] ?? 0);
+  if (have >= (policy.restock ?? 1)) return null;
+  // away from home, keep the fare, and buy only with an hour left to sell in before the ride
+  const away = !cfg.places[state.place].door;
+  if (away && state.energy < cfg.energy.perHour * 2 + (policy.spentAt ?? 1)) return null;
+  return state.carried >= c.price + (away ? cfg.subway.fare : 0) ? { do: 'pack', good: c.good } : null;
+}
+/** Goods to take out for a market trip: up to `carry` sales of each (the crowd buys twice a day); the rest stay home. */
+const tripGoods = (state, policy) => Object.fromEntries(Object.entries(state.stash ?? {}).map(([g, n]) => [g, Math.min(n, policy.carry ?? 2)]));
+/** The price of the market's pack, if the policy means to buy one there on arriving (0: it does not). */
+function marketPack(cfg, v, state, policy) {
+  const c = (v.connects ?? []).find(x => x.place === 'market');
+  if (!c || !c.sells || !buysAt(policy).includes('market') || !worthSelling(cfg, v, policy, c.good)) return 0;
+  return (state.goods?.[c.good] ?? 0) + (state.stash?.[c.good] ?? 0) < (policy.restock ?? 1) ? c.price : 0;
+}
+/**
+ * What to take out of the crib for packs on the way (0: none wanted, or none affordable): the park's, bought on
+ * stepping out, and, going to the market, the market's, bought on arrival.
+ */
+function packCash(cfg, v, state, policy, fare, { market = false } = {}) {
+  let take = 0;
+  for (const place of market ? ['park', 'market'] : ['park']) {
+    if (!buysAt(policy).includes(place)) continue;
+    const c = (v.connects ?? []).find(x => x.place === place);
+    if (!c || !c.sells || !worthSelling(cfg, v, policy, c.good)) continue;
+    const have = (state.goods?.[c.good] ?? 0) + (state.stash?.[c.good] ?? 0);
+    if (have < (policy.restock ?? 1) && state.banked >= take + c.price + fare) take += c.price;
+  }
+  return take;
+}
 const regularOf = (v, o) => !!o.who && !!v.people.find(p => p.id === o.who.id)?.regular;
 
 /** The good neighbour's line: what it will do to a person, on a given day (policies above, `trust: 'neighbour'`). */
@@ -77,6 +178,10 @@ function bestJob(v, policy, heat, { rob: robHere = true, cfg = null, state = nul
   }
   const kind = policy.trust === 'neighbour' && cfg && state;
   if (kind) opts = opts.filter(o => neighbourly(cfg, o, state.day, policy));
+  if (policy.sell === 'lean') {
+    const sales = opts.filter(o => o.uses && heat + o.failHeat <= policy.heatMax);
+    if (sales.length) return choiceOf(sales.reduce((a, b) => (ev(b) > ev(a) ? b : a)), policy);
+  }
   let pick = opts[0];
   if (policy.crime) for (const o of opts) if (ev(o) > ev(pick) && heat + o.failHeat <= policy.heatMax) pick = o;
   let rob = robHere && policy.crime && !policy.robPlan ? v.moves.find(m => m.what === 'rob' && m.available) : null;
@@ -113,11 +218,101 @@ function robNow(cfg, v, state, policy, last) {
   return rob.choice;
 }
 
+/** The day's food where you stand, if the policy eats and it would buy one more hour. */
+function eatNow(v, state, policy) {
+  if (!policy.eat) return null;
+  const food = v.moves.find(m => m.what === 'shop' && m.available && m.choice.do === 'shop');
+  return food && state.carried >= food.price ? food.choice : null;
+}
+
+// ── routes (RUN.md, "Routes") ──────────────────────────────────────────────────────────────────────────────────────
+/** The way the policy goes to a place along a route, if it goes this way at all: the board when it skates and owns one, else on foot. */
+function wayFor(state, policy, to) {
+  const out = to !== 'park';
+  if (policy.skate && state.things?.board) return 'skate';
+  if (policy.walk === 'both' || policy.walk === (out ? 'out' : 'home')) return 'walk';
+  return null;
+}
+/** That way's move, if the view has it open (else the policy takes the subway). */
+function wayMove(v, state, policy, to) {
+  const d = wayFor(state, policy, to);
+  return d ? v.moves.find(m => m.what === 'route' && m.choice.do === d && m.choice.to === to && m.available)?.choice ?? null : null;
+}
+/**
+ * At a stop: play the best card of the hand (by what it pays an energy on average) or go on. 'all' plays every card
+ * it can; 'home' (and 'play') only on the way home, where the energy left would otherwise go to the trailer park's
+ * odd jobs or a short second trip (both worth less an energy than a card), and only a card worth more than `cardMin`
+ * an energy; 'out' only on the way out. A card whose failure would push the heat on you over heatMax is passed by.
+ */
+function atStop(cfg, state, v, policy) {
+  const home = state.route.to === 'park';
+  const mode = policy.stops === 'play' ? 'home' : policy.stops;
+  const wants = mode === 'all' || (mode === 'home' && home) || (mode === 'out' && !home);
+  // what an hour here could cost you, read off the danger the view shows for it (a bad one takes it all, and the clinic)
+  const j = v.danger.here ? v.danger.thisHour.jump : null;
+  const risk = j ? (j.bad * j.takes.bad + j.scuffle * j.takes.scuffle) / 100 : 0;
+  const worth = c => c.perEnergy - (mode === 'all' ? 0 : risk);
+  // (on the way out, at most cardsOut cards: the energy is the market's)
+  const played = state.hoursThere; // (the hours spent at this stop this time: the cards played)
+  const room = mode === 'all' || home || played < (policy.cardsOut ?? 1);
+  const cards = wants && room ? v.hand.filter(c => c.available && worth(c) > (mode === 'all' ? 0 : policy.cardMin ?? 8) && v.heat + c.failHeat <= (policy.heatMax ?? 9)) : [];
+  if (cards.length) return cards.reduce((a, b) => (worth(b) > worth(a) ? b : a)).choice;
+  return { do: 'onward' };
+}
+
+// ── home pressure (RUN.md, "Home pressure") ────────────────────────────────────────────────────────────────────────
+/**
+ * The racer, away with a notice up: the quickest way home that gets there in time (paying the fare when it can), when
+ * what it would save is worth the hours: what the attempt would take with nobody home (the view's odds, the guard
+ * first) less what it would take met at the door (their clean win all of it, a scuffle the scuffle's), against the
+ * hours it has left, worked at home instead of here (what the safe job here pays over the trailer park's odd job).
+ * Not when its own trip ends in time anyway.
+ */
+function raceHome(cfg, state, v, policy) {
+  if (!policy.race || !v.home?.notice) return null;
+  const ways = v.home.notice.ways.filter(w => w.inTime);
+  if (!ways.length) return null;
+  const best = Math.min(...ways.map(w => w.hours));
+  const quick = ways.filter(w => w.hours === best);
+  const way = quick.find(w => !w.choice.hop && w.available) ?? quick[0];
+  // home in time anyway (the energy left is an hour or so of work, then the way home): no need to cut the trip short
+  if (Math.max(0, state.energy - (policy.spentAt ?? 1)) + way.hours <= v.home.notice.hoursLeft) return null;
+  const o = v.home.odds;
+  const held = o.away.guard ? (100 - o.away.guard.beatenPct) / 100 : 0;
+  const away = (1 - held) * (o.away.pct / 100) * o.stake.takes;
+  const door = (1 - held) * ((o.door.bands.clean / 100) * o.stake.takes + (o.door.bands.messy / 100) * o.stake.scuffle);
+  const safe = v.options.find(x => x.safe);
+  // (the hours left are worked at home instead: what an hour of the safe job here pays over the trailer park's odd job)
+  const mean = r => (r[0] + r[1]) / 2;
+  const over = Math.max(0, (safe ? mean(safe.pay) : 0) - mean(cfg.places.park.jobs.odd.pay));
+  return away - door > Math.max(0, state.energy - way.hours) * over ? way.choice : null;
+}
+/**
+ * The guard defender at the crib: hires him (a stretch, paid up front) on the morning an attempt is due, unless he is on
+ * through today already. `guardWhen: 'worth'` hires only when what stands to be lost is more than his price: the share
+ * of the bank an attempt would take, times the chance they get in with the defences owned (the view's odds, away).
+ */
+function guardNow(v, policy) {
+  if (policy.defend !== 'guard') return null;
+  const g = v.home?.defences?.guard;
+  if (!g?.choice || !g.moveAvailable || g.on || !v.home.warning?.today) return null;
+  if (policy.guardWhen === 'worth') {
+    const o = v.home.odds;
+    if ((o.stake.takes * o.away.pct) / 100 <= g.price) return null;
+  }
+  return g.choice;
+}
+
 /** The policy's next choice from what the view shows. */
 export function decide(cfg, state, given, v = view(cfg, state)) {
   // the farmer: odd jobs in the trailer park for its first days, then the burner
   const policy = given.trust === 'farm' && state.day <= (given.farmDays ?? 0) ? { ...given, where: 'park', crime: false, mixed: false } : given;
-  const fare = cfg.subway.fare;
+  if (state.route) return (policy.race && v.home?.notice ? { do: 'onward' } : null) ?? atStop(cfg, state, v, policy);
+  const race = state.place !== 'park' && state.place !== 'crib' ? raceHome(cfg, state, v, policy) : null;
+  if (race) return race;
+  // (a walker or skater pays no fare out: it takes none from the crib)
+  const fare = wayFor(state, policy, 'market') ? 0 : cfg.subway.fare;
+  const fareHome = wayFor(state, policy, 'park') ? 0 : cfg.subway.fare;
   const where = policy.marketOnce && !Object.keys(policy.marketOnce).every(k => state.owned[k]) ? 'park' : policy.where;
   const marketHeat = heatHere(cfg, state, 'market');
   const goMarket = where === 'market' && state.energy >= (policy.minOut ?? 3) && marketHeat < policy.heatHome;
@@ -129,16 +324,20 @@ export function decide(cfg, state, given, v = view(cfg, state)) {
       return { do: 'morning' };
     case 'crib': {
       if (state.door) return policy.door !== 'refuse' && state.banked >= state.door.wants ? { do: 'give' } : { do: 'refuse' };
+      const guard = guardNow(v, policy);
+      if (guard) return guard;
       if (policy.buy) for (const item of ITEMS) if (v.shop.find(s => s.item === item).available) return { do: 'buy', item };
-      if (goMarket) return { do: 'out', take: Math.min(fare, state.banked) };
-      if (parkHere && state.energy >= hour) return { do: 'out', take: 0 };
+      if (goMarket) return { do: 'out', take: policy.carryAll ? state.banked : Math.min(fare + packCash(cfg, v, state, policy, fare, { market: true }), state.banked), goods: tripGoods(state, policy) };
+      if (parkHere && state.energy >= hour) return { do: 'out', take: policy.carryAll ? state.banked : packCash(cfg, v, state, policy, 0) };
       return { do: 'sleep' };
     }
     case 'park': {
+      const pack = packNow(cfg, v, state, policy);
+      if (pack) return pack;
       // police about with heat on you here: bank what you carry first (going inside costs no hour)
-      if (parkHere && state.carried > 0 && v.danger.here && v.danger.thisHour.stop.chance > 0) return { do: 'inside' };
+      if (parkHere && !policy.carryAll && state.carried > 0 && v.danger.here && v.danger.thisHour.stop.chance > 0) return { do: 'inside' };
       if (parkHere) {
-        if (state.energy < hour) return { do: 'inside' };
+        if (state.energy < hour) return eatNow(v, state, policy) ?? { do: 'inside' };
         // the last hour here (then inside, where nothing rolls): a robbery, if you have the cutter
         if (state.energy === hour && !policy.robPlan) return robNow(cfg, v, state, policy, 'inside') ?? bestJob(v, policy, v.heat, { rob: false, cfg, state });
         return (policy.robPlan ? planned(v, state, policy) : null) ?? bestJob(v, policy, v.heat, { rob: false, cfg, state });
@@ -148,21 +347,26 @@ export function decide(cfg, state, given, v = view(cfg, state)) {
         const c = bestJob(v, policy, v.heat, { rob: false, cfg, state });
         if (c.do === 'job' && !v.options.find(o => o.id === c.id)?.safe) return c;
       }
-      if (!goMarket || state.carried > fare) return { do: 'inside' }; // bank what you brought home first
-      return (policy.robPlan ? planned(v, state, policy) : null) ?? { do: 'subway', to: 'market', hop: state.carried < fare };
+      // bank what you brought home first (beyond the fare and a market pack's price, taken out for the trip)
+      if (!goMarket || (!policy.carryAll && state.carried > fare + marketPack(cfg, v, state, policy))) return { do: 'inside' };
+      // more goods on you than the trip can sell (a carton just bought): leave the rest at the crib first (no hour)
+      if (Object.keys(state.goods ?? {}).some(g => state.goods[g] > (policy.carry ?? 2))) return { do: 'inside' };
+      return (policy.robPlan ? planned(v, state, policy) : null) ?? wayMove(v, state, policy, 'market') ?? { do: 'subway', to: 'market', hop: state.carried < cfg.subway.fare };
     }
     case 'market': {
+      const pack = packNow(cfg, v, state, policy);
+      if (pack) return pack;
       const spent = state.energy <= (policy.spentAt ?? 1);
       if (spent && policy.rough) return state.energy >= hour ? bestJob(v, policy, v.heat, { cfg, state }) : { do: 'rough' };
       if (spent && policy.drink) {
         const drink = v.moves.find(m => m.what === 'shop' && m.available && m.item === 'drink');
-        if (drink && state.carried >= drink.price + fare) return drink.choice;
+        if (drink && state.carried >= drink.price + fareHome) return drink.choice;
       }
       if (state.energy < hour) return v.moves.find(m => m.choice.do === 'shop' && m.available)?.choice ?? { do: 'rough' };
       if (spent || state.carried >= policy.stopAt || v.heat >= policy.heatHome) {
         // on the way out (an energy left for the ride): a robbery, the last thing done here
         const rob = state.energy > hour ? robNow(cfg, v, state, policy, 'ride') : null;
-        return rob ?? { do: 'subway', to: 'park', hop: state.carried < fare };
+        return rob ?? wayMove(v, state, policy, 'park') ?? { do: 'subway', to: 'park', hop: state.carried < cfg.subway.fare };
       }
       return bestJob(v, policy, v.heat, { rob: policy.heatMax >= cfg.heat.max, cfg, state }); // (heat-blind robs by expected pay)
     }
@@ -178,16 +382,28 @@ export function decide(cfg, state, given, v = view(cfg, state)) {
  */
 export function playSeason(cfg, { seed, policy, kit = {}, days = 6, until = null, maxDays = 60 }) {
   let state = newRun({ seed, cfg });
-  state.owned = { ...state.owned, ...kit };
+  // a kit's things (the skateboard) are owned as things, the rest as the three
+  for (const [k, on] of Object.entries(kit)) if (cfg.things?.[k]) state.things = { ...state.things, [k]: on };
+  state.owned = { ...state.owned, ...Object.fromEntries(Object.entries(kit).filter(([k]) => !cfg.things?.[k])) };
   state.energy = fullEnergy(cfg, state);
   const takes = [];
-  const tally = { jumped: 0, bad: 0, scuffle: 0, stopped: 0, earned: 0, lost: 0, trips: 0, robbed: 0, rough: 0, door: 0, fights: 0, robs: 0, bins: 0, drinks: 0 };
-  const kept = s => s.banked + s.books.spent - (s.books.street ?? 0) - (s.books.door ?? 0);
+  const tally = { jumped: 0, bad: 0, scuffle: 0, stopped: 0, earned: 0, lost: 0, trips: 0, robbed: 0, rough: 0, door: 0, fights: 0, robs: 0, bins: 0, drinks: 0, packs: 0, sales: 0, goodsLost: 0, goodsSeized: 0, walks: 0, cards: 0, cardPay: 0, footLost: 0, footGoods: 0, footJumped: 0,
+    // home pressure: warnings, attempts (met at the door, settled by the guard, taken), what they took, the guard's wages,
+    // the races home on a notice; and per run, the days of each (H4, H6)
+    warnings: 0, raids: 0, raidsDoor: 0, raidsGuard: 0, raidsTaken: 0, burgled: 0, guardPaid: 0, alarms: 0, raced: 0, pressureSum: 0, warnDays: [], raidDays: [] };
+  // what got banked, plus what was spent at the crib on the three things (food, the door and the guard's wages count
+  // against it), and the goods in hand at what they cost (a pack is money turned into stock: it counts against the day
+  // only when the stock is lost, or sold for less)
+  const stock = s => goodsWorth(cfg, s.goods ?? {}) + goodsWorth(cfg, s.stash ?? {});
+  const kept = s => s.banked + s.books.spent - (s.books.street ?? 0) - (s.books.door ?? 0) - (s.books.goods ?? 0) - (s.books.guard ?? 0) + stock(s);
   let dayStart = kept(state);
   let steps = 0;
   const last = until ? maxDays : days;
   while (state.day <= last && !(until && until(state))) {
-    const { state: next, events } = step(cfg, state, decide(cfg, state, policy));
+    const v = view(cfg, state);
+    const choice = decide(cfg, state, policy, v);
+    if (policy.race && v.home?.notice && !state.route && choice === raceHome(cfg, state, v, policy)) tally.raced += 1;
+    const { state: next, events } = step(cfg, state, choice);
     for (const e of events) {
       if (e.type === 'jumped') {
         tally.jumped += 1;
@@ -195,7 +411,20 @@ export function playSeason(cfg, { seed, policy, kit = {}, days = 6, until = null
         if (e.outcome === 'messy') tally.scuffle += 1;
       }
       if (e.type === 'stopped') tally.stopped += 1;
-      if (e.type === 'ride' && e.place === 'market') tally.trips += 1;
+      if ((e.type === 'ride' || e.type === 'arrive') && e.place === 'market') tally.trips += 1;
+      // routes: the ways set out on, the cards played and what they paid, and what was lost on a route's ground
+      // (jumped or stopped at a stop or on a leg on from one: cash, and goods at what they cost)
+      if (e.type === 'walk') tally.walks += 1;
+      if (e.type === 'card' || (e.type === 'bins' && e.card)) {
+        tally.cards += 1;
+        tally.cardPay += e.pay ?? 0;
+      }
+      if (e.route && (e.type === 'jumped' || e.type === 'stopped')) {
+        const goods = goodsWorth(cfg, e.goodsTaken ?? e.goodsSeized ?? {});
+        tally.footLost += (e.taken ?? e.seized ?? 0) + goods;
+        tally.footGoods += goods;
+        if (e.type === 'jumped') tally.footJumped += 1;
+      }
       if (e.type === 'robbed') tally.robbed += 1;
       if (e.type === 'rough') tally.rough += 1;
       if (e.type === 'door') tally.door += 1;
@@ -203,8 +432,26 @@ export function playSeason(cfg, { seed, policy, kit = {}, days = 6, until = null
       if (e.type === 'rob') tally.robs += 1;
       if (e.type === 'bins') tally.bins += 1;
       if (e.type === 'shop') tally.drinks += 1;
+      if (e.type === 'pack') tally.packs += 1;
+      if (e.type === 'job' && e.goods) tally.sales += 1;
+      for (const n of Object.values(e.goodsTaken ?? {})) tally.goodsLost += n;
+      for (const n of Object.values(e.goodsSeized ?? {})) tally.goodsSeized += n;
+      if (e.type === 'casing') { tally.warnings += 1; tally.warnDays.push(e.day); }
+      if (e.type === 'alarm') {
+        tally.alarms += 1;
+      }
+      if (e.type === 'raid') {
+        tally.raids += 1;
+        tally.raidDays.push(e.day);
+        if (e.fight) tally.raidsDoor += 1;
+        if (e.how === 'guard') tally.raidsGuard += 1;
+        if (e.taken) tally.raidsTaken += 1;
+        tally.burgled += e.taken;
+      }
+      if (e.type === 'guard') tally.guardPaid += e.paid ?? 0;
     }
     if (next.day !== state.day) {
+      tally.pressureSum += pressureOf(cfg, next)?.value ?? 0;
       const now = kept(next);
       takes.push(now - dayStart);
       dayStart = now;

@@ -142,9 +142,9 @@ try {
     await ev(`document.querySelector('.rn-sheet .k-tab#k-tab-wearing')?.click()`);
     await shot('panel-character-wearing', 600);
     await ev(`document.querySelector('.rn-sheet .k-tab#k-tab-stats')?.click()`);
-    await key('a');
+    await key('g');
     await shot('panel-moves', 500);
-    await key('s');
+    await key('o');
     await shot('panel-stuff', 500);
     await key('m');
     await page.waitFor('window.__demo.hud.map.ready', 30000, 100).catch(() => console.log('  (the map was not up in 30 s)'));

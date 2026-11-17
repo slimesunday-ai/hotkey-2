@@ -404,6 +404,8 @@ export async function createStage({ city, CITY, map = CITYMAP, loader: given = n
   });
   director.on((what, shot) => {
     if (what === 'shot' && shot.hit) gore?.hit(shot.at, shot.by);
+    // (a fist that lands, on a step that asks for blood: director.js 'blow', at the clip's contact moment)
+    if (what === 'blow') gore?.blow(shot.at, shot.by, shot.clip);
   });
 
   // what is playing now, for the tools: the kinds of the scenes on stage
@@ -888,6 +890,22 @@ export async function createStage({ city, CITY, map = CITYMAP, loader: given = n
       const end = { block, spot, held: null };
       return id === leadId() ? voyage(id, end) : director.voyage(id, end);
     },
+    /**
+     * A CHANGE OF ZONE THE PAGE MAKES UNDER ITS OWN BLACK (join-1: the run's try-out stop, demo/run/trip.js): the zone
+     * becomes all there is round `view` (the camera is cut there for the city to build round), the director's people
+     * are seated afresh in it (away where their place is not in it) and the city's crowd is kept off as the zone wants.
+     * No fade and no camera move of its own: the page holds the black and puts the camera where it wants it. → the
+     * loader's entry ({ seconds, built, cached, blocks }).
+     */
+    async enterZone(z, view = null) {
+      await inFlight.catch(() => {});
+      await ready;
+      director.abort();
+      const entry = await loader.enter(z, view);
+      director.setZone(z);
+      keepOut();
+      return entry;
+    },
     /** The place's own camera shot (the tools' pictures): the zone is loaded first. */
     async showPlace(place) {
       await quiet();
@@ -906,6 +924,12 @@ export async function createStage({ city, CITY, map = CITYMAP, loader: given = n
       city.camera.clearViewOffset();
     },
     actors,
+    /**
+     * TRYING ON (lib-1): the player shown wearing `pieces` ({ cast slot: id }, e.g. from src/run/library.mjs tryOn's
+     * `dress`) until tryOff(); nothing of the run changes. The page ends it when the player leaves the wardrobe or stall.
+     */
+    tryOn: pieces => (you ? actors.tryOn(you, pieces) : false),
+    tryOff: () => (you ? actors.tryOff(you) : false),
     director,
     camera,
     seeThrough,

@@ -112,9 +112,9 @@ try {
   }
   if (want('moves')) {
     await load(PARK);
-    await key('a');
+    await key('g');
     await shot('trust-moves', 800);
-    await key('a');
+    await key('g');
   }
   if (want('told')) {
     await load(PARK);
@@ -144,13 +144,14 @@ try {
   }
   if (want('notice')) {
     await load(DOOR(0));
-    await key('x');
+    // (ui-3, leg 2: at your door, 2 shuts it: X's old job)
+    await key('2');
     await go();
     await shot('trust-notice', 900);
   }
   if (want('sore')) {
     await load(DOOR(3));
-    await key('x');
+    await key('2');
     await go();
     await shot('trust-sore', 900);
   }
@@ -168,7 +169,8 @@ try {
     await load(PARK);
     const sheet = () => ev(`(s => s.hidden ? null : s.dataset.sheet)(document.querySelector('.rn-sheet'))`);
     const said = [];
-    for (const [k, id] of [['c', 'character'], ['a', 'moves'], ['s', 'stuff'], ['m', 'map']]) {
+    // (ui-3, leg 2: C You, G Guide, O Stuff, M Map; N folds your numbers, D's old job; W A S D are never the run's)
+    for (const [k, id] of [['c', 'character'], ['g', 'moves'], ['o', 'stuff'], ['m', 'map']]) {
       await key(k);
       await page.sleep(400);
       const open = await sheet();
@@ -176,14 +178,22 @@ try {
       await page.sleep(300);
       said.push(`${k.toUpperCase()} ${open === id && (await sheet()) === null ? 'opens and closes' : `FAILED (${open})`}`);
     }
-    const rail = () => ev(`document.querySelector('.rn-dock').classList.contains('is-rail')`);
+    const rail = () => ev(`document.querySelector('.u-stats')?.classList.contains('is-folded') ?? null`);
     const r0 = await rail();
-    await key('d');
+    await key('n');
     await page.sleep(300);
     const r1 = await rail();
-    await key('d');
+    await key('n');
     await page.sleep(300);
-    said.push(`D ${r0 !== r1 && (await rail()) === r0 ? 'folds and opens the dock' : 'FAILED'}`);
+    said.push(`N ${r0 !== r1 && (await rail()) === r0 ? 'folds and opens your numbers' : 'FAILED'}`);
+    const wasd = [];
+    for (const k of ['w', 'a', 's', 'd']) {
+      const before = await sheet();
+      await key(k);
+      await page.sleep(200);
+      if ((await sheet()) !== before) wasd.push(k);
+    }
+    said.push(`W A S D ${wasd.length ? `FAILED (${wasd.join(' ')})` : 'do nothing'}`);
     const folded = () => ev(`document.querySelector('.rn-card').classList.contains('is-folded')`);
     const f0 = await folded();
     await key('f');

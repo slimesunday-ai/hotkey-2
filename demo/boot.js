@@ -7,6 +7,8 @@
 //   /demo/?mode=watch&seed=4        straight into a season (mode=play&seat=dealer, mode=coach)
 //   /demo/?mode=run&seed=3          the run (RUN.md): one player, the trailer park and the flea market (demo/run/);
 //                                   &runtest=market|park plays it on auto (demo/run/autoplay.js, demo/tools/run-stage.mjs)
+//   /demo/?mode=fight               the fight, a test round of THE RUN: a live fight behind the dead mall (demo/fight/;
+//                                   &site=elm at the ELM ST stop where it began); /demo/?mode=fightlab its clips, to judge
 //   /demo/?stagetest=watch|play     a whole season on auto over the real stage; the title ends `stage-ok` or
 //                                   `stage-fail: <why>` (demo/stage/director-test.js)
 //   /demo/?proof=all                the spike's proof scenes, no panels (demo/stage/proof.js)
@@ -105,6 +107,8 @@ if (SMALL) {
     const [map, { createLoader }, { buildsBlock }] = await Promise.all([import('./stage/citymap.js'), import('./stage/loader.js'), import(`${CITY}modules.js`)]);
     loader = createLoader({ city, CITY, map });
     zone0 = map.zoneOf(Q.get('zone') && map.PLACES[Q.get('zone')] ? Q.get('zone') : map.START);
+    // (the fight: the zone of its site, the dead mall's own or ELM ST's: demo/fight/zone.js)
+    if (Q.get('mode') === 'fight' || Q.get('mode') === 'fightlab') zone0 = (await import('./fight/zone.js')).fightZone(map, Q.get('site')) ?? zone0;
     // (only blocks the city has: a ring round a place on the shore reaches out over open sea)
     const world = new Set(cityMain.worldBlocks().map(([i, j]) => `${i},${j}`));
     const blocks = map.zoneBlocks(zone0, loader.ring).filter(([i, j]) => world.has(`${i},${j}`));
@@ -169,6 +173,14 @@ if (GAME) {
     const opts = { stage: demo.stage, seed: Number(Q.get('seed')) || 1, speed: Number(Q.get('speed')) || 1, scenes: Q.get('scenes') !== '0' };
     if (Q.get('runtest')) demo.hud = (await import('./run/autoplay.js')).runRunTest({ demo, mountRun, host, opts });
     else demo.hud = mountRun(host, opts);
+  } else if (Q.get('mode') === 'fight') {
+    // THE FIGHT (a test round of THE RUN, apart from its rules): a live fight behind the dead mall (demo/fight/)
+    const { mountFight } = await import('./fight/index.js');
+    demo.hud = await mountFight(host, { stage: demo.stage, demo, seed: Number(Q.get('seed')) || 1 });
+  } else if (Q.get('mode') === 'fightlab') {
+    // THE FIGHT'S MOVES, to judge: each clip it plays looping on the city's own people at the fight's lot (demo/fight/lab.js)
+    const { mountLab } = await import('./fight/lab.js');
+    demo.hud = await mountLab(host, { stage: demo.stage, demo });
   } else if (Q.get('stagetest')) {
     const { runStageTest } = await import('./stage/director-test.js');
     demo.hud = runStageTest({ demo, mountHud, host, mode: Q.get('stagetest') });

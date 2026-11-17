@@ -21,6 +21,7 @@
 //   const cribs = createCribs({ city, HOMES, PLAN, GPU, roomOf, entry, lotOf, keys, starter })
 //   cribs.keys() · cribs.place(key) → the place (inside.js's contract) for a pad's key
 import { LAYER } from '../inside.js';
+import { createArrange } from './arrange.js';
 
 /** How far over its lot a pad's room is built for the inside view (m): over every walker's head, near the ground's light. */
 export const LIFT = 12;
@@ -56,6 +57,29 @@ export function createCribs({ city, HOMES, PLAN, GPU, roomOf, entry, lotOf, keys
   const innerM = new T.MeshStandardMaterial({ color: 0x7a4c2c, roughness: 0.7, transparent: true });
   const stubM = new T.MeshStandardMaterial({ color: 0xf1ede4, roughness: 0.85 });
   const sillM = new T.MeshStandardMaterial({ color: 0x5a3b24, roughness: 0.8 });
+  // THE DEADBOLT ON THE DOOR (lib-1): owned, the kit's own door chain and locks (interiors/home security.js
+  // 'door-locks', variant 0 "chain + deadbolt") on the room side of both leaves, by the latch edge, at its own mount
+  // height. The rules are not touched: what the deadbolt does is config's (`things.deadbolt.defends`).
+  let lockGeo = null;
+  const lockMats = [0.78, 0.22, 0.3].map((r, i) => new T.MeshStandardMaterial({ vertexColors: true, roughness: r, metalness: [0, 0.1, 0.85][i] }));
+  const CITY = new URL('../../../city/from-trunk/style/city/', import.meta.url).href;
+  Promise.all([import(`${CITY}interiors/home/index.js`), import(`${CITY}vox.js`), import(`${CITY}glue.js`)]).then(([HO, V, G]) => {
+    const o = HO.byId.get('door-locks');
+    const b = new V.Bank(true);
+    V.meshVol(HO.buildObject(o, { variant: 0 }), b);
+    lockGeo = { mount: o.mount, layers: b.L.map((O, li) => (O.v ? { g: G.geoOf(O), li } : null)).filter(Boolean) };
+  }).catch(err => console.warn('[crib] the door locks did not load:', err));
+  /** The locks for a leaf (its centre at the leaf's middle): on its -z face (the room's side), by the latch edge. */
+  function locksOn(leaf, side = -1) {
+    if (!lockGeo) return null;
+    const g = new T.Group();
+    for (const { g: geo, li } of lockGeo.layers) g.add(Object.assign(new T.Mesh(geo, lockMats[li] ?? lockMats[0]), { userData: { shared: true } }));
+    // (the piece's face is +z out of its wall: turned half round to face -z, its 0.25 m width ending 0.06 m from the edge)
+    g.rotation.y = side < 0 ? Math.PI : 0;
+    g.position.set(side < 0 ? 0.47 : 0.22, lockGeo.mount - 1.1, side * 0.031);
+    leaf.add(g);
+    return g;
+  }
 
   function make(key) {
     const h = entry(key);
@@ -159,6 +183,7 @@ export function createCribs({ city, HOMES, PLAN, GPU, roomOf, entry, lotOf, keys
       const leaf = new T.Mesh(leafG, innerM);
       leaf.position.set(0.53, 1.1, 0);
       leaf.visible = false;
+      if (S0 && starter.shows().door) locksOn(leaf, -1);
       hinge.add(leaf);
       g.add(hinge);
       extra.add(g);
@@ -179,6 +204,8 @@ export function createCribs({ city, HOMES, PLAN, GPU, roomOf, entry, lotOf, keys
       const pane = new T.Mesh(paneG, paneM);
       pane.position.set(0, 0.45, 0);
       leaf.add(pane);
+      // (the room's side of the trailer's own door: seen from the street while it stands open)
+      if (S0 && starter.shows().door) locksOn(leaf, -1);
       hinge.add(leaf);
       const hole = new T.Mesh(holeG, holeM);
       hole.position.set(0, 1.13, 0.02);
@@ -267,7 +294,7 @@ export function createCribs({ city, HOMES, PLAN, GPU, roomOf, entry, lotOf, keys
         const done = () => {
           extra.removeFromParent();
           outer.g.removeFromParent();
-          extra.traverse(o => o.geometry && o.geometry !== leafG && o.geometry.dispose());
+          extra.traverse(o => o.geometry && o.geometry !== leafG && !o.userData.shared && o.geometry.dispose());
         };
         if (!up) return done();
         next.leaf('in', leaves.in);
@@ -296,10 +323,13 @@ export function createCribs({ city, HOMES, PLAN, GPU, roomOf, entry, lotOf, keys
       made.set(key, { sig: m?.place ? m.sig : sig, place: m?.place ?? null, at: now });
       return m?.place ?? null;
     }
-    if (m?.place) m.place.passTo(p).catch(err => console.warn('[crib] the room was not swapped:', key, err));
-    made.set(key, { sig, place: p, at: now });
+    const swap = m?.place ? m.place.passTo(p).catch(err => console.warn('[crib] the room was not swapped:', key, err)) : null;
+    made.set(key, { sig, place: p, at: now, swap });
     return p;
   }
+  // THE RUN'S CRIB ARRANGED (set/arrange.js): the room made again at once when the arrangement changes (not a second
+  // later); `swap` resolves once the new room stands where the old one did
+  const arrange = starter ? createArrange({ city, PLAN, starter, current: key => made.get(key)?.place ?? null, remake: key => ((made.get(key) ?? {}).at = -Infinity, placeOf(key), made.get(key)?.swap ?? null) }) : null;
   // a place whose plan waits for its block: it answers null until then
   const lazy = new Map();
   function handle(key) {
@@ -327,6 +357,10 @@ export function createCribs({ city, HOMES, PLAN, GPU, roomOf, entry, lotOf, keys
       },
       get room() {
         return placeOf(key)?.room ?? null;
+      },
+      // (the run's own pad: its arrangement, set/arrange.js; null for every other pad)
+      get arrange() {
+        return arrange?.of(key) ?? null;
       },
     };
     lazy.set(key, H);

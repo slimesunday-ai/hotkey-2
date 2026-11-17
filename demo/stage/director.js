@@ -20,6 +20,8 @@
 import { GOING, PACE, HURRY, LASTING, HOUR_MS } from './director-plan.js';
 import { ACTION_CLIPS } from '../../src/clips.mjs';
 import { BACK_FP, SHOT_D, COWER, grid, placeFor, around, reactors } from './staging.js';
+import { clearPlace, HEADS_SHARE } from './heads.js';
+import { BLOWS } from './gore.js';
 
 /** How far apart a pair stands when no clip says. */
 const REACH = 1.15;
@@ -90,6 +92,8 @@ export function createDirector({ city, actors, map, stands, travel = null, hooks
   const listeners = new Set();
   let epoch = 0;
   let running = 0;
+  // the scenes playing now (headWatch: who is acting in one is not stepped off)
+  const playing = new Set();
   let hourStart = 0;
   let hourNo = 0;
   // the seat a person plays, when one does: their pad is the one that opens when they are home
@@ -196,12 +200,20 @@ export function createDirector({ city, actors, map, stands, travel = null, hooks
     const here0 = clearAt(x, z);
     if (here0 >= OPEN) return null;
     let best = null;
+    const placed = stands.list().filter(o => o.by && o.by !== who && people.has(o.by));
     for (const s of stands.list()) {
       if (s.named || s.by === 'unfit' || !here(s.block)) continue;
       // (nor somebody else's spot, nor within two steps of the open ground somebody else has been given: two people
       // robbed in one hour at the bar were sent to the one open spot, and stood in each other)
       if (s.by && s.by !== who) continue;
       if ([...people.values()].some(Q => Q.id !== who && Q.stand?.temp && Math.hypot(Q.stand.x - s.x, Q.stand.z - s.z) < 2.4)) continue;
+      // (nor within a head and a hand of anybody's place, or of anybody of ours standing there now: the player sent
+      // to open ground for a sale at the flea market stood at Mrs. Kowalski's elbow behind her stall, the two heads
+      // one over the other in the picture for the whole scene; the audit's `heads`)
+      if ([...people.values()].some(Q => Q.id !== who && !Q.off && !Q.away && Q.stand && Math.hypot(Q.stand.x - s.x, Q.stand.z - s.z) < actors.headGapAt(who, Q.id, [s.x, s.z], [Q.stand.x, Q.stand.z]))) continue;
+      // (a keeper's counter or stall back is a named place of the stands', theirs without a `stand` of their own)
+      if (placed.some(o => Math.hypot(o.x - s.x, o.z - s.z) < actors.headGapAt(who, o.by, [s.x, s.z], [o.x, o.z]))) continue;
+      if (actors.all().some(A => A.id !== who && !A.w.hide && !A.room && !(A.moving > 0.1) && Math.hypot(A.x - s.x, A.z - s.z) < actors.headGapAt(who, A.id, [s.x, s.z], [A.x, A.z]))) continue;
       // (nor at the kerb: whoever comes for them needs a place to stand that is not the street)
       if ([0, 1, 2, 3, 4, 5, 6, 7].some(k => actors.onRoad(s.x + Math.sin((k * Math.PI) / 4) * 1.6, s.z + Math.cos((k * Math.PI) / 4) * 1.6))) continue;
       // (nor a spot the ground there has turned out to refuse, a table or a chair on it: its ring was clear and
@@ -242,8 +254,18 @@ export function createDirector({ city, actors, map, stands, travel = null, hooks
     const far = Math.hypot(g[0] - A.x, g[1] - A.z);
     if (far < D + 4) return;
     const f = (far - (D + 2)) / far;
-    const q = [A.x + (g[0] - A.x) * f, A.z + (g[1] - A.z) * f];
+    let q = [A.x + (g[0] - A.x) * f, A.z + (g[1] - A.z) * f];
     if (actors.solidAt(q[0], q[1]) || actors.onRoad(q[0], q[1])) return;
+    // (where they stop to wait is a head clear of everybody in the picture, as anybody stood for a scene is
+    // (headRoom): the player waiting there for Shaky Dee stood at the elbow of the woman on the phone at the bus stop,
+    // dealer seeds 3 and 5. The nearest such place as far from where T will stand; none: they wait where it was)
+    if (!HEADS_OLD) {
+      const share = (x, z) => actors.headsAt(P.id, x, z, { face: g, shift: P.id === player ? [x - A.x, z - A.z] : null }).share;
+      if (share(q[0], q[1]) > HEADS_SHARE * HEAD_OK) {
+        const ground = (x, z) => !actors.solidAt(x, z) && !actors.onRoad(x, z) && !actors.lowNear?.(x, z, 0.3);
+        q = clearPlace({ ox: g[0], oz: g[1], a0: Math.atan2(q[0] - g[0], q[1] - g[1]), rings: [D + 2, D + 2.5, D + 3], from: q, share, ground, limit: HEADS_SHARE * HEAD_OK }) ?? q;
+      }
+    }
     const ground = actors.groundWay(A.x, A.z, q[0], q[1]);
     const straight = Math.hypot(q[0] - A.x, q[1] - A.z);
     P.astray = true;
@@ -464,6 +486,12 @@ export function createDirector({ city, actors, map, stands, travel = null, hooks
       }
       if (c.k === 'go') {
         // out along the spot's beat and back: the short walk the city's stand-spot rules checked clear from it
+        // (not when the far end of it has somebody's head there in the picture: they stay. Tiny paced out to Lola's
+        // place at the market while she had stepped aside, and she stepped back into his head: headRoom)
+        if (!HEADS_OLD && actors.headsAt(P.id, c.to[0], c.to[1]).share > HEADS_SHARE * HEAD_OK) {
+          await actors.seconds(c.secs);
+          continue;
+        }
         if (!(await settle())) return;
         if (!(await actors.stepTo(P.id, c.to[0], c.to[1], { v: c.v, clip: c.clip })) || !on()) return;
         await actors.seconds(c.secs);
@@ -1204,9 +1232,36 @@ export function createDirector({ city, actors, map, stands, travel = null, hooks
       if (!actors.inPicture(A.x, A.z)) return;
       const q = offPoint(P, A.x, A.z, A.x, A.z, Math.atan2(A.x - from[0], A.z - from[1]));
       if (!q) return;
-      await limit(actors.walkTo(P.id, q[0], q[1], { v: fled ? RUN : HURRY, clip: fled ? 'run_getaway' : null, clipFrom: fled ? RUN_FROM : 0 }), 20);
+      await limit(Promise.race([actors.walkTo(P.id, q[0], q[1], { v: fled ? RUN : HURRY, clip: fled ? 'run_getaway' : null, clipFrom: fled ? RUN_FROM : 0 }), heldUp(P.id)]), 20);
+      if ((at(P.id).route?.stood ?? 0) > 2) return;
     }
   }
+  /**
+   * Resolves once the camera has lost `P` by a good margin (a body two metres to any side of them would be out of the
+   * picture too: the camera moves a little between the frame that finds them gone and the one they are taken off in),
+   * or once `still()` is false (somebody else has them now). Never waited for by an hour.
+   */
+  const lostTo = id => {
+    const A = at(id);
+    return [[0, 0], [2, 0], [-2, 0], [0, 2], [0, -2]].every(([dx, dz]) => !actors.inPicture(A.x + dx, A.z + dz));
+  };
+  // (and standing off the walkers' lane while they wait: the city's walkers piled up behind one of ours left standing
+  // on the flea market's sidewalk, travel.js offLane)
+  /** Resolves when `id` has stood held up on its walk for three seconds (somebody in its way who does not move on). */
+  const heldUp = id => actors.until(() => !actors.has(id) || (at(id).route?.stood ?? 0) > 3);
+  const offWhenLost = (P, still) => {
+    if (!still() || !actors.has(P.id) || lostTo(P.id)) return Promise.resolve();
+    const A = at(P.id);
+    const d = actors.laneDistance(A.x, A.z);
+    if (d !== null && d <= 0.5 && (!A.route || (A.route.stood ?? 0) > 2)) {
+      // (on the sidewalk and a head from anybody standing there: actors.offLaneSpot. fitSpot's own point was asked
+      // about nothing but the lane: a buyer walking off could be stood at the elbow of whoever was on the phone at the
+      // flea market's kerb, or over the kerb's edge)
+      const q = actors.offLaneSpot(P.id);
+      if (q && Math.hypot(q[0] - A.x, q[1] - A.z) > 0.2) actors.stepTo(P.id, q[0], q[1], { v: 1.3 }).catch(() => {});
+    }
+    return actors.until(() => !still() || !actors.has(P.id) || lostTo(P.id));
+  };
   function dismiss(P, now = false) {
     if (P.off) return;
     P.off = true;
@@ -1216,12 +1271,16 @@ export function createDirector({ city, actors, map, stands, travel = null, hooks
     stopRoutine(P);
     release(P);
     actors.stop(P.id);
-    const leave = () => {
+    const off = () => {
       if (P.off && P.tripId === trip) actors.show(P.id, false);
     };
+    // (STILL IN THE PICTURE when the walk off has given out, held up on the way: they stay until the camera has lost
+    // them. Taken off there they went in plain sight, a robber seen off after a jump at the flea market, by how long
+    // the way had held him up: market, seed 3)
+    const leave = () => offWhenLost(P, () => P.off && P.tripId === trip).then(off);
     // (`now`: a whole hour settled at once, the picture cut for it: the run's skip and its morning, demo/run/index.js)
     if (now || !P.block) {
-      leave();
+      off();
       return;
     }
     const from = base(P.block, P.spot ?? 'street');
@@ -1232,7 +1291,7 @@ export function createDirector({ city, actors, map, stands, travel = null, hooks
     const go = (tx, tz) => actors.walkTo(P.id, tx, tz, { v: fled ? RUN : HURRY, clip: fled ? 'run_getaway' : null, clipFrom: fled ? RUN_FROM : 0 });
     // (the wings in the picture: straight for a point out of it)
     const out = actors.inPicture(x, z) ? offPoint(P, at(P.id).x, at(P.id).z, at(P.id).x, at(P.id).z, Math.atan2(at(P.id).x - from[0], at(P.id).z - from[1])) : null;
-    limit(go(...(out ?? [x, z])), 24).then(() => offPicture(P, trip, from, fled)).then(leave);
+    limit(Promise.race([go(...(out ?? [x, z])), heldUp(P.id)]), 24).then(() => ((at(P.id).route?.stood ?? 0) > 2 ? null : offPicture(P, trip, from, fled))).then(leave);
   }
 
   // ── scenes ──────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -1336,6 +1395,14 @@ export function createDirector({ city, actors, map, stands, travel = null, hooks
     // (an ATTACK is never left out because the one it is done to is three steps from their spot late in a long
     // hour: graceFor. A street sale's late hand-offs are left as they were: not played past the hour's curfew)
     if (!(await present(T, scene.block, scene.spot, graceFor(scene))) || epoch !== mine) return false;
+    // (THE ONE WHO STAYS STANDS STILL FIRST: a step of nobody's trip still under them, the step back from making way
+    // for a walker or a step clear of somebody's head (headRoom), ends before the mark is taken from where they
+    // stand. Mr. Ferraro stepped back to his place after the player's mark was taken by him, and the two stood
+    // talking 1.2 m apart, one head over the other: burner seed 12)
+    if (!HEADS_OLD && !T.going && !T.down && at(T.id)?.route) {
+      await limit(actors.until(() => !at(T.id)?.route || T.going), 2);
+      if (epoch !== mine) return false;
+    }
     leave(P);
     // (whoever is at home comes to their door for someone who has come to them: nobody talks to a wall)
     if (T.inside && !HELD[T.inside]) {
@@ -1361,6 +1428,31 @@ export function createDirector({ city, actors, map, stands, travel = null, hooks
       if (epoch !== mine) return false;
     }
     M.step = false;
+    // (THE ONE WHO STAYS, STOPPED AT SOMEBODY'S HEAD: a step to ground a head and a hand from everyone first. The
+    // player, walking out past Mrs. Kowalski's shoulder in the flea market's one-body-wide back row, was stopped
+    // there by a buyer coming to him, and sold to them at her elbow, their two heads one over the other for the
+    // whole scene: burner seed 12, every run)
+    if (!HEADS_OLD && !centre.down && !centre.inside && !C.room && !sits(centre)) {
+      const ck = C.contact;
+      // (by distance, a head and a hand; and by the picture, as the audit sees it: headRoom)
+      const crowded = (x, z) => actors.all().some(B => B !== C && B.id !== mover.id && !B.w.hide && !B.room && !B.route && !(B.moving > 0.1) && !(ck && B.contact === ck) && Math.hypot(B.x - x, B.z - z) < actors.headGapAt(centre.id, B.id, [x, z], [B.x, B.z])) || actors.headsAt(centre.id, x, z, { skip: [mover.id] }).share > HEADS_SHARE * HEAD_OK;
+      if (crowded(C.x, C.z)) {
+        let to = null;
+        for (const r of [0.6, 1.0, 1.4, 1.8]) {
+          for (let k = 0; k < 12 && !to; k++) {
+            const t = [C.x + Math.sin((k * Math.PI) / 6) * r, C.z + Math.cos((k * Math.PI) / 6) * r];
+            if (actors.solidAt(t[0], t[1]) || actors.onRoad(t[0], t[1]) || actors.lowNear?.(t[0], t[1], 0.3) || crowded(t[0], t[1]) || actors.wayRound(C.x, C.z, t[0], t[1]) !== null) continue;
+            to = t;
+          }
+          if (to) break;
+        }
+        if (to) {
+          centre.astray = true;
+          await limit(actors.stepTo(centre.id, to[0], to[1], { v: 1.25 * rate }), 4);
+          if (epoch !== mine) return false;
+        }
+      }
+    }
     // (a pair that does not touch and could only be stood along the camera's bearing, a keeper at a counter with the
     // stall on one side: a little further apart, so the nearer head does not sit over the other in the picture)
     if (!contact && !gun && !HEADS_OLD) {
@@ -1372,11 +1464,34 @@ export function createDirector({ city, actors, map, stands, travel = null, hooks
     const q = [C.x + M.u[0] * D, C.z + M.u[1] * D];
     // (a mark in something solid, or with its back in it, a stall's counter across the flea market's aisle: brought
     // in toward the one who stays until it is clear, a little short of the distance asked for)
-    for (let k = 0; k < 3 && D - 0.15 * k > 0.9 && !M.room && (actors.solidAt(q[0], q[1]) || actors.solidAt(q[0] + M.u[0] * 0.3, q[1] + M.u[1] * 0.3)); k++) {
+    // (nor out in the roadway when the one who stays is not: the mark pushed a head further out along a bearing to the
+    // kerb stood the player in the street beside the one he lifted from, the audit's `inRoad`)
+    const kerbside = !actors.onRoad(C.x, C.z);
+    for (let k = 0; k < 6 && D - 0.15 * k > 0.9 && !M.room && ((k < 3 && (actors.solidAt(q[0], q[1]) || actors.solidAt(q[0] + M.u[0] * 0.3, q[1] + M.u[1] * 0.3))) || (kerbside && actors.onRoad(q[0], q[1]))); k++) {
       q[0] -= M.u[0] * 0.15;
       q[1] -= M.u[1] * 0.15;
     }
     if (!HEADS_OLD) makeWay(scene, mover, centre, q);
+    // (A MARK AT THE HEAD OF SOMEBODY WHO COULD NOT STEP BACK from it, or on something low: round the one who stays,
+    // the nearest bearing whose mark is standing ground with nobody's head there. The flea market's back row is one
+    // body wide: the player's hand-off to a buyer was marked at Mrs. Kowalski's elbow behind her stall, and she had
+    // nowhere to step; their heads one over the other, burner seed 12, every run; or a crate's corner)
+    if (!HEADS_OLD && !M.room) {
+      const key = at(mover.id).contact;
+      // (and by the picture, as the audit sees it, with the camera where it will be when the player is the one who
+      // walks: it is locked on him. headRoom, below, asks again where the walk gives out)
+      const shift = (x, z) => (mover.id === player ? [x - A.x, z - A.z] : null);
+      const taken = (x, z) => actors.lowNear?.(x, z, 0.3) || actors.all().some(B => B.id !== mover.id && B.id !== centre.id && !B.w.hide && !B.room && !B.route && !(B.moving > 0.1) && !(key && B.contact === key) && Math.hypot(B.x - x, B.z - z) < actors.headGapAt(mover.id, B.id, [x, z], [B.x, B.z])) || actors.headsAt(mover.id, x, z, { face: [C.x, C.z], skip: [centre.id], shift: shift(x, z) }).share > HEADS_SHARE * HEAD_OK;
+      if (taken(q[0], q[1])) {
+        const a0 = Math.atan2(q[0] - C.x, q[1] - C.z);
+        for (const da of [0.35, -0.35, 0.7, -0.7, 1.05, -1.05, 1.4, -1.4, 1.75, -1.75, 2.1, -2.1, 2.6, -2.6, Math.PI]) {
+          const t = [C.x + Math.sin(a0 + da) * D, C.z + Math.cos(a0 + da) * D];
+          if (actors.solidAt(t[0], t[1]) || (kerbside && actors.onRoad(t[0], t[1])) || taken(t[0], t[1])) continue;
+          [q[0], q[1]] = t;
+          break;
+        }
+      }
+    }
     const d = Math.hypot(A.x - q[0], A.z - q[1]);
     // (the one who stays is where the walk is going, not in its way: actors.js bodyAhead)
     actors.meeting(mover.id, centre.id);
@@ -1420,10 +1535,140 @@ export function createDirector({ city, actors, map, stands, travel = null, hooks
       if (!M.room && Math.hypot(A.x - C.x, A.z - C.z) > D + 0.8) return false;
     }
     actors.meeting(mover.id, null);
+    if (!HEADS_OLD && !M.room) {
+      await headRoom(mover, { centre, D: contact ? Math.min(D, Math.max(0.6, Math.hypot(A.x - C.x, A.z - C.z))) : D, contact, rate, kerbside });
+      if (epoch !== mine) return false;
+    }
     actors.face(mover.id, C.x, C.z);
     if (!centre.down) actors.face(centre.id, A.x, A.z);
     await actors.turned(centre.down ? [mover.id] : [P.id, T.id], 0.9);
     return true;
+  }
+
+  /**
+   * HEAD ROOM WHERE THE PAIR STANDS, AS THE PICTURE SHOWS IT (the audit's own test: actors.headsAt). Whoever came
+   * (`mover`) stands where the walk gave out: on the mark, short of it, or beside somebody who came to stand there
+   * after it was chosen (a stall keeper behind her stall, a woman on the phone at the bus stop, the partner himself
+   * stepped aside for a passer-by). When the head there would be over another's in the picture (more than half the
+   * audit's share), a short step to the nearest place round the one who stays, `D` from them, where it is
+   * not: facing them, on standing ground (no roadway when they are not on one, nothing solid there or at the body's
+   * back, nothing low at its feet), with a straight way to it or a short way round (ROUND_WAY). A contact step keeps its reach (only its bearing
+   * moves); a pair that does not touch may stand a little further off. With nobody to face (a few steps off at the
+   * end of a scene's walk, a scene's contact over), round where they stand. Nowhere better: they stay. The mark's own
+   * checks are by distance (a head and a hand, actors.headGap); this is the picture's, for what they could not foresee.
+   * (Mrs. Kowalski behind her stall at 0.7 m from the player handing off to Tiny in front of it: guard seed 8, burner
+   * seed 12; Shaky Dee sold to at the elbow of the woman on the phone at the bus stop: dealer seeds 3 and 5)
+   */
+  const HEAD_OK = 0.5;
+  /** The longest way round (m) to a clear place: a step or two, not a walk. */
+  const ROUND_WAY = 5;
+  async function headRoom(mover, { centre = null, D = 0, contact = false, rate = 1, kerbside = null, over = HEADS_SHARE * HEAD_OK, astray = !!centre } = {}) {
+    const [A, C] = [at(mover.id), centre ? at(centre.id) : null];
+    if (!A || (centre && !C) || mover.down || A.room || C?.room || A.paired || A.w.hide || aiming(mover.id)) return false;
+    const face = C ? [C.x, C.z] : null;
+    const share = (x, z) => actors.headsAt(mover.id, x, z, { face }).share;
+    const limit0 = HEADS_SHARE * HEAD_OK;
+    if (share(A.x, A.z) <= over) return false;
+    kerbside ??= !actors.onRoad(C ? C.x : A.x, C ? C.z : A.z);
+    // (round the one who stays, at their distance; with nobody to face, round where they stand, the nearest first)
+    const [ox, oz] = C ? [C.x, C.z] : [A.x, A.z];
+    const a0 = C ? Math.atan2(A.x - C.x, A.z - C.z) : A.w.yawS ?? A.ry;
+    const rings = C ? (contact ? [D] : [D, D + 0.35, D + 0.7]) : [0.5, 0.9, 1.3, 1.7];
+    // (a straight step, or a short way round: the walk up gave out in the flea market's back row, one body wide, at
+    // Mrs. Kowalski's elbow, and the clear side of the buyer is round the end of her stall)
+    const wayTo = (x, z) => {
+      const w = actors.wayRound(A.x, A.z, x, z);
+      if (!w) return w;
+      let m = 0;
+      for (let k = 0, p = [A.x, A.z]; k < w.length; p = w[k], k++) m += Math.hypot(w[k][0] - p[0], w[k][1] - p[1]);
+      return m <= ROUND_WAY ? w : false;
+    };
+    const ground = (x, z, ux, uz) => !actors.solidAt(x, z) && !(C && actors.solidAt(x + ux * 0.3, z + uz * 0.3)) && !(kerbside && actors.onRoad(x, z)) && !actors.lowNear?.(x, z, 0.3) && wayTo(x, z) !== false;
+    const to = clearPlace({ ox, oz, a0, rings, from: [A.x, A.z], share, ground, limit: limit0 });
+    const was = actors.headsAt(mover.id, A.x, A.z, { face });
+    actors.noteAudit(`room ${mover.id} ${(100 * was.share).toFixed(0)}% with ${was.with} at ${A.x.toFixed(1)}, ${A.z.toFixed(1)}${C ? ` facing ${centre.id} ${Math.hypot(A.x - C.x, A.z - C.z).toFixed(2)} m` : ''}${A.route ? ', still on its way' : ''}: ${to ? `to ${to[0].toFixed(1)}, ${to[1].toFixed(1)}` : 'nowhere clear'}`);
+    if (!to) return false;
+    // (`astray`, at a meeting: off their place for the scene, and walked back to it after. A step clear with nobody to
+    // face is not: it is their place now. Marked astray, the player's step clear at the end of a lift at the bus stop
+    // had the end of the hour walk him 55 m to the trailer park's own spot, and whoever stood idle was walked back
+    // into the same head the next hour)
+    if (astray) mover.astray = true;
+    const way = wayTo(to[0], to[1]);
+    await limit(way ? actors.stepVia(mover.id, way, { v: 1.4 * rate }) : actors.stepTo(mover.id, to[0], to[1], { v: 1.25 * rate }), 4);
+    return true;
+  }
+
+  /**
+   * WHOEVER STANDS IDLE WITH A HEAD OVER ANOTHER'S STEPS CLEAR (headRoom, with nobody to face). Ten times a second of
+   * the game: one of ours on stage, standing still, with no part in a step that is playing now, whose head in the
+   * picture is over somebody else's (the audit's own share, actors.headsAt), steps to the nearest clear place. Never
+   * the player (where he stands is the scene's or his own), nor a keeper of a shop or a stall's back (they keep it: the
+   * others come and go round them), nor whoever is on a spot with something to lean or sit on, down, sitting, held,
+   * indoors, on their way or walking off; and each at most once in
+   * a second and a half. What the scenes' own placing could not foresee: the robber waiting for his turn at the stall
+   * the player was sent to work behind (burner seed 12), two of the market's crowd put down at one kerb.
+   */
+  let headNext = 0;
+  const headMoved = new Map();
+  actors.onFrame(() => {
+    if (HEADS_OLD || actors.clock < headNext) return;
+    headNext = actors.clock + 0.1;
+    const acting = new Set();
+    for (const sc of playing) for (const q of [sc.now, ...(sc.earlyNow ?? [])]) if (q) acting.add(q.actor).add(q.target);
+    for (const Q of people.values()) {
+      if (Q.id === player || KEEPERS.has(Q.role) || /^keep:/.test(Q.spot ?? '') || acting.has(Q.id) || Q.down || Q.inside || Q.held || Q.going || Q.leaving || Q.off || Q.away || Q.transit || !actors.has(Q.id)) continue;
+      if (actors.clock - (headMoved.get(Q.id) ?? -9) < 1.5) continue;
+      const A = at(Q.id);
+      if (A.w.hide || A.room || A.route || A.moving > 0.1 || A.paired || A.mode !== 'free' || /^(sit_|sleep|lie_)/.test(A.clipName ?? '') || (!Q.astray && (A.stand?.lean || A.stand?.sit || A.stand?.kind === 'bench'))) continue;
+      if (actors.headsAt(Q.id, A.x, A.z).share <= HEADS_SHARE) continue;
+      headMoved.set(Q.id, actors.clock);
+      headRoom(Q, { over: HEADS_SHARE }).catch(() => {});
+    }
+  });
+
+  /**
+   * WHOEVER WAITS FOR A LATER TURN STANDS A HEAD CLEAR OF EVERYONE. While a scene plays, four times a second: one of
+   * its own people with no part in the step now playing (nor in a walk up already under way), standing by, who is
+   * within a head and a hand (actors.headGap) of anybody of ours standing still steps off a little, to ground that is
+   * a head and a hand from everyone, a sidewalk or a yard, nothing solid or low there. Not from someone they are at
+   * arm's length with on purpose (the scene's contact steps: a fight, a lift, a hand-off), nor while sitting, lying,
+   * aiming, or half of a two-person clip. The second robber waited for his turn at the player's elbow while the first
+   * jumped him (1.04 m apart, burner seed 12: the audit's `heads`); a robber waiting by a counter stood in its keeper.
+   * → the function that stops it.
+   */
+  function watchWaiting(scene, principals, mine) {
+    let next = 0;
+    const moved = new Map();
+    const still = B => !B.w.hide && !B.room && !B.route && !(B.moving > 0.1);
+    return actors.onFrame(() => {
+      if (epoch !== mine || actors.clock < next) return;
+      next = actors.clock + 0.25;
+      const acting = new Set([scene.now?.actor, scene.now?.target, ...[...(scene.earlyNow ?? [])].flatMap(q => [q.actor, q.target])]);
+      for (const Q of principals) {
+        if (acting.has(Q.id) || Q.down || Q.going || Q.inside || Q.held || Q.off || Q.away || Q.transit || !actors.has(Q.id)) continue;
+        const A = at(Q.id);
+        if (!still(A) || A.paired || aiming(Q.id) || /^(sit_|sleep|lie_)/.test(A.clipName ?? '') || actors.clock - (moved.get(Q.id) ?? -9) < 1.5) continue;
+        const B = actors.all().find(B => B !== A && still(B) && !(A.contact && A.contact === B.contact) && !(A.paired && B.paired) && Math.hypot(B.x - A.x, B.z - A.z) < actors.headGapAt(Q.id, B.id, [A.x, A.z], [B.x, B.z]) - 0.05);
+        if (!B) continue;
+        const need = actors.headGap(Q.id, B.id);
+        const roomy = (x, z) => actors.all().every(C => C === A || C.w.hide || C.room || (A.contact && A.contact === C.contact) || Math.hypot(C.x - x, C.z - z) >= actors.headGapAt(Q.id, C.id, [x, z], [C.x, C.z]));
+        const a0 = Math.atan2(A.x - B.x, A.z - B.z);
+        let to = null;
+        for (const da of [0, 0.5, -0.5, 1.0, -1.0, 1.6, -1.6]) {
+          for (const m of [need + 0.15, need + 0.5]) {
+            const t = [B.x + Math.sin(a0 + da) * m, B.z + Math.cos(a0 + da) * m];
+            if (Math.hypot(t[0] - A.x, t[1] - A.z) > 2 || actors.solidAt(t[0], t[1]) || actors.onRoad(t[0], t[1]) || actors.lowNear?.(t[0], t[1], 0.3) || !roomy(t[0], t[1])) continue;
+            to = t;
+            break;
+          }
+          if (to) break;
+        }
+        if (!to) continue;
+        moved.set(Q.id, actors.clock);
+        Q.astray = true;
+        actors.stepTo(Q.id, to[0], to[1], { v: 1.3 }).catch(() => {});
+      }
+    });
   }
 
   /**
@@ -1435,9 +1680,15 @@ export function createDirector({ city, actors, map, stands, travel = null, hooks
   function makeWay(scene, mover, centre, q) {
     const C = at(centre.id);
     for (const Q of people.values()) {
-      if (Q === mover || Q === centre || scene.actors.includes(Q.id) || Q.busy || Q.going || Q.down || Q.inside || Q.held || Q.off || Q.away || Q.transit) continue;
+      if (Q === mover || Q === centre || Q.going || Q.down || Q.inside || Q.held || Q.off || Q.away || Q.transit) continue;
+      // (AND WHOEVER OF THE SCENE'S OWN WAITS FOR A LATER TURN, standing by: a head and a hand from the two as well.
+      // The second robber stood at the player's elbow while the first one jumped him, their heads one over the other
+      // until his own turn came: the audit's `heads`, burner seed 12. Not one who is in the scene's contact steps
+      // already: two of a fight are at arm's length on purpose)
+      const waits = scene.actors.includes(Q.id) && !(scene.contactKey && at(Q.id)?.contact === scene.contactKey) && !aiming(Q.id);
+      if (!waits && (scene.actors.includes(Q.id) || Q.busy)) continue;
       const B = at(Q.id);
-      if (!B || B.w.hide || B.route || B.room) continue;
+      if (!B || B.w.hide || B.route || B.room || B.paired) continue;
       // (where they step to is a head and a hand from everybody else too, the pair's two places among them)
       const roomy = (x, z) => actors.all().every(R => R.id === Q.id || R.w.hide || Math.hypot(R.x - x, R.z - z) >= actors.headGap(Q.id, R.id)) && Math.hypot(q[0] - x, q[1] - z) >= actors.headGap(Q.id, mover.id) && Math.hypot(C.x - x, C.z - z) >= actors.headGap(Q.id, centre.id);
       for (const [px, pz, who] of [[q[0], q[1], mover.id], [C.x, C.z, centre.id]]) {
@@ -1456,7 +1707,7 @@ export function createDirector({ city, actors, map, stands, travel = null, hooks
           if (to) break;
         }
         if (!to) continue;
-        if (!Q.ambient) stopRoutine(Q);
+        if (!Q.ambient && !waits) stopRoutine(Q);
         Q.astray = true;
         actors.stepTo(Q.id, to[0], to[1], { v: 1.3 }).then(out => out && !Q.busy && !Q.going && !Q.ambient && startRoutine(Q));
         break;
@@ -1506,7 +1757,10 @@ export function createDirector({ city, actors, map, stands, travel = null, hooks
       release(Q);
       actors.firm(Q.id, false);
       actors.face(Q.id, null);
-      actors.walkTo(Q.id, q[0], q[1], { v: HURRY }).then(() => Q.off && actors.show(Q.id, false));
+      // (and out of the picture before they are taken off: offWhenLost)
+      const trip = Q.tripId;
+      const still = () => Q.off && Q.tripId === trip;
+      actors.walkTo(Q.id, q[0], q[1], { v: HURRY }).then(() => offWhenLost(Q, still)).then(() => still() && actors.show(Q.id, false));
     }
   }
 
@@ -1703,10 +1957,24 @@ export function createDirector({ city, actors, map, stands, travel = null, hooks
           const d = Math.hypot(A.x - to[0], A.z - to[1]);
           const ground = !spot.entry && d < 28 ? actors.groundWay(A.x, A.z, to[0], to[1]) : null;
           const how = ground !== null && ground < d * 1.5 + 2 ? 'straight' : 'path';
+          // (THE PLAYER'S WAY TO A PLACE OF HIS OWN IN A SCENE, his work behind a stall, is past the shoulders of whoever
+          // stands still by it: the row behind the flea market's stalls is one body wide. He stood fourteen seconds
+          // behind Mrs. Kowalski watching him from her own stall's back, and the shift's work was played where the
+          // wait gave out, his head in hers; or not, by how the seconds fell (market, seed 3, 2026-11-14). The walk
+          // that gives out wherever it has got to is what made the end of the scene differ from run to run)
+          // (only whoever stands at a place of their own there, a stall's back or a porch: not the street's people)
+          if (P.id === player) actors.passing(P.id, actors.nextTo(to[0], to[1], 3.5, P.id).filter(id => people.get(id)?.kind === 'npc' && /:/.test(people.get(id)?.spot ?? '')));
           const out = await limit(actors.walkTo(P.id, to[0], to[1], { v, how, clip, clipFrom, entry: spot.entry, yaw: spot.way ? null : spot.ry }), 14);
+          if (P.id === player) actors.passing(P.id, null);
           if (out?.arrived) actors.stand(P.id, spot.way ? null : spot);
         } else if (lane) await limit(actors.walkTo(P.id, to[0], to[1], { v, clip, clipFrom }), 14);
         else await limit(actors.stepTo(P.id, to[0], to[1], { v, clip, clipFrom }), 14);
+        // (A FEW STEPS OFF END A HEAD CLEAR OF EVERYONE IN THE PICTURE, as a pair's meeting does (headRoom): a buyer
+        // walked off after his sale stood with his head in Shaky Dee's at the bus stop for the rest of the hour. Not
+        // off a place that is the scene's own, a counter or a stall's back, nor off a spot with something to lean or
+        // sit on: its clip needs it)
+        const St = actors.get(P.id)?.stand;
+        if (!HEADS_OLD && epoch === mine && !spot?.named && !P.off && !P.going && !P.inside && !(St && (St.lean || St.sit || St.kind === 'bench'))) await headRoom(P, { rate });
       }
       if (step.action === 'get_up') P.down = false;
       return;
@@ -1795,6 +2063,12 @@ export function createDirector({ city, actors, map, stands, travel = null, hooks
       if (clip.pair && T && !T.down) {
         T.lastPair = clip.pair.with;
         const loops = clip.loop || clip.hold;
+        // (A FIST'S BLOOD, ONLY WHERE THE STEP ASKS FOR IT: `blood` on a punch, a haymaker or a scuffle. Told at the
+        // clip's own contact moment, gore.js BLOWS; the stage puts the blood there)
+        if (step.blood && BLOWS[name] !== undefined) {
+          const landed = () => actors.clipOf(P.id).name === name && actors.clipOf(P.id).t >= BLOWS[name];
+          limit(actors.until(landed), clip.dur + 6).then(() => epoch === mine && landed() && tell('blow', { kind: scene.kind, block: scene.block, by: P.id, at: T.id, clip: name }));
+        }
         await limit(actors.pair(P.id, T.id, name, { placed: true, hold: loops ? HOLD : null }), (loops ? HOLD : clip.dur) + 3.6);
         // (a loop is blended out here only when its person has nothing more to do in this scene: with something
         // next, that is asked for over it and the two blend through, with no bare stand between: moreFor)
@@ -1921,6 +2195,7 @@ export function createDirector({ city, actors, map, stands, travel = null, hooks
     // nothing waits for them
     const moveOnly = scene.passive;
     running += 1;
+    playing.add(scene);
     // a break-in is staged at somebody's door and pad: that pad opens for the scene (it shuts the player's own, the
     // city having one cutaway, and the player's opens again when the scene is over and they are still home)
     const pad = !moveOnly && /^(breakin|door|night:(robbed|job))/.test(scene.kind) ? /^(?:door|pad):(.+)$/.exec(scene.spot)?.[1] : null;
@@ -1964,6 +2239,7 @@ export function createDirector({ city, actors, map, stands, travel = null, hooks
     if (room_) rooms_.add(room_);
     if (!moveOnly) {
       tell('start', scene);
+      if (!HEADS_OLD) scene.unwatch = watchWaiting(scene, principals, mine);
       // the people a scene is about wear their names while it plays: on a crowded sidewalk nothing else finds them
       if (scene.actors.length > 1 || scene.big) for (const P of principals) actors.tag(P.id, true);
     }
@@ -2005,12 +2281,15 @@ export function createDirector({ city, actors, map, stands, travel = null, hooks
           const next = acting[k + 1];
           if (TRADES.has('g') && k + 1 < exits && next?.mode === 'go' && next.target && step.mode === 'act' && step.target && ![step.actor, step.target].includes(next.actor) && people.get(next.actor)) {
             next.early = true;
+            (scene.earlyNow ??= new Set()).add(next);
             early.set(next, runStep(scene, next, rate, mine).catch(err => console.warn('[stage] a walk up fell over:', err)));
           }
+          scene.now = step;
           if (early.has(step)) {
             const [T, P] = [people.get(step.target), people.get(step.actor)];
             if (T && P) nextInLine(scene, T, P);
             await early.get(step);
+            scene.earlyNow?.delete(step);
             entry.steps.push(`${step.actor} ${step.action} ${(actors.clock - t).toFixed(1)} (early)`);
             continue;
           }
@@ -2028,7 +2307,19 @@ export function createDirector({ city, actors, map, stands, travel = null, hooks
       }
     } finally {
       running -= 1;
+      playing.delete(scene);
+      scene.unwatch?.();
+      scene.now = null;
       for (const id of scene.contacts ?? []) if (at(id)?.contact === scene.contactKey) actors.contact(id, null);
+      // (THE SCENE OVER, ITS CONTACT IS OVER: whoever stood at arm's length for it, a shove, a hand-off, and is left
+      // standing there with a head over another's, steps clear (headRoom), as anybody does who is stood for a scene.
+      // The player shoved at the kerb stood a metre from Tiny after it: burner seed 12)
+      if (!HEADS_OLD && epoch === mine) {
+        for (const id of scene.contacts ?? []) {
+          const Q = people.get(id);
+          if (Q && !Q.going && !Q.leaving && !Q.off && !Q.inside && !Q.held && !Q.down && actors.has(id)) headRoom(Q, {}).catch(() => {});
+        }
+      }
       if (pad && rooms?.show) {
         Promise.resolve(rooms.show(padKey(pad), false)).catch(() => {});
         tell('room-shut', { key: padKey(pad), id: pad, block: scene.block, scene });

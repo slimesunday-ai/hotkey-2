@@ -14,7 +14,19 @@ You need Node 22 or newer and Chrome.
 node demo/serve.mjs
 ```
 
-Then open http://127.0.0.1:5470/demo/ and pick a seat.
+**The run** (the newest way to play: one player, one save): open http://127.0.0.1:5470/demo/?mode=run&seed=3
+
+- The first load can take up to a minute while the city is built.
+- Pick a card with 1, 2 or 3, then Enter. The button at the bottom right always says what Enter will do. The mouse
+  works on everything too.
+- B shop, T travel, H home, Z sleep, M map, C you, L the library of everything you can own, G the guide. Space skips
+  a scene, Esc closes one thing, I makes the interface smaller.
+- **Try the fight:** step out of your trailer, press T, and take the last line, "TRY-OUT · Behind the dead mall".
+  Pick a loadout with 1 to 5, set how hard with the up and down arrows, Enter to fight. W A S D moves you and your
+  weapon fires by itself. Esc goes back to your run. Nothing there counts.
+- Your run is saved in the browser. "New run" at the top left starts over.
+
+**The older ten-seat game:** open http://127.0.0.1:5470/demo/ and pick a seat.
 
 - Nothing is installed and nothing costs anything: the rules, the other nine players (bots) and the city all run in
   the page. No account, no model calls. The page asks Google Fonts for one font and works without it.

@@ -1,0 +1,115 @@
+/* THE FIGHT'S LAYOUT IN THE RUN'S FRAME (join-1; demo/fight/panels.js). The parts are the run's (demo/run/ui.css), the
+   look is the run's skin (demo/run/skin.css): this sheet only places them for the fight and sizes what the run has no
+   part for (five loadouts, how hard, the meters, the results side by side). NO COLOUR OF ITS OWN: every colour, outline
+   and shadow is a token, var(--u-…), so one change to the skin changes both pages.
+   Nothing here is a panel the stage makes way for (.hk-top, .hk-left, .hk-move-card): the fight's picture is framed
+   as it always was. */
+
+#k .rn.fg { --u-side-w: calc(340 * var(--k-px)); }
+/* (the run's dock is placed by the HUD's move card; the fight's is not that panel, so it is placed here) */
+/* (the dock takes the mouse: the run's own dock has it from the kit's panel class, which this one does not carry; so
+   do the two cards and the button that brings the frame back) */
+#k .rn.fg .fg-dock { position: absolute; z-index: 3; pointer-events: auto; }
+#k .fg .fg-res, #k .fg .fg-ask, #k .fg .u-back { pointer-events: auto; }
+
+/* ── WHERE, top left: the place's own name, the TRY-OUT mark, how hard ─────────────────────────────────────────── */
+#k .fg .fg-where-mark { display: flex; align-items: center; gap: 7px; min-width: 0; }
+#k .fg .fg-where-not { font: 700 var(--u-fs-s)/1.2 var(--u-ui); color: var(--u-ink-2); }
+#k .fg .u-where-when .fg-where-lvl { font: 600 var(--u-fs-s)/1.2 var(--u-ui); color: var(--u-ink-2); }
+#k .fg .u-where-foot .fg-where-free { margin-left: auto; }
+#k .fg .u-where.is-compact .fg-where-not, #k .fg .u-where.is-compact .fg-where-lvl { display: none; }
+#k .fg .u-where.is-compact { gap: 9px; }
+
+/* ── THE RESULTS SIDE BY SIDE, top right: folded to one line until J ───────────────────────────────────────────── */
+#k .fg .fg-table { position: absolute; right: var(--u-m); top: var(--u-m); z-index: 3; width: var(--u-side-w); padding: calc(7 * var(--k-px)) calc(10 * var(--k-px)) calc(6 * var(--k-px)); }
+#k .fg .fg-table[hidden] { display: none; }
+#k .fg .fg-table.is-folded { width: auto; max-width: var(--u-side-w); padding: calc(5 * var(--k-px)) calc(8 * var(--k-px)); }
+#k .fg .fg-table-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+#k .fg .fg-table-head .u-cap { color: var(--u-ink); white-space: nowrap; }
+#k .fg .fg-table-last { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 var(--u-fs-s)/1.2 var(--u-ui); color: var(--u-ink-2); }
+#k .fg .fg-table-x { margin-left: auto; width: auto; padding: 0 5px; gap: 4px; display: inline-flex; align-items: center; font: 700 var(--u-fs-cap)/1 var(--u-ui); text-transform: uppercase; letter-spacing: .05em; }
+#k .fg .fg-results { width: 100%; margin-top: 6px; border-collapse: collapse; font: 600 var(--u-fs-s)/1.25 var(--u-ui); color: var(--u-ink); }
+#k .fg .fg-results th, #k .fg .fg-results td { padding: 3px 5px; border-top: 1px solid var(--u-rule); text-align: left; white-space: nowrap; }
+#k .fg .fg-results thead th { border-top: 0; color: var(--u-mute); font-weight: 700; }
+#k .fg .fg-results thead th.is-on { color: var(--u-ink); text-decoration: underline; text-underline-offset: 3px; }
+#k .fg .fg-results tbody th { font-weight: 700; }
+#k .fg .fg-results tr.is-on th { box-shadow: inset 4px 0 0 var(--u-you); padding-left: 9px; }
+#k .fg .fg-results td.is-won { color: var(--u-gain-text); font-weight: 800; }
+#k .fg .fg-results td.is-lost { color: var(--u-loss-text); font-weight: 800; }
+#k .fg .fg-results td.is-left, #k .fg .fg-results td.is-timeout { color: var(--u-ink-2); }
+#k .fg .fg-results td.is-none { color: var(--u-mute); }
+#k .fg .fg-table-note { margin: 5px 0 0; font: 600 var(--u-fs-s)/1.3 var(--u-ui); color: var(--u-mute); }
+
+/* ── THE DOCK while you choose: five loadouts, how hard, Build your own, Results, the main button ──────────────── */
+#k .fg .u-dock-head .fg-dock-cap { flex: none; color: var(--u-ink); padding-right: 8px; box-shadow: 1px 0 0 var(--u-rule); }
+#k .fg .u-dock-head .fg-own { flex: none; }
+#k .fg .u-dock-cards.fg-cards:not(.is-row) { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+#k .fg .fg-card:not(.is-row) { min-height: calc(3 * var(--u-dock-line) + 3 * var(--k-px)); align-content: start; padding-top: calc(4 * var(--k-px)); padding-bottom: calc(4 * var(--k-px)); }
+#k .fg .fg-card .u-card-sub.fg-card-has { display: block; height: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--u-ink-2); }
+#k .fg .fg-card-last { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 var(--u-fs-s)/1.25 var(--u-ui); }
+#k .fg .fg-card-last.is-gain { color: var(--u-gain-text); }
+#k .fg .fg-card-last.is-loss { color: var(--u-loss-text); }
+#k .fg .fg-card-last.is-mute { color: var(--u-ink-2); }
+#k .fg .fg-card-last.is-news { color: var(--u-heat-text); }
+#k .fg .fg-card-last.is-none { color: var(--u-mute); font-weight: 600; }
+/* (how hard: three, one of them on; their names in the where card and the tooltips) */
+#k .fg .fg-levels { flex: none; display: flex; align-items: center; gap: 7px; min-width: 0; padding-right: 9px; box-shadow: 1px 0 0 var(--u-rule); }
+#k .fg .fg-levels .u-cap { color: var(--u-ink); white-space: nowrap; }
+#k .fg .fg-levels .u-seg { flex-wrap: nowrap; gap: 4px; }
+#k .fg .fg-levels .u-chip { min-height: calc(var(--u-dock-key) - 4 * var(--k-px)); padding: 0 calc(11 * var(--k-px)); border-radius: calc(8 * var(--k-px)); border-width: 1.5px; box-shadow: var(--u-block); font-size: var(--u-fs); }
+#k .fg .fg-levels .u-chip.is-on { outline: 3px solid var(--u-you); outline-offset: 0; }
+#k .fg .fg-levels .u-chip small { display: none; }
+#k .fg .fg-hint { display: inline-flex; gap: 2px; }
+#k .fg .fg-verbs .u-verbs { flex: 1 1 auto; }
+#k .fg .fg-verbs .u-verb { max-width: calc(200 * var(--k-px)); }
+#k .fg .u-dock-row .fg-levels { padding-right: 6px; }
+#k .fg .u-dock-row .fg-levels .u-chip { min-height: calc(var(--u-dock-key) - 8 * var(--k-px)); padding: 0 8px; box-shadow: none; }
+#k .fg .u-dock-row .u-btn.u-go { max-width: calc(250 * var(--k-px)); min-width: 0; }
+#k .fg .u-card.is-row .u-card-t { font-size: var(--u-fs-s); }
+/* (build your own, over its button: the run's list) */
+#k .fg .fg-build { width: calc(400 * var(--k-px)); }
+#k .fg .fg-build .fg-build-sub { margin: 7px 4px 2px; }
+#k .fg .fg-build .u-li.is-at { box-shadow: inset 0 0 0 1.5px var(--u-line); }
+#k .fg .fg-build .fg-li-mark { flex: none; font: 700 var(--u-fs-s)/1 var(--u-ui); color: var(--u-mute); text-transform: uppercase; letter-spacing: .03em; }
+#k .fg .fg-build .u-li.is-on .fg-li-mark { color: var(--u-you-ink); }
+
+/* ── THE METERS while a round is on: one slim strip in the run's number style, one quiet line of keys under it ─── */
+#k .rn.fg .fg-dock.is-playing { width: max-content; max-width: calc(100% - 2 * var(--u-m)); padding: calc(4 * var(--k-px)) calc(4 * var(--k-px)) calc(4 * var(--k-px)); }
+#k .fg .fg-strip { align-items: stretch; gap: 0; min-height: 0; }
+#k .fg .fg-meter { flex: none; display: flex; align-items: center; gap: 5px; padding: 1px 9px; box-shadow: 1px 0 0 var(--u-rule); white-space: nowrap; }
+#k .fg .fg-meter:last-child { box-shadow: none; }
+#k .fg .fg-meter .u-cap { display: inline-flex; align-items: center; gap: 4px; }
+#k .fg .fg-meter .u-cap .u-ico { width: calc(14 * var(--k-px)); height: calc(14 * var(--k-px)); }
+#k .fg .fg-meter-v { font: 400 calc(18 * var(--k-px))/1 var(--u-sign); white-space: nowrap; font-variant-numeric: tabular-nums; }
+#k .fg .fg-meter-v small { font: 700 var(--u-fs-s)/1 var(--u-ui); color: var(--u-mute); margin-left: 1px; }
+#k .fg .fg-meter.is-risk .fg-meter-v { color: var(--u-risk-text); }
+#k .fg .fg-meter.is-risk .u-cap { color: var(--u-risk-text); }
+#k .fg .fg-meter.is-late .fg-meter-v { color: var(--u-heat-text); }
+#k .fg .fg-bar { flex: none; width: calc(56 * var(--k-px)); height: calc(9 * var(--k-px)); box-sizing: border-box; border: 1px solid var(--u-line); border-radius: 3px; background: var(--u-inset); overflow: hidden; }
+#k .fg .fg-bar i { display: block; height: 100%; }
+#k .fg .fg-bar.is-gain i { background: var(--u-gain); }
+#k .fg .fg-bar.is-risk i { background: var(--u-risk); }
+#k .fg .fg-bar.is-trust i { background: var(--u-trust); }
+#k .fg .is-ally .fg-bar { width: calc(40 * var(--k-px)); }
+#k .fg .fg-meter .u-pips { flex-wrap: nowrap; }
+#k .fg .fg-pips-you i.is-on { background: var(--u-you); }
+#k .fg .fg-pips-you.is-many i, #k .fg .is-left .u-pips i { width: calc(5 * var(--k-px)); }
+#k .fg .fg-keys { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 3px 5px; margin: 3px 0 0; padding-top: 3px; border-top: 1px solid var(--u-rule);
+  font: 600 var(--u-fs-s)/1.2 var(--u-ui); color: var(--u-ink-2); }
+#k .fg .fg-keys i { font-style: normal; color: var(--u-mute); padding: 0 2px; }
+#k[data-skin] .rn.fg .fg-keys .u-key { min-width: calc(16 * var(--k-px)); height: calc(16 * var(--k-px)); }
+
+/* ── THE RESULT CARD and the ask: the run's card, top middle ─────────────────────────────────────────────────── */
+#k .fg .fg-advice { display: flex; align-items: flex-start; gap: 7px; margin: 9px 0 0; padding: 7px 10px; border: 1.5px solid var(--u-line); border-radius: calc(8 * var(--k-px));
+  background: var(--u-you); color: var(--u-you-ink); box-shadow: var(--u-block); font: 600 var(--u-fs)/1.35 var(--u-ui); }
+#k .fg .fg-advice .u-ico { margin-top: 1px; }
+#k .fg .fg-advice b { font-weight: 800; }
+#k .fg .fg-res-foot { flex-wrap: wrap; justify-content: flex-start; }
+#k .fg .fg-res-foot .u-btn { margin-left: 0; }
+#k .fg .fg-res-foot .u-btn:last-child { margin-left: auto; }
+#k .fg .fg-ask { left: 50%; right: auto; transform: translateX(-50%); width: min(calc(460 * var(--k-px)), calc(100% - 2 * var(--u-m))); max-width: none; border-top-color: var(--u-risk); }
+#k .fg .fg-ask-t { margin: 7px 0 0; font: 600 var(--u-fs)/1.4 var(--u-ui); color: var(--u-ink); }
+#k .fg .fg-ask .u-res-foot .u-btn { margin-left: 0; }
+
+/* (the black of the side trip says where it is going: the run's own words in the middle of it, demo/run/trip.js) */
+#k .rn.fg-trip { z-index: 2; }

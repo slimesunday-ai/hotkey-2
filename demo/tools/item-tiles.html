@@ -1,0 +1,40 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>hotkey 2 · item tiles</title>
+<link rel="icon" href="data:,">
+<!--
+  The item tiles' page (demo/tools/item-tiles.js): every thing THE RUN sells, from the model the game draws, as tiles.
+  Driven headless by demo/tools/item-tiles.mjs; opened in a browser it shows the 64 px sheet.
+  window.__tiles = { ready, K, rows, sheet(size, o), ladder(sizes, o), slot(slot, size), counts(), atlas(size), ... }
+-->
+<style>
+  html, body { margin: 0; background: #fbfaf7; font: 12px ui-monospace, Menlo, monospace; }
+  #err { color: #fff; background: #c00; white-space: pre-wrap; }
+  #err:empty { display: none; }
+  canvas { display: block; }
+</style>
+<div id="err"></div>
+<div id="out"></div>
+<script type="importmap">{ "imports": { "three": "../../city/vendor/three/build/three.module.js", "three/addons/": "../../city/vendor/three/examples/jsm/" } }</script>
+<script>
+  addEventListener('error', e => { document.getElementById('err').textContent += (e.message || e) + '\n'; });
+  addEventListener('unhandledrejection', e => { document.getElementById('err').textContent += (e.reason && e.reason.stack || e.reason) + '\n'; });
+</script>
+<script type="module">
+  import * as T from './item-tiles.js';
+  const K = await T.kit();
+  const rows = T.catalog(K);
+  const png = c => c.toDataURL('image/png');
+  window.__tiles = {
+    T, K, rows,
+    sheet: (size, o = {}) => { const { canvas, pics } = T.sheet(K, rows, size, o); return { png: png(canvas), alike: T.alike(Object.fromEntries(Object.entries(pics).map(([k, p]) => [k, p.alone]))) }; },
+    ladder: (sizes, o = {}) => png(T.ladder(K, rows, sizes, o).canvas),
+    slot: (slot, size, o = {}) => { const { canvas, thumbs } = T.slotSheet(K, slot, size, o); return { png: png(canvas), alike: T.alike(Object.fromEntries(Object.entries(thumbs).map(([k, t]) => [k, t.alone]))) }; },
+    rowsSheet: (rows2, size, o = {}) => png(T.sheet(K, rows2, size, o).canvas),
+    library: (kind, slot, size, title) => { const r = T.librarySheet(K, p => p.kind === kind && (!slot || (kind === 'wear' ? p.castSlot === slot : (Array.isArray(slot) ? slot.includes(p.cat) : p.cat === slot))), size, title); return { png: png(r.canvas), blanks: r.blanks, n: r.n }; },
+    counts: () => T.counts(K),
+    atlas: (size, o = {}) => { const a = T.atlas(K, rows, size, o); return { png: png(a.canvas), index: a.index, bakeMs: a.bakeMs }; },
+    ready: true,
+  };
+  if (!navigator.webdriver && !new URLSearchParams(location.search).has('quiet')) document.getElementById('out').append(T.sheet(K, rows, 64).canvas);
+</script>

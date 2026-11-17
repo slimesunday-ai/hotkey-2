@@ -1,0 +1,51 @@
+/* THE RUN'S SKIN: every colour, outline and shadow of the run's new parts (ui.css), as tokens, and nothing else.
+   Swap this one file to change the look: the parts only ever say var(--u-…).
+   Treatment A ("sim, quiet": the zte skin's bone, grid, ink and hard ink blocks), as the owner picked it on 2026-11-16,
+   with two changes of his: RISK is pink (orange has left the palette) and TRUST, people's colour, is violet, one token
+   so it can change when he chooses its colour. Contrast, measured against the panel's grid line (its darkest pixel):
+   ink 15.0, grey words 4.55, risk words #A80056 5.03, trust words #5a24d6 5.30, gain words #09622a 5.04, loss words
+   #b0141a 4.76, heat words #1d3fc4 5.50; in the pills: ink on pink 5.87, ink on lime 15+, white on violet 5.36,
+   white on the red plate 5.29, white on blue 4.58, ink on yellow 11.05. */
+#k .rn {
+  /* ink and paper */
+  --u-ink: #17171B; --u-ink-2: #3a3a40; --u-mute: #585B64; --u-slate: #6D707A;
+  --u-panel: #E6E1D6;                       /* the bone panel */
+  --u-grid: linear-gradient(rgba(23, 23, 27, .07) 1px, transparent 1px) 0 0 / 12px 12px, linear-gradient(90deg, rgba(23, 23, 27, .07) 1px, transparent 1px) 0 0 / 12px 12px;
+  --u-inset: #F4F1EA;                       /* white insets: rows, keys, chips at rest */
+  --u-pale: #D3D4D7;                        /* grey pills, empty tracks */
+  --u-rule: rgba(23, 23, 27, .2);           /* hairlines inside a panel */
+  /* outlines and the hard ink blocks (no blur anywhere) */
+  --u-line: #17171B;                        /* every panel's and card's outline */
+  --u-shadow: 4px 4px 0 #17171B;            /* panels */
+  --u-shadow-l: 6px 7px 0 #17171B;          /* the result card, the big ones */
+  --u-block: 2px 2px 0 #17171B;             /* keys, buttons, chips with an edge */
+  --u-key-shadow: 1px 1px 0 #17171B;
+  /* the place plate (top left) */
+  --u-place-bg: #E6E1D6; --u-place-ink: #17171B;
+  /* keys and buttons */
+  --u-key-bg: #F4F1EA; --u-key-ink: #17171B;
+  --u-go-bg: #17171B; --u-go-ink: #F4F1EA; --u-go-key-bg: #FFC21A; --u-go-key-ink: #17171B;
+  /* YOU: your pick, your things, your goal */
+  --u-you: #FFC21A; --u-you-ink: #17171B;
+  --u-focus: #FFC21A;                       /* the keyboard focus ring, with an ink ring outside it */
+  /* the six colour roles, each one meaning: a fill, the words on it, and its words straight on a panel */
+  --u-gain: #6CFF4A; --u-gain-on: #17171B; --u-gain-text: #09622a;      /* money in, energy, go */
+  --u-risk: #FF4FA3; --u-risk-on: #17171B; --u-risk-text: #A80056;      /* a chance of trouble, cash at risk */
+  --u-risk-mark: #C4005F;                                               /* the warning mark (a graphic, not words) */
+  --u-loss: #E8232A; --u-loss-plate: #C41A21; --u-loss-on: #F4F1EA; --u-loss-text: #b0141a;  /* something taken */
+  --u-heat: #2F5BFF; --u-heat-on: #F4F1EA; --u-heat-text: #1d3fc4;      /* heat and the police */
+  --u-trust: #7A3CFF; --u-trust-on: #FFFFFF; --u-trust-text: #5a24d6;   /* people and trust (the owner's to choose) */
+  --u-mute-bg: #D3D4D7; --u-mute-on: #3a3a40;                           /* a plain fact */
+  /* THE TILES (leg 3): a piece's picture on bone, the item's own 1 px ink outline drawn into it; the tile's edge */
+  --u-tile-bg: #E6E1D6; --u-tile-edge: rgba(23, 23, 27, .28); --u-tile-wait: rgba(23, 23, 27, .22);
+  /* RARITY (leg 3; PROVISIONAL, the owner will art-direct): each tier a plate and the words on it, always with its word.
+     Ink on the slate measures 2.6:1 and on the blue 3.4:1 (under 4.5), so those two carry light words, as the heat's
+     blue pill does (4.6); light on slate 6.0. Epic and grail carry ink (13.7, 11.1). Violet (trust) and pink (risk)
+     are never a tier's */
+  --u-tier-0: #585B64; --u-tier-0-on: #F4F1EA;   /* common, slate */
+  --u-tier-1: #2F5BFF; --u-tier-1-on: #F4F1EA;   /* rare, blue */
+  --u-tier-2: #6CFF4A; --u-tier-2-on: #17171B;   /* epic, lime */
+  --u-tier-3: #FFC21A; --u-tier-3-on: #17171B;   /* grail, yellow */
+  /* TRYING ON: an ink plate, no colour of owning or of a tier */
+  --u-try: #17171B; --u-try-on: #F4F1EA;
+}

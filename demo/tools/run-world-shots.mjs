@@ -78,11 +78,15 @@ try {
     if (!ok) throw new Error('the run would not load the state');
     await page.sleep(2200);
   }
-  /** Presses a choice by its letter twice (picks it on the bar, then goes), as a player would. */
+  /**
+   * Picks a choice by its key on the dock and goes (Enter), as a player would. (ui-3, leg 2: the old letters, pressed
+   * twice, are the dock's now: R Rob, X Bins (was B), B Shop (was E), Z Sleep, and at your door 1 gives, 2 shuts the
+   * door (were G and X))
+   */
   const twice = async k => {
     await key(k);
     await page.sleep(250);
-    await key(k);
+    await key('Enter');
   };
   const passer = `(['npc:passer:1', 'npc:passer:2', 'npc:passer:3'].find(id => window.__demo.stage.actors.has(id) && !window.__demo.stage.actors.get(id).w.hide) ?? 'npc:passer:1')`;
   const panel = id => ev(`window.__demo.hud.panel(${JSON.stringify(id)})`);
@@ -115,13 +119,14 @@ try {
     await load({ place: 'market', day: 2, hour: 13, banked: 40, carried: 20, energy: 6, heat: 0, placeHeat: { park: 0, market: 0 } });
     const k = await ev('(o => o ? o.key : null)(window.__demo.hud.view.options.find(o => o.targets?.length > 1))');
     if (k) {
-      await key(k);
+      // (ui-3, leg 2: its card's key picks it, ↑ its next target: the number again and T were the old keys)
+      await key(await ev(`window.__demo.hud.keyFor(${JSON.stringify(k)})`));
       await shot('target-dealt', 600);
       await crop('target-dealt', '.rn-card');
-      await key(k);
+      await key('ArrowUp');
       await shot('target-picked', 600);
       await crop('target-picked', '.rn-card');
-      await key('t');
+      await key('ArrowUp');
       await shot('target-picked-again', 600);
       console.log(`  picked: ${await ev(`(o => o && o.targets.map(t => t.name).join(' / '))(window.__demo.hud.view.options.find(o => o.key === ${JSON.stringify(k)}))`)}`);
     } else console.log('  (no option with two targets this hour)');
@@ -209,7 +214,7 @@ try {
   if (want('bins')) {
     // the bins in the trailer park, a real find, nobody sees
     await load({ place: 'park', day: 3, hour: 15, banked: 40, carried: 8, energy: 5, heat: 0, placeHeat: { park: 0, market: 0 } }, { chances: [97, 99] });
-    await twice('b');
+    await twice('x');
     if (await until(`${clipOf('a1')} === 'rummage'`)) await shot('scene-bins-dig', 400);
     if (await until(`${clipOf('a1')} === 'pick_up'`, 15000)) await shot('scene-bins-find', 300);
     await choosing();
@@ -218,7 +223,7 @@ try {
   if (want('binsseen')) {
     // seen: a neighbour comes over, says their piece, turns their back (cold: thinks less of you)
     await load({ place: 'park', day: 3, hour: 16, banked: 40, carried: 8, energy: 5, heat: 0, placeHeat: { park: 0, market: 0 } }, { chances: [10, 0] });
-    await twice('b');
+    await twice('x');
     if (await until(`${clipOf('a1')} === 'rummage'`)) await shot('scene-bins-seen-dig', 300);
     if (await until(`['npc:neighbour', 'npc:neighbour:2', 'npc:neighbour:3'].some(id => window.__demo.stage.actors.has(id) && /^talk_gesture/.test(window.__demo.stage.actors.clipOf(id).name ?? ''))`)) await shot('scene-bins-seen-neighbour', 300);
     await choosing();
@@ -227,7 +232,7 @@ try {
   }
   if (want('drink')) {
     await load({ place: 'market', day: 3, hour: 18, hoursThere: 2, banked: 40, carried: 20, energy: 1, heat: 0, placeHeat: { park: 0, market: 0 } }, { chances: RIG_NONE });
-    await twice('e');
+    await twice('b');
     if (await until(`${clipOf('npc:shop:market')} === 'brush_pass'`, 30000)) await shot('scene-drink-handed', 100);
     if (await until(`${clipOf('a1')} === 'drink'`, 30000)) await shot('scene-drink', 300);
     await choosing();
@@ -263,7 +268,7 @@ try {
     else await shot('door-morning', 1500);
     await crop('door-morning-bar', '.rn-card');
     // give
-    await twice('g');
+    await twice('1');
     if (await until(`${clipOf('a1')} === 'brush_pass'`)) await shot('scene-gave', 300);
     if (await until(`(A => A.has('npc:buyer:projects:1') && A.get('npc:buyer:projects:1').moving > 0.3)(window.__demo.stage.actors)`, 15000)) await shot('scene-gave-leaves', 500);
     await choosing();
@@ -273,7 +278,7 @@ try {
     // the regular at the door, refused: he swings, a scuffle (his messy win: energy −2)
     await load({ place: 'crib', day: 5, hour: 12, banked: 60, carried: 0, energy: 6, heat: 0, placeHeat: { park: 0, market: 0 }, regulars: { 'npc:buyer:projects:1': 5 }, door: { id: 'npc:buyer:projects:1', name: 'Shaky Dee', role: 'buyer', place: 'park', wants: 21 } }, { chances: [0], rolls: [40] });
     await shot('door-loaded', 800);
-    await twice('x');
+    await twice('2');
     if (await until(`/hands_up_point|talk_gesture/.test(${clipOf('npc:buyer:projects:1')} + ${clipOf('a1')})`)) await shot('scene-refused', 300);
     if (await until(`/scuffle|shove/.test(${clipOf('npc:buyer:projects:1')} + ${clipOf('a1')})`)) await shot('scene-fight', 300);
     await choosing();
@@ -282,7 +287,7 @@ try {
   if (want('grudge')) {
     // refused, and he does not swing: a grudge; the police come round the park
     await load({ place: 'crib', day: 5, hour: 12, banked: 60, carried: 0, energy: 6, heat: 0, placeHeat: { park: 0, market: 0 }, regulars: { 'npc:buyer:projects:1': 5 }, door: { id: 'npc:buyer:projects:1', name: 'Shaky Dee', role: 'buyer', place: 'park', wants: 21 } }, { chances: [99] });
-    await twice('x');
+    await twice('2');
     if (await until(`${clipOf('npc:buyer:projects:1')} === 'hands_up_point'`)) await shot('scene-grudge', 400);
     // (he storms off home, the player watching from his porch)
     if (await until(`window.__demo.stage.actors.has('npc:buyer:projects:1') && window.__demo.stage.actors.get('npc:buyer:projects:1').moving > 0.3`, 20000)) await shot('scene-grudge-storms-off', 1000);

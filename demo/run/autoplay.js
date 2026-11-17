@@ -16,7 +16,18 @@
 //   runtest=mixed    both places (mark 12)
 //   runtest=neighbour  both places, the good neighbour: trust built, nobody turned against it (marks 13, 14)
 //   runtest=burner     both places, the best pay whoever it burns, the door shut on a regular (marks 13, 14)
-// &kit=pocket,cutter,bed starts the run owning those (for the street's robbing early on).
+//   runtest=dealer     both places, home at $120, buying packs from both connects, selling whenever dealt one, and
+//                      carrying two of each good between them (goods-1, marks 15 and 16)
+//   runtest=walker     to the market, home at $90, ON FOOT both ways by Fit Street, playing the stop's best card on the
+//                      way home (routes-1, mark R2)
+//   runtest=skater     the same on the skateboard, every way (routes-1, mark R3): give it &kit=board, or it walks
+//                      nowhere until it has bought one (it takes the subway till then)
+//   runtest=homefirst  both places, the trailer park's crimes first, home at $120: it brings pressure on at home and
+//                      is away when they come, and ignores it all (home-1, marks H2, H5)
+//   runtest=guard      the same, hiring Cousin Earl for three days, $75 up front, the morning an attempt is due unless
+//                      he is on through it (home-1, mark H3; save-1, mark H8)
+//   runtest=racer      the same, heading home on a notice by the quickest way in time when it pays (home-1, mark H7)
+// &kit=pocket,cutter,bed,board starts the run owning those (for the street's robbing early on; the board as a thing).
 //
 // When it is over the title is `run-ok` or `run-fail: <why>`, and window.__runtest holds the numbers, with `moves`:
 // how many times each choice was played (job, rob, bins, shop, rough, give, refuse, …) and `picked`, targets named.
@@ -36,6 +47,16 @@ const POLICY = {
   // anyone against it, the burner takes the best pay and shuts the door on a regular
   neighbour: { ...POLICIES.neighbour(120), buy: true },
   burner: { ...POLICIES.burner(120), buy: true },
+  dealer: { ...POLICIES.dealer(120), buy: true },
+  // routes-1 (RUN.md "Routes", marks R2 and R3): on foot both ways, the stop's best card on the way home; on the board
+  walker: { ...POLICIES.walker(90, 'play'), buy: true },
+  skater: { ...POLICIES.skater(90), buy: true },
+  // home-1 (RUN.md "Home pressure", marks H3 and H7): the pressured player, the home-first one (the trailer park's
+  // crimes first, then the market, home at $120), meeting the attempts its pressure brings three ways: ignoring them,
+  // Cousin Earl hired for three days the morning one is due, racing home on a notice when it pays
+  homefirst: { ...POLICIES.homeFirst(120), buy: true },
+  guard: { ...POLICIES.homeFirst(120), defend: 'guard', buy: true },
+  racer: { ...POLICIES.homeFirst(120), race: true, buy: true },
 };
 
 export function runRunTest({ demo, mountRun, host, opts }) {
@@ -72,7 +93,17 @@ export function runRunTest({ demo, mountRun, host, opts }) {
   const started = performance.now();
   const seen = { policy: name, seed: opts.seed, days: 0, steps: 0, kinds: {}, moves: {}, picked: 0, daySeconds: [], stepSeconds: [], skipped: 0, done: null, troubles: { jumped: 0, bad: 0, stopped: 0, clinic: 0, jail: 0 },
     // (trust-1: witnesses who called it in or kept quiet, who was turned against you or won over, looked away, sore, notices)
-    trust: { called: 0, quiet: 0, against: [], with: [], lookedAway: 0, sore: 0, notices: 0, end: null } };
+    trust: { called: 0, quiet: 0, against: [], with: [], lookedAway: 0, sore: 0, notices: 0, end: null },
+    // (goods-1: packs bought by place, sales that used a good by place and good, rides taken with goods on you, the
+    // goods a jump or a stop took, errands and things)
+    goods: { packs: {}, sold: {}, carriedRides: 0, lost: 0, seized: 0, errands: 0, things: 0, worn: 0 },
+    // (routes-1: the ways set out on, on foot and on the board, the legs on from a stop, the cards played by card, and
+    // what the way's ground took: jumped or stopped at the stop or on a leg from it)
+    routes: { walks: 0, skates: 0, onward: 0, cards: {}, jumped: 0, stopped: 0 },
+    // (home-1: warnings (seen casing your crib), notices (somebody at your door), attempts met at the door (home in time,
+    // or in the night) and settled while you were out, how each went, Cousin Earl's stretches (save-1: each hire paid up
+    // front, `hires`; of them kept on from his last day, `kept`; his last-day notices and his going), ones called off)
+    home: { warnings: 0, notices: 0, met: 0, settled: 0, taken: 0, held: 0, hires: 0, kept: 0, lastDays: 0, gone: 0, calledOff: 0, raced: 0, outcomes: [] } };
   let dayAt = started;
   let stepAt = started;
   let lastStep = null;
@@ -97,17 +128,46 @@ export function runRunTest({ demo, mountRun, host, opts }) {
     if (!finished && performance.now() - stepAt > 120000) finish(`stuck after ${seen.steps} steps at ${hud?.state.place}, ${hud?.phase}`);
   }, 5000);
 
-  const kit = Object.fromEntries((Q.get('kit') ?? '').split(',').filter(k => ['pocket', 'cutter', 'bed'].includes(k)).map(k => [k, true]));
+  const kit = Object.fromEntries((Q.get('kit') ?? '').split(',').filter(k => ['pocket', 'cutter', 'bed', 'board'].includes(k)).map(k => [k, true]));
   const hud = mountRun(host, {
     ...opts,
     kit,
+    // (save-1: &save=1, the tool asks for the save: the run is saved after every step and picked up after a reload
+    // (demo/tools/run-stage.mjs --reload-at); &new=1 on the first load starts it fresh. Otherwise none is read or written)
+    save: Q.get('save') === '1',
     pilot: (v, state) => decide(RUN_CONFIG, state, policy, v),
     onError: err => finish(String(err?.message ?? err)),
     onStep({ choice, events, state, before }) {
       const now = performance.now();
       if (lastStep) seen.stepSeconds.push({ what: lastStep, s: +((now - stepAt) / 1000).toFixed(1) });
       stepAt = now;
-      lastStep = choice.do === 'job' ? `job:${choice.id}@${before.place}` : choice.do === 'subway' ? `subway>${choice.to}` : ['rob', 'bins', 'shop', 'rough'].includes(choice.do) ? `${choice.do}@${before.place}` : choice.do;
+      lastStep = choice.do === 'job' ? `job:${choice.id}@${before.place}` : choice.do === 'subway' ? `subway>${choice.to}` : ['rob', 'bins', 'shop', 'rough', 'pack', 'get'].includes(choice.do) ? `${choice.do}@${before.place}`
+        : choice.do === 'walk' || choice.do === 'skate' ? `${choice.do}>${choice.to}` : choice.do === 'onward' ? `onward>${before.route?.to}` : choice.do === 'card' ? `card:${choice.id}` : choice.do;
+      const Rt = seen.routes;
+      if (choice.do === 'walk') Rt.walks += 1;
+      if (choice.do === 'skate') Rt.skates += 1;
+      if (choice.do === 'onward') Rt.onward += 1;
+      if (choice.do === 'card') Rt.cards[choice.id] = (Rt.cards[choice.id] ?? 0) + 1;
+      for (const e of events) if (e.route && (e.type === 'jumped' || e.type === 'stopped')) Rt[e.type] += 1;
+      const Hm = seen.home;
+      if (before.home?.raid?.started && (choice.do === 'subway' || choice.do === 'walk' || choice.do === 'skate' || choice.do === 'onward') && (choice.to === 'park' || before.route?.to === 'park')) Hm.raced += 1;
+      for (const e of events) {
+        if (e.type === 'casing') Hm.warnings += 1;
+        if (e.type === 'alarm') Hm.notices += 1;
+        if (e.type === 'calledOff') Hm.calledOff += 1;
+        if (e.type === 'guard' && e.paid) Hm.hires += 1;
+        if (e.type === 'guard' && e.paid && e.kept) Hm.kept += 1;
+        if (e.type === 'guard' && e.lastDay) Hm.lastDays += 1;
+        if (e.type === 'guard' && !e.on && e.why === 'done') Hm.gone += 1;
+        if (e.type === 'raid') {
+          const met = (e.place === 'crib' || e.place === 'park') && (!!e.fight || e.how === 'guard');
+          Hm[met ? 'met' : 'settled'] += 1;
+          Hm[e.taken ? 'taken' : 'held'] += 1;
+          Hm.outcomes.push(`d${e.day} ${met ? 'met' : 'settled'} ${e.how}${e.night ? ' night' : ''}${e.fight ? ` fight:${e.fight.outcome}` : ''}${e.guard ? ` earl:${e.guard.beaten ? 'beaten' : 'held'}` : ''} ${e.taken ? `$${e.taken} taken` : 'held'}`);
+        }
+      }
+      const G = seen.goods;
+      if (choice.do === 'subway' && Object.values(before.goods ?? {}).some(n => n > 0)) G.carriedRides += 1;
       seen.steps += 1;
       seen.moves[choice.do] = (seen.moves[choice.do] ?? 0) + 1;
       if (choice.who) seen.picked += 1;
@@ -123,6 +183,13 @@ export function runRunTest({ demo, mountRun, host, opts }) {
         if (e.type === 'sore') seen.trust.sore += 1;
         if (e.notice) seen.trust.notices += 1;
         if (e.type === 'bins' && e.lookedAway) seen.trust.lookedAway += 1;
+        if (e.type === 'pack') G.packs[`${e.good}@${e.at}`] = (G.packs[`${e.good}@${e.at}`] ?? 0) + 1;
+        if (e.type === 'job' && e.goods) G.sold[`${e.goods.good}@${e.place}`] = (G.sold[`${e.goods.good}@${e.place}`] ?? 0) + 1;
+        if (e.type === 'jumped' || e.type === 'robbed') G.lost += Object.values(e.goodsTaken ?? {}).reduce((a, n) => a + n, 0);
+        if (e.type === 'stopped') G.seized += Object.values(e.goodsSeized ?? {}).reduce((a, n) => a + n, 0);
+        if (e.type === 'shop') G.errands += 1;
+        if (e.type === 'thing') G.things += 1;
+        if (e.type === 'wear') G.worn += 1;
         for (const t of [e.trust, ...(e.type === 'drift' ? e.changes ?? [] : [])]) if (t && t.band !== t.bandWas && t.band !== 'neutral') seen.trust[t.band].push(`${t.who.name} d${state.day}`);
       }
       if (state.doneDay && !seen.done) seen.done = state.doneDay;
@@ -131,6 +198,9 @@ export function runRunTest({ demo, mountRun, host, opts }) {
         seen.daySeconds.push(+((now - dayAt) / 1000).toFixed(1));
         dayAt = now;
         seen.days = state.day - 1;
+        // (the state at the step that ended the last day asked for: the same whatever the wall clock did after it, so a
+        // run cut by a reload and picked up can be compared with an unbroken one: run-stage.mjs --compare)
+        if (seen.days >= days && !seen.endState) seen.endState = JSON.parse(JSON.stringify(state));
         if (seen.days >= days) setTimeout(() => finish(errors.length ? errors[0].slice(0, 200) : null), 4000);
       }
     },

@@ -4,7 +4,7 @@
 // A new run (a page load, or "New run", which loads the page again) begins on the city: the camera high over the
 // trailer park by day, the city's own blocks and walkers under it, comes down toward the player's trailer, eased,
 // three and a half seconds in all; then the picture goes through black (the stage's own fade, travel.js) and comes
-// back on the room, where the run's first morning is played as before ("You wake at the crib"). Space, Enter or a
+// back on the room, where the run's first morning is played as before ("You wake at the crib"). Space or a
 // click skips it: straight through black to the room. It is played once per page, before the run's first hour, and
 // only when the run asks (not on auto, not with &scenes=0).
 //
@@ -82,6 +82,8 @@ export function createOpening({ city, fade, inside, fall: unbuild = null, camera
   const cam = city.camera;
   const ctl = city.controls;
   const D = { state: 'idle', t: 0, skipped: false, ms: 0, path: null, frames: 0, released: null };
+  // (a skip asked for by the page before the walk in moves: opening.skip)
+  let wanted = false;
   const frame = () => new Promise(resolve => requestAnimationFrame(() => resolve()));
   const rad = d => (d * Math.PI) / 180;
 
@@ -337,8 +339,9 @@ export function createOpening({ city, fade, inside, fall: unbuild = null, camera
     city.clearFixedShadow?.();
     put(poseAt(P, 0));
     let skip = false;
+    // (ui-3, leg 2: Space skips, as it skips every scene of the run; Enter is the picked thing's, never a skip)
     const onKey = e => {
-      if (e.key === ' ' || e.key === 'Enter') {
+      if (e.key === ' ') {
         e.preventDefault();
         skip = true;
       }
@@ -441,7 +444,8 @@ export function createOpening({ city, fade, inside, fall: unbuild = null, camera
   /**
    * THE WALK IN. `you` stands outside already (the page put everyone, under the stage's black); go() is the page's own
    * "go inside" for them (it resolves when they are in the room). Resolves when the room is up. Space is the page's
-   * own skip of what go() plays: the camera is then given back at once.
+   * own skip of what go() plays: the camera is then given back at once. Before that, the page's skip() asks for no
+   * move at all: the black is held, go() is called (the page settles it at once) and the black lifts on the room.
    */
   async function walkIn({ you, key, go }) {
     const t0 = performance.now();
@@ -480,18 +484,35 @@ export function createOpening({ city, fade, inside, fall: unbuild = null, camera
     if (inside.realWanted) unbuild?.scan?.();
     D.state = 'settling';
     cams.cutTo(at(1, end0));
-    for (let k = 0; k < 8; k++) await frame();
+    for (let k = 0; k < 8 && !wanted; k++) await frame();
     cams.cutTo(at(0, end0));
     {
       const c0 = performance.now();
       let last = c0;
-      for (let calm = 0; calm < 24 && performance.now() - c0 < 4000;) {
+      for (let calm = 0; calm < 24 && !wanted && performance.now() - c0 < 4000;) {
         await frame();
         const now = performance.now();
         calm = now - last < 34 ? calm + 1 : 0;
         last = now;
       }
       D.settled = Math.round(performance.now() - c0);
+    }
+    // ── SKIPPED BEFORE IT MOVED (Space in these first black seconds, kept by the page: skip below): no move. The
+    // page's going inside is settled at once under this black, and the black lifts on the room
+    if (wanted) {
+      D.state = 'skipped';
+      D.skipped = true;
+      const going = Promise.resolve().then(go);
+      cams.arrived();
+      try {
+        await going;
+      } finally {
+        fade.in();
+        document.body.classList.remove('hk2-opening');
+        D.state = 'done';
+        D.ms = Math.round(performance.now() - t0);
+      }
+      return { played: false, skipped: true, ms: D.ms };
     }
     D.state = 'moving';
     D.path = { from: at(0, end0), to: at(1, end0), walkIn: true };
@@ -529,6 +550,10 @@ export function createOpening({ city, fade, inside, fall: unbuild = null, camera
   return {
     play,
     walkIn,
-    debug: () => ({ ...D }),
+    /** The page's Space before the walk in has begun to move: it is skipped as soon as it can be (walkIn above). */
+    skip() {
+      wanted = true;
+    },
+    debug: () => ({ ...D, wanted }),
   };
 }

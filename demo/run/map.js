@@ -136,7 +136,7 @@ export function createRunMap({ where, clock, stops, line, card }) {
       layer.append(f.el);
       flags.set(s.id, f);
     }
-    const key = `${s.name}|${s.flag}|${s.here}|${s.locked}|${cardId === s.id}|${s.heat}|${s.police}|${s.hot}|${s.rose ?? 0}`;
+    const key = `${s.name}|${s.flag}|${s.here}|${s.locked}|${cardId === s.id}|${s.heat}|${s.police}|${s.hot}|${s.rose ?? 0}|${s.mark ?? ''}`;
     if (key !== f.key) {
       f.key = key;
       // (rules-2: the place's heat as a count, red when it is hot, and the police in blue where they are about;
@@ -145,8 +145,9 @@ export function createRunMap({ where, clock, stops, line, card }) {
       const rose = s.rose ? h('i', { class: 'rn-flag-rose' }, `+${s.rose} just now`) : null;
       const pol = s.police ? h('i', { class: `rn-flag-pol${s.hot ? ' is-hot' : ''}` }, 'police') : null;
       f.el.replaceChildren(...[h('b', null, s.name), h('span', null, s.flag), heat, rose, pol].filter(Boolean));
-      f.el.className = `rn-flag${s.here ? ' is-here' : ''}${s.locked ? ' is-locked' : ''}${cardId === s.id ? ' is-on' : ''}`;
-      f.el.title = `${s.name}: what it pays, its danger, its heat and police, who is left today`;
+      f.el.className = `rn-flag${s.here ? ' is-here' : ''}${s.locked ? ' is-locked' : ''}${s.mark ? ` is-${s.mark}` : ''}${cardId === s.id ? ' is-on' : ''}`;
+      // (join-1: a stop of the page's own, the try-out: its card says what it is)
+      f.el.title = s.side ? `${s.name}: ${s.flag}` : `${s.name}: what it pays, its danger, its heat and police, who is left today`;
     }
     return f;
   }
@@ -260,19 +261,36 @@ export function createRunMap({ where, clock, stops, line, card }) {
     }
     // the stops: a square in the paper's ink (the corner a slate diamond, locked), each with its leader to its flag
     const seen = new Set();
+    const placed = [];
     for (const s of stops()) {
       const [x, y] = P(s.x, s.z);
-      const dy = FLAG_DY[s.id] ?? 0;
       const f = flagOf(s);
       const inside = x > -40 && y > -40 && x < W + 40 && y < H + 40;
       f.el.hidden = !inside;
       seen.add(s.id);
       if (!inside) continue;
-      f.el.style.left = `${Math.round(x - 14)}px`;
-      f.el.style.top = `${Math.round(y + dy)}px`;
+      // (a stop out west of the run's, the try-out, has its flag on its right: on the left it ran off the sheet)
+      f.el.style.left = `${Math.round(s.right ? x + 14 : x - 14)}px`;
+      f.el.style.transform = s.right ? 'translate(0, -50%)' : '';
+      f.el.style.top = `${Math.round(y + (FLAG_DY[s.id] ?? 0))}px`;
+      placed.push({ s, f, x, y, dy: FLAG_DY[s.id] ?? 0 });
+    }
+    // (ui-3 QUICK FIX: two flags never lie over each other, "THE CORNER locked" on "FLEA MARKET": the lower of two
+    // that meet is moved down below the other, its leader still to its own stop)
+    placed.sort((a, b) => a.y + a.dy - (b.y + b.dy));
+    for (let i = 0; i < placed.length; i++) {
+      for (let j = 0; j < i; j++) {
+        const a = placed[j].f.el.getBoundingClientRect();
+        const b = placed[i].f.el.getBoundingClientRect();
+        if (a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top) continue;
+        placed[i].dy += Math.ceil(a.bottom - b.top) + 4;
+        placed[i].f.el.style.top = `${Math.round(placed[i].y + placed[i].dy)}px`;
+      }
+    }
+    for (const { s, x, y, dy } of placed) {
       ctx.beginPath();
       ctx.moveTo(x, y);
-      ctx.lineTo(x - 14, y + dy);
+      ctx.lineTo(s.right ? x + 14 : x - 14, y + dy);
       ctx.strokeStyle = ink;
       ctx.lineWidth = 1.5;
       ctx.stroke();
@@ -287,6 +305,14 @@ export function createRunMap({ where, clock, stops, line, card }) {
       ctx.strokeStyle = ink;
       ctx.lineWidth = 1.6;
       ctx.strokeRect(-r, -r, r * 2, r * 2);
+      // (join-1: a try-out stop, ringed in dashes: not a place of the run's, nothing counts there)
+      if (s.mark === 'tryout') {
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.arc(0, 0, r + 5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
       ctx.restore();
     }
     for (const [id, f] of flags) if (!seen.has(id)) f.el.hidden = true;
@@ -313,6 +339,7 @@ export function createRunMap({ where, clock, stops, line, card }) {
   function opening() {
     const W = host.clientWidth || 600;
     const H = host.clientHeight || 400;
+    // (the run's own stops but the corner, locked; and a stop of the page's own, the try-out, so its flag is on the sheet)
     const pts = stops().filter(s => s.id !== 'corner').map(s => [s.x, s.z]);
     const me = where();
     if (me) pts.push([me.x, me.z]);
@@ -321,7 +348,7 @@ export function createRunMap({ where, clock, stops, line, card }) {
     const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)];
     // (room on the left for the flags, which sit left of their stops: the westmost stop as far in from the edge as its
     // flag is wide, when the flags are up; else a guess)
-    const west = stops().filter(s => s.id !== 'corner').sort((a, b) => a.x - b.x)[0];
+    const west = stops().filter(s => s.id !== 'corner' && !s.side).sort((a, b) => a.x - b.x)[0];
     const fw = west && flags.get(west.id)?.el.offsetWidth;
     const [left, right, ends] = [Math.min(fw ? fw + 30 : 290, W * 0.6), 50, 90];
     const s = Math.max(0.35, Math.min(14, (W - left - right) / Math.max(40, x1 - x0), (H - 2 * ends) / Math.max(40, z1 - z0)));

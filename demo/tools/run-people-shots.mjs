@@ -41,6 +41,13 @@ try {
   await page.sleep(2000);
   const ev = (js, ms = 30000) => page.evaluate(js, ms);
   const key = k => ev(`document.body.dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(k)}, bubbles: true }))`);
+  // (ui-3, leg 2, THE DOCK: a rules' choice key is reached by its card's 1 to 3 or its verb's letter (B Shop, R Rob,
+  // X Bins, T Travel, H Home, Z Sleep), and in the verb's list by its line; then Enter does it)
+  const dockPress = async k => {
+    const at = await ev(`window.__demo.hud.keyFor(${JSON.stringify(String(k))})`);
+    if (at) await key(at);
+    await ev(`window.__demo.hud.pick(${JSON.stringify(String(k))})`);
+  };
   const choosing = () => page.waitFor('window.__demo.hud.phase === "choose"', 120000, 100);
   const saved = f => console.log(`saved ${f}`);
   /** The page at the element's box, at twice the size: a card or the map, close. */
@@ -97,7 +104,7 @@ try {
     return k;
   }
   const go = async k => {
-    await key(String(k));
+    await dockPress(k);
     await key('Enter');
   };
   const clipOf = id => `(window.__demo.stage.actors.has(${JSON.stringify(id)}) ? window.__demo.stage.actors.clipOf(${JSON.stringify(id)}).name ?? '' : '')`;
@@ -254,7 +261,7 @@ try {
     await loadFor({ place: 'park', people: outAll });
     saved(await page.shot(path.join(out, 'card-dry.jpg')));
     await crop('card-dry-close', '.rn-card');
-    console.log('  dry: picked', await ev(`(s => s && JSON.stringify(window.__demo.hud.view.choices.find(c => c.key === s)?.choice))(document.querySelector('.rn-card .is-on')?.dataset.key)`));
+    console.log('  dry: picked', await ev(`(s => s && JSON.stringify(window.__demo.hud.view.choices.find(c => c.key === s)?.choice))(window.__demo.hud.sel)`));
     // the map with who is left (a few worked at both stops)
     await loadFor({ place: 'market', people: { ...outAll, 'npc:shop:market': { mood: 'friendly', out: false, job: 'stall' }, 'npc:buyer:market:2': { mood: 'wary', out: true, job: 'crowd' } } });
     await key('m');

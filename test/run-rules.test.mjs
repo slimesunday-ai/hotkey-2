@@ -81,14 +81,14 @@ test('the run: monkeys never crash and every dollar is accounted for, every step
   for (const [seed, kit] of [[1, {}], [2, { pocket: true }], [3, { cutter: true }], [4, { bed: true }], [7, { pocket: true, cutter: true, bed: true }]]) {
     const { state, trail } = monkey(seed, 600, kit);
     const b = state.books;
-    assert.equal(b.start + b.earned - b.jumped - b.seized - b.fares - b.spent, state.carried + state.banked);
+    assert.equal(b.start + b.earned - b.jumped - b.seized - b.fares - b.spent - b.burgled, state.carried + state.banked); // (home-1: burgled, out of what was banked)
     // every dollar moved in an event adds up to the books
-    const moved = { earned: 0, jumped: 0, seized: 0, fares: 0, spent: 0 };
+    const moved = { earned: 0, jumped: 0, seized: 0, fares: 0, spent: 0, burgled: 0 };
     for (const t of trail) for (const e of t.events) for (const m of e.money ?? []) {
       if (m.from === 'pay') moved.earned += m.amount;
       else if (moved[m.to] !== undefined) moved[m.to] += m.amount;
     }
-    assert.deepEqual(moved, { earned: b.earned, jumped: b.jumped, seized: b.seized, fares: b.fares, spent: b.spent });
+    assert.deepEqual(moved, { earned: b.earned, jumped: b.jumped, seized: b.seized, fares: b.fares, spent: b.spent, burgled: b.burgled });
     assert.ok(state.day > 3, `a monkey got through only ${state.day} days`);
   }
 });
@@ -96,7 +96,7 @@ test('the run: monkeys never crash and every dollar is accounted for, every step
 test('the run: the deal is the safe job first and two drawn from what you are able to do', () => {
   const seen = { park: new Set(), market: new Set() };
   for (let hour = 12; hour < 22; hour++) for (const place of ['park', 'market']) {
-    const s = at(place, { hour });
+    const s = at(place, { hour, goods: { smokes: 9, discs: 9 } }); // (goods on you: the selling jobs are in the pool)
     const d = deal(cfg, s);
     assert.equal(d.length, 3);
     assert.ok(d[0].safe);
@@ -334,7 +334,7 @@ test('the run: every event carries a scene the stage already has, at a block on 
       const s = e.scene;
       if (s.kind) assert.ok(KINDS[s.kind], `unknown scene kind ${s.kind}`);
       if (s.action) assert.ok(ACTIONS.includes(s.action), `unknown action ${s.action}`);
-      if (s.ride) assert.equal(s.ride, 'subway');
+      if (s.ride) assert.ok(['subway', 'foot', 'skate'].includes(s.ride), `unknown ride ${s.ride}`); // (routes-1: demo/stage/rides plays all three)
       assert.ok(s.kind || s.action || s.ride || s.notice, `${e.type}: empty scene`);
       if (e.block) assert.ok(CITY.blocks[e.block], `unknown block ${e.block}`);
       for (const k of ['type', 'text', 'day', 'hour', 'place']) assert.ok(e[k] !== undefined, `${e.type} lacks ${k}`);

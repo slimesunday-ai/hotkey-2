@@ -49,9 +49,16 @@ async function session(width, height, run) {
 const tools = page => {
   const ev = (js, ms = 30000) => page.evaluate(js, ms);
   const key = k => ev(`document.body.dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(k)}, bubbles: true }))`);
+  // (ui-3, leg 2, THE DOCK: a rules' choice key is reached by its card's 1 to 3 or its verb's letter (B Shop, R Rob,
+  // X Bins, T Travel, H Home, Z Sleep), and in the verb's list by its line; then Enter does it)
+  const dockPress = async k => {
+    const at = await ev(`window.__demo.hud.keyFor(${JSON.stringify(String(k))})`);
+    if (at) await key(at);
+    await ev(`window.__demo.hud.pick(${JSON.stringify(String(k))})`);
+  };
   const phase = p => page.waitFor(`window.__demo.hud.phase === ${JSON.stringify(p)}`, 120000, 100);
   const choose = async k => {
-    await key(String(k));
+    await dockPress(k);
     await key('Enter');
   };
   const door = () => ev(`window.__demo.stage.doorway.info(${JSON.stringify(KEY)}, 'a1')`);

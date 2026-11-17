@@ -25,6 +25,10 @@ export function viewText(v) {
   if (here.length) out.push(`People here: ${here.map(p => `${p.name} (${p.mood}${p.outToday ? ', out today' : ''})`).join(', ')}`);
   const t = v.trustHere;
   if (t && (t.offTable.length || t.tellRisk.pct || t.withYou.length)) out.push(`Trust: ${t.text}`);
+  // goods (goods-1): what you carry and have at home, what is at stake, and a selling job not dealt for want of goods
+  const goods = (v.goods ?? []).filter(g => g.carried || g.home);
+  if (goods.length) out.push(`Goods: ${goods.map(g => `${g.label} ${g.carried} on you, ${g.home} at home`).join('; ')}. ${v.atRisk?.here ? v.atRisk.text : ''}`.trim());
+  for (const s of v.selling?.jobs ?? []) if (!s.dealt) out.push(s.text);
   if (v.dry) out.push(v.dry.text);
   if (v.door) out.push(v.door.text);
   if (v.stranded) out.push(v.stranded.text);

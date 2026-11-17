@@ -60,6 +60,7 @@ const LOW = new Set(['lie_hurt', 'lie_still', 'fall_back', 'shove_fall', 'shot_h
 
 const sleepFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
 import { createSurface } from './surface.js';
+import { headRect as headRectOf, headShare, headSpell, HEADS_SHARE } from './heads.js';
 
 export async function createActors({ city, CITY }) {
   const THREE = city.THREE;
@@ -455,6 +456,18 @@ export async function createActors({ city, CITY }) {
    * by on that shoulder's width, which the audit counts (`brushes`). Its middle is never nearer anybody's than BRUSH.
    */
   const BRUSH = 0.45;
+  /**
+   * ONE OF THE CITY'S OWN WALKERS IN THE WAY, standing. The city's crowd walks its lanes one way round each block and
+   * ours go either way, so they meet head-on; a walker of the crowd steps aside for one of ours only while ours is on
+   * the move, and one of ours standing is a body it stops short of. Held up by each other, the two stood for good:
+   * ours waited behind it (nothing above names a walker of the crowd), it waited for ours, and every walker behind it
+   * stood too (the flea market: eight in a still line on its sidewalk in the owner's picture; measured, market seed 3,
+   * the crowd's walkers stood 70 to 98 s and ours up to 85 s behind them). Ours GOES ROUND it where there is room (stepRound); where there is none it STEPS OFF THE LANE and lets it by
+   * (yieldCrowd), at once when the crowd's walker is itself held up by ours, after CROWD_HELD s otherwise, and then
+   * walks on. CROWD_BY: seconds it stands aside at the most.
+   */
+  const CROWD_HELD = 3;
+  const CROWD_BY = 6;
   const P4 = [0, 0, 0, 0];
   const Q4 = [0, 0, 0, 0];
   const L4 = [0, 0, 0, 0];
@@ -578,6 +591,25 @@ export async function createActors({ city, CITY }) {
       const q = poseOf(R, Math.min(R.len, k * TABLE), P4);
       [X[k], Z[k], H[k]] = [q[0], q[2], q[3]];
     }
+    // ON THE SIDEWALK ALONG A KERB, NOT IN ITS GUTTER. Where a block's carved lane runs along the very edge of the
+    // kerb, or over it (the flea market's north side: its stalls take the sidewalk, and the lane the city carves runs
+    // 0.2 m out in the street, z 38.7 against a kerb at 38.9), the line walked along it is laid back on to the
+    // sidewalk, KERB_IN in from its edge, square to the kerb: whoever of ours is held up there stands on the paving,
+    // not in the road (the audit's `inRoad`), and the feet are not on the kerb's very edge (the audit's `feet`). Only
+    // where the way runs along the kerb (a crossing goes straight over it), not at the two ends (where the walker
+    // is now, and the place it is going), and never into anything solid
+    for (let k = 1; k < n; k++) {
+      const ko = PLAN.kerbOut(X[k], Z[k]);
+      if (ko >= KERB_IN || ko < -0.9) continue;
+      const gx = (PLAN.kerbOut(X[k] + 0.05, Z[k]) - PLAN.kerbOut(X[k] - 0.05, Z[k])) / 0.1;
+      const gz = (PLAN.kerbOut(X[k], Z[k] + 0.05) - PLAN.kerbOut(X[k], Z[k] - 0.05)) / 0.1;
+      const g = Math.hypot(gx, gz);
+      if (g < 0.5 || Math.abs(gx * Math.sin(H[k]) + gz * Math.cos(H[k])) / g > 0.5) continue;
+      const m = (KERB_IN - ko) / g;
+      const [x, z] = [X[k] + (gx / g) * m, Z[k] + (gz / g) * m];
+      if (solidAt(x, groundAt(x, z), z)) continue;
+      [X[k], Z[k]] = [x, z];
+    }
     const even = raw => {
       const out = raw.slice();
       for (let k = 1; k < n; k++) {
@@ -616,6 +648,8 @@ export async function createActors({ city, CITY }) {
   }
   /** The step of a route's table, in metres of its geometry. */
   const TABLE = 0.05;
+  /** Metres in from a kerb's edge that a walked line along it keeps at the least (makeRoute: on the sidewalk). */
+  const KERB_IN = 0.15;
   /**
    * The point of a route's walked line `m` drawn metres along it → out [x, , z, heading] (the height is the
    * geometry's: poseOf). Returns where that is on the geometry (`d`).
@@ -841,6 +875,67 @@ export async function createActors({ city, CITY }) {
     }
     return false;
   }
+  /** Is anybody on the city's body map (the crowd's walkers, ours) within `r` m of (x, z), but `skip` and `skip2`? */
+  function crowdNear(x, z, r, skip = null, skip2 = null) {
+    const BG = sim.grid;
+    if (!BG?.n) return false;
+    let hit = false;
+    sim.near(x, z, r + 0.6, k => {
+      const o = BG.w[k];
+      if (hit || o === skip || o === skip2 || o?.hide) return;
+      if (Math.hypot(BG.x[k] - x, BG.z[k] - z) < r + Math.max(0, BG.r[k] - PED.body)) hit = true;
+    });
+    return hit;
+  }
+  /**
+   * MAKING WAY FOR ONE OF THE CITY'S OWN WALKERS (CROWD_HELD above): one of ours held up on its walk by a walker of the
+   * crowd who stands, with no room to go round it, steps off the walkers' lane to the side the other is not on (else
+   * the other side), out of its way, and stands there until it is by (CROWD_BY s at the most); then its own walk is
+   * laid again from there (stepYield). The ground stepped to is a sidewalk (never the roadway, even from a crossing:
+   * nobody of ours waits in the street), free, clear of the crowd by a body and a pad and of ours by a head and a
+   * hand, and off the lane by a body's width where the sidewalk has it. → true when it steps.
+   */
+  function yieldCrowd(A, w) {
+    const R = A.route;
+    if (!R || A.yield || A.paired || A.room || A.w.hide || !w?.p || w.hide) return false;
+    const [hx, hz] = [Math.sin(A.ry), Math.cos(A.ry)];
+    const [nx, nz] = [hz, -hx];
+    const lat = (w.p[0] - A.x) * nx + (w.p[2] - A.z) * nz;
+    const side = lat >= 0 ? -1 : 1;
+    const ok = (x, z, off) => {
+      if (PLAN.kerbOut(x, z) < PED.body) return false;
+      const y = groundAt(x, z);
+      if (solidAt(x, y, z) || lowAt(x, z, y, 0.25) || !lineFree(A.x, A.z, x, z)) return false;
+      if ((sim.laneNear(x, z)?.d ?? 9) < off) return false;
+      if (crowdNear(x, z, 2 * PED.body + 0.1, A.w)) return false;
+      // (and a head and a hand from anybody of ours standing, or about to stand, there: two heads one over the other
+      // in the picture are the audit's `heads`)
+      for (const C of actors.values()) {
+        if (C === A || C.w.hide || C.room) continue;
+        const [cx, cz] = C.route ? endOf(C.route) : [C.x, C.z];
+        if (Math.hypot(cx - x, cz - z) < api.headGapAt(A.id, C.id, [x, z], [cx, cz])) return false;
+      }
+      return true;
+    };
+    // (off the lane by a body's width first; where the sidewalk has no such ground, by what it has)
+    for (const off of [1.0, 0.7, 0.45]) {
+      for (const [sd, far, fwd] of [[side, 1, 0], [side, 1.3, 0], [side, 1, -0.6], [side, 1.3, -0.6], [-side, 1, 0], [-side, 1.3, 0], [-side, 1, -0.6], [side, 1.6, -0.3], [-side, 1.6, -0.3]]) {
+        const [x, z] = [A.x + nx * sd * far + hx * fwd, A.z + nz * sd * far + hz * fwd];
+        if (!ok(x, z, off)) continue;
+        const S = makeRoute([{ line: [A.x, A.z, x, z] }]);
+        if (!S) return false;
+        // (a run's clip goes with the run: it steps aside at a walk)
+        if (R.clip && R.clipFrom && A.want?.name === R.clip) A.want = null;
+        R.clipOn = false;
+        A.yield = { home: [A.x, A.z, A.ry], to: [x, z], for: null, crowd: w, want: null, t: 0, phase: 1, goId: A.goId, walk: R, wv: null };
+        Object.assign(S, { v: 1.3, wvx: R.wvx, wvz: R.wvz, pass: 2, passAt: 1e9 });
+        A.route = S;
+        if (audit) audit.madeWay = (audit.madeWay ?? 0) + 1;
+        return true;
+      }
+    }
+    return false;
+  }
   /** One frame of someone making way (giveWay): out of what they were doing, the step aside, the wait, the step back. */
   function stepYield(B, dt) {
     const Y = B.yield;
@@ -880,8 +975,12 @@ export async function createActors({ city, CITY }) {
       Y.t = 0;
     } else if (Y.phase === 2) {
       const A = Y.for;
-      const by = !A.route || A.w.hide || (B.x - A.x) * Math.sin(A.ry) + (B.z - A.z) * Math.cos(A.ry) < -0.7 || Math.hypot(B.x - A.x, B.z - A.z) > 4;
-      if (!by && Y.t < 8) return;
+      // (one of the crowd's: gone, past where this walker was going from, or off another way)
+      const w = Y.crowd;
+      const by = w
+        ? w.hide || w.off || !w.p || (w.p[0] - Y.home[0]) * Math.sin(Y.home[2]) + (w.p[2] - Y.home[1]) * Math.cos(Y.home[2]) < -0.6 || Math.hypot(w.p[0] - B.x, w.p[2] - B.z) > 3
+        : !A.route || A.w.hide || (B.x - A.x) * Math.sin(A.ry) + (B.z - A.z) * Math.cos(A.ry) < -0.7 || Math.hypot(B.x - A.x, B.z - A.z) > 4;
+      if (!by && Y.t < (w ? CROWD_BY : 8)) return;
       if (Y.walk) {
         // on with its own walk, laid again from where it stepped to (the same route object: whoever waits for
         // its end still does)
@@ -898,7 +997,8 @@ export async function createActors({ city, CITY }) {
         Y.phase = 4;
       } else {
         // back to where they stood, when nobody has taken it meanwhile (the walker's own place may be right there)
-        const taken = [...actors.values()].some(C => C !== B && !C.w.hide && !C.room && (Math.hypot(C.x - Y.home[0], C.z - Y.home[1]) < 0.75 || (C.route && Math.hypot(endOf(C.route)[0] - Y.home[0], endOf(C.route)[1] - Y.home[1]) < 0.75)));
+        // (nor where a head there would be over somebody's in the picture, the audit's `heads`: they wait aside)
+        const taken = [...actors.values()].some(C => C !== B && !C.w.hide && !C.room && (Math.hypot(C.x - Y.home[0], C.z - Y.home[1]) < 0.75 || (C.route && Math.hypot(endOf(C.route)[0] - Y.home[0], endOf(C.route)[1] - Y.home[1]) < 0.75))) || api.headsAt(B.id, Y.home[0], Y.home[1], { face: [Y.home[0] + Math.sin(Y.home[2]), Y.home[1] + Math.cos(Y.home[2])] }).share > HEADS_SHARE / 2;
         if (taken && Y.t < 8) return;
         Y.phase = !taken && go(Y.home[0], Y.home[1], Y.home[2]) ? 3 : 4;
       }
@@ -917,11 +1017,13 @@ export async function createActors({ city, CITY }) {
    * when they are behind it. Only into free ground: a sidewalk (or the road it is already on), nothing solid, nobody
    * standing there or abeam of the one it goes round. → true when it has somewhere to step.
    */
-  function stepRound(A, R, B, hx, hz, lat, over = false) {
+  function stepRound(A, R, B, hx, hz, lat, over = false, crowd = null) {
     if ((R.aside && !over) || B.x === undefined) return false;
     const road = PLAN.kerbOut(A.x, A.z) <= 0;
     const ahead = Math.max(0, (B.x - A.x) * hx + (B.z - A.z) * hz);
-    const free = (x, z) => (road || PLAN.kerbOut(x, z) >= PED.body) && !solidAt(x, groundAt(x, z), z) && ![...actors.values()].some(C => C !== A && C !== B && !C.w.hide && !C.room && !C.route && Math.hypot(C.x - x, C.z - z) < 2 * PED.body + 0.05);
+    // (`crowd`: round one of the city's own walkers, the sim walker itself. The ground stepped to is clear of the rest
+    // of its crowd too, who stand in a line there as often as not)
+    const free = (x, z) => (road || PLAN.kerbOut(x, z) >= PED.body) && !solidAt(x, groundAt(x, z), z) && ![...actors.values()].some(C => C !== A && C !== B && !C.w.hide && !C.room && !C.route && Math.hypot(C.x - x, C.z - z) < 2 * PED.body + 0.05) && !(crowd && crowdNear(x, z, 2 * PED.body + 0.05, A.w, crowd));
     for (const side of lat >= 0 ? [-1, 1] : [1, -1]) {
       // (so far across that its line passes them at a body's width and a pad)
       const move = lat + side * (2 * PED.body + 0.12);
@@ -1176,8 +1278,11 @@ export async function createActors({ city, CITY }) {
       if (R.held > STUCK) {
         const B = R.blocker;
         const [hx, hz] = [Math.sin(here[3]), Math.cos(here[3])];
+        // (a walker of the city's crowd: where the sim has it. CROWD_HELD above)
+        const crowd = B.x === undefined && !B.hk2 && !!B.p;
+        const [bx, bz] = crowd ? [B.p[0], B.p[2]] : [B.x, B.z];
         // (how far to the side of this walker's way the body it is held by is: + to its right hand's side of the map)
-        const lat = B.x !== undefined ? (B.x - A.x) * hz - (B.z - A.z) * hx : 0;
+        const lat = bx !== undefined ? (bx - A.x) * hz - (bz - A.z) * hx : 0;
         const beside = Math.abs(lat) >= BRUSH - 0.03;
         if (beside && !R.pass) {
           R.pass = 1;
@@ -1191,7 +1296,7 @@ export async function createActors({ city, CITY }) {
           const road = PLAN.kerbOut(A.x, A.z) <= 0;
           if (need > 0 && !R.aside && (road || PLAN.kerbOut(x, z) >= PED.body) && !solidAt(x, groundAt(x, z), z)) {
             R.aside = [R.wx + vx, R.wz + vz];
-            R.asideFor = B.route !== undefined ? B : null;
+            R.asideFor = !crowd && B.route !== undefined ? B : null;
             R.leanAt = R.m;
           } else if (audit) {
             audit.brushes += 1;
@@ -1200,6 +1305,13 @@ export async function createActors({ city, CITY }) {
           R.pass = 2;
           R.passAt = R.m;
           R.held = 0;
+        } else if (crowd) {
+          // ONE OF THE CROWD'S, ahead and standing: round it where there is room; else off the lane to let it by, at
+          // once when it is held up by this walker, else after CROWD_HELD s (it may be waiting for its light)
+          if (clock - (R.askedAt ?? -9) > 0.8) {
+            R.askedAt = clock;
+            if (!stepRound(A, R, { x: bx, z: bz }, hx, hz, lat, false, B) && (B.blk === A.w || R.stood > CROWD_HELD)) A.crowdTo = B;
+          }
         } else if (clock - (R.askedAt ?? -9) > 0.8) {
           // ON its way (someone straight ahead is never crept up on: a queue keeps its distance). Two walkers each
           // in the other's way: the one who came on stage later steps out of it and lets the other by (giveWay,
@@ -1311,7 +1423,12 @@ export async function createActors({ city, CITY }) {
     // (a step aside may be down off the kerb: the ground is the ground under the body)
     // (the ground under the BODY, which is off the walked line by a step aside or a clip's shift: a walker by a
     // porch's edge stood on the porch's height while the line it walked was on it and its feet were not)
-    const y = Math.min(groundAt(A.x, A.z), R.wx || R.wz || R.ox || R.oz ? groundAt(A.x + Math.sin(p[3]) * A.vc * 0.1, A.z + Math.cos(p[3]) * A.vc * 0.1) : aheadY);
+    // (BUT NEVER BELOW THE GROUND UNDER THE BODY ITSELF: the point a tenth of a second ahead over the street, the feet
+    // still on the sidewalk, is the one way a walker's height went under the paving it stood on, and along a kerb's
+    // edge that held for more than a moment: Lola 0.2 m under at the flea market's north kerb, neighbour seed 3, the
+    // audit's `feet`. Down off a kerb is now when the body is over the street)
+    const under = groundAt(A.x, A.z);
+    const y = Math.max(under - 0.02, Math.min(under, R.wx || R.wz || R.ox || R.oz ? groundAt(A.x + Math.sin(p[3]) * A.vc * 0.1, A.z + Math.cos(p[3]) * A.vc * 0.1) : aheadY));
     A.y += Math.max(-2.4 * dt, Math.min(2.4 * dt, y - A.y));
     // it faces the way it is really going: along its route, leaning into a step aside
     if (A.vc > 0.3) A.ry = Math.atan2(Math.sin(p[3]) * A.vc + R.wvx * Wyaw, Math.cos(p[3]) * A.vc + R.wvz * Wyaw);
@@ -1343,6 +1460,8 @@ export async function createActors({ city, CITY }) {
     }
     A.route = R;
     A.room = false;
+    // (while the audit is on: who sent them, for the `heads` notes: which of two stood there last, and by whose order)
+    if (audit) [A.sentBy, A.sentAt] = [callers(), clock];
     endPath(A, false);
   }
 
@@ -1400,6 +1519,12 @@ export async function createActors({ city, CITY }) {
         const [F, ring] = A.yieldTo;
         A.yieldTo = null;
         if (!A.yield && F.route) giveWay(A, F, ring);
+      }
+      // (making way for one of the crowd's, asked from inside its own step last frame: laid at the top of this one)
+      if (A.crowdTo) {
+        const w = A.crowdTo;
+        A.crowdTo = null;
+        if (!A.yield) yieldCrowd(A, w);
       }
       A.stepping = true;
       for (let k = 0; k < n && A.route; k++) advance(A, A.route, dt / n, 0.5 / n);
@@ -1768,11 +1893,17 @@ export async function createActors({ city, CITY }) {
     cells[cells.length - 1] = [bx, bz];
     // pulled straight: from each point, the furthest later one the straight line to which is free (asked of the
     // grid's own cells, which are known by now: a line is free when every cell it passes over is ground)
+    // (nor over a roadway's edge that the way itself kept off: a line between two points of the sidewalk is pulled
+    // straight only over sidewalk. Pulled across a kerb's corner, a walk between two points of the flea market's
+    // sidewalk could run along the street's gutter, and whoever was held up on it stood in the road: the audit's
+    // `inRoad`)
     const gridFree = (p, q) => {
       const len = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      const kerbside = ask(...cellOf(p[0], p[1])) !== 2 && ask(...cellOf(q[0], q[1])) !== 2;
       for (let d = 0.2; d < len; d += 0.2) {
         const [i, j] = cellOf(p[0] + ((q[0] - p[0]) * d) / len, p[1] + ((q[1] - p[1]) * d) / len);
-        if (ask(i, j) === 3) return false;
+        const k = ask(i, j);
+        if (k === 3 || (k === 2 && kerbside)) return false;
       }
       return true;
     };
@@ -2099,59 +2230,67 @@ export async function createActors({ city, CITY }) {
         } else if (audit.near.has(key)) audit.near.delete(key);
       }
     }
-    auditHeads(realDt, list, note);
+    auditHeads(realDt, list, note, dt);
   }
   /**
    * HEADS OVER EACH OTHER IN THE PICTURE (`heads`): two of ours STANDING (no way under them, not down, sat, riding
    * or in a room, both in the camera's picture) whose heads as the camera draws them (headOf's box, turned with the
-   * body, its eight corners through the camera) overlap by more than a fifth of the smaller for more than half a
-   * second (each spell once). Not two in a CONTACT step with each other (contact(): a hand-off, a shove, a lift, a
-   * grab, a punch, a cuffing: the clip has hands meet at its own short reach; two of one scene's contact steps, for
-   * that scene: a fight is three people at arm's length) nor the two halves of a pair clip.
-   * `headFrames`: every frame of it.
+   * body, its eight corners through the camera: heads.js) overlap by more than HEADS_SHARE (15%) of the smaller for
+   * more than HEADS_SECS, half a second OF THE GAME'S OWN CLOCK (each spell once: heads.js headSpell; it was half a
+   * second of the wall, two of the game's at 4x, and whether a spell of two seconds was noted fell by the frame).
+   * The stage stands people by the same test (headsAt below, director.js headRoom). Not two in a CONTACT step with
+   * each other (contact(): a hand-off, a shove, a lift, a grab, a punch, a cuffing: the clip has hands meet at its own
+   * short reach; two of one scene's contact steps, for that scene: a fight is three people at arm's length) nor the
+   * two halves of a pair clip.
+   * `headFrames`: every frame of it. `spells`: the longest spells (auditHeads).
    */
   const HV = new THREE.Vector3();
-  function headRect(A) {
-    const H = A.head ?? HEAD_TYPICAL;
-    const yaw = A.w.yawS ?? A.ry;
-    const [c, s] = [Math.cos(yaw), Math.sin(yaw)];
-    const r = [Infinity, Infinity, -Infinity, -Infinity];
-    for (const bx of [-H.hw, H.hw]) {
-      for (const bz of [-H.hd, H.hd]) {
-        for (const by of [H.y0, H.y1]) {
-          HV.set(A.x + bx * c + bz * s, A.y + by, A.z - bx * s + bz * c).project(city.camera);
-          [r[0], r[1], r[2], r[3]] = [Math.min(r[0], HV.x), Math.min(r[1], HV.y), Math.max(r[2], HV.x), Math.max(r[3], HV.y)];
-        }
-      }
-    }
-    return r;
-  }
-  function auditHeads(realDt, list, note) {
-    const standing = list.filter(A => !A.room && A.mode === 'free' && !A.route && !(A.moving > 0.1) && !LOW.has(A.clipName) && !OFF_FEET.test(A.clipName ?? '') && inPicture(A.x, A.z, A.y));
+  /** A head's box (H: headOf's) for a body standing at (x, y, z) turned to `yaw`, through `cam`: [x0, y0, x1, y1] on the picture (heads.js). */
+  const headRectAt = (H, x, y, z, yaw, cam = city.camera) => headRectOf(H, x, y, z, yaw, (px, py, pz) => {
+    HV.set(px, py, pz).project(cam);
+    return [HV.x, HV.y];
+  });
+  const headRect = A => headRectAt(A.head ?? HEAD_TYPICAL, A.x, A.y, A.z, A.w.yawS ?? A.ry);
+  /** Standing, as the audit's `heads` counts it: on stage, outdoors, on foot, no way under them, still. */
+  const standsStill = A => !A.w.hide && !A.room && A.mode === 'free' && !A.route && !(A.moving > 0.1) && !LOW.has(A.clipName) && !OFF_FEET.test(A.clipName ?? '');
+  // (a camera of our own for a picture as it will be: the city's, moved with whoever it is locked on)
+  let headCam = null;
+  /** Two of ours the audit's `heads` leaves be: two in one scene's contact steps, or the two halves of a pair clip. */
+  const headsExempt = (A, B) => (A.contact && A.contact === B.contact) || (A.paired && B.paired);
+  function auditHeads(realDt, list, note, dt = realDt) {
+    const standing = list.filter(A => standsStill(A) && inPicture(A.x, A.z, A.y));
     const rects = new Map(standing.map(A => [A, headRect(A)]));
     const seen = new Set();
     for (let i = 0; i < standing.length; i++) {
       for (let j = i + 1; j < standing.length; j++) {
         const [A, B] = [standing[i], standing[j]];
-        if ((A.contact && A.contact === B.contact) || (A.paired && B.paired)) continue;
-        const [a, b] = [rects.get(A), rects.get(B)];
-        const w = Math.min(a[2], b[2]) - Math.max(a[0], b[0]);
-        const h = Math.min(a[3], b[3]) - Math.max(a[1], b[1]);
-        if (w <= 0 || h <= 0) continue;
-        const small = Math.min((a[2] - a[0]) * (a[3] - a[1]), (b[2] - b[0]) * (b[3] - b[1]));
-        if ((w * h) / small <= 0.15) continue;
+        if (headsExempt(A, B)) continue;
+        const share = headShare(rects.get(A), rects.get(B));
+        if (share <= HEADS_SHARE) continue;
         const key = `${A.id}|${B.id}`;
         seen.add(key);
         audit.headFrames += 1;
-        const t = (audit.heads2.get(key) ?? 0) + realDt;
-        if (t > 0.5 && (audit.heads2.get(key) ?? 0) <= 0.5) {
+        // (ON THE GAME'S OWN CLOCK, heads.js headSpell: the same spell of the game at any speed and any frame rate.
+        // It counted seconds of the wall: at 4x the half second was two of the game's, and the same scene at 1x failed)
+        const { t, fired } = headSpell(audit.heads2.get(key) ?? 0, dt, true);
+        if (fired) {
           audit.heads += 1;
-          note(`heads ${key} over each other in the picture at ${A.x.toFixed(1)}, ${A.z.toFixed(1)} and ${B.x.toFixed(1)}, ${B.z.toFixed(1)} (${Math.hypot(A.x - B.x, A.z - B.z).toFixed(2)} m apart, ${((100 * w * h) / small).toFixed(0)}% of the smaller head${A.clipName ? ', ' + A.clipName : ''}${B.clipName ? ' / ' + B.clipName : ''}${A.firm || B.firm ? ', in a scene' : ''})`);
+          note(`heads ${key} over each other in the picture at ${A.x.toFixed(1)}, ${A.z.toFixed(1)} and ${B.x.toFixed(1)}, ${B.z.toFixed(1)} (${Math.hypot(A.x - B.x, A.z - B.z).toFixed(2)} m apart, ${(100 * share).toFixed(0)}% of the smaller head${A.clipName ? ', ' + A.clipName : ''}${B.clipName ? ' / ' + B.clipName : ''}${A.firm || B.firm ? ', in a scene' : ''})${[A, B].map(C => `; ${C.id} sent ${C.sentAt !== undefined ? (clock - C.sentAt).toFixed(1) + ' s ago by ' + C.sentBy : 'never'}`).join('')}`);
         }
         audit.heads2.set(key, t);
+        // (`spells`: the longest spells of the run, a third of a second of the game and more, each with its seconds of
+        // the game and of the wall, its worst share, and who was sent there last by whom: what a run's notes cannot say)
+        const sp = audit.spells2.get(key) ?? { key, real: 0, game: 0, max: 0, at: clock, how: `${Math.hypot(A.x - B.x, A.z - B.z).toFixed(2)} m, ${A.clipName ?? '-'} / ${B.clipName ?? '-'}${[A, B].map(C => `; ${C.id} sent ${C.sentAt !== undefined ? (clock - C.sentAt).toFixed(1) + ' s ago by ' + C.sentBy : 'never'}`).join('')}` };
+        Object.assign(sp, { real: sp.real + realDt, game: sp.game + dt, max: Math.max(sp.max, share) });
+        audit.spells2.set(key, sp);
       }
     }
     for (const key of [...audit.heads2.keys()]) if (!seen.has(key)) audit.heads2.delete(key);
+    for (const [key, sp] of [...audit.spells2]) {
+      if (seen.has(key)) continue;
+      audit.spells2.delete(key);
+      if (sp.game > 0.3) audit.spells = [...audit.spells, sp].sort((a, b) => b.game - a.game).slice(0, 12);
+    }
   }
 
   const driver0 = peds.driver;
@@ -2620,12 +2759,66 @@ export async function createActors({ city, CITY }) {
     },
     /** Starts or stops the audit (the counts are listed above auditFrame); returns the counts so far. */
     audit(on) {
-      if (on === true) audit = { frames: 0, scenes: 0, walks: 0, steps: 0, jumps: 0, cuts: 0, shifts: 0, flips: 0, pops: 0, drops: 0, unseated: 0, close: 0, slides: 0, speedSteps: 0, headingSnaps: 0, floating: 0, inRoad: 0, pushes: 0, squeezes: 0, brushes: 0, dodges: 0, rounds: 0, keptRight: 0, waits: 0, gaveWay: 0, replans: 0, seams: 0, through: 0, blind: 0, short: 0, ways: 0, overlaps: 0, overlapFrames: 0, byFigure: 0, furniture: 0, furnitureFrames: 0, vanish: 0, feet: 0, feetFrames: 0, heads: 0, headFrames: 0, heads2: new Map(), near: new Map(), kinds: {}, examples: [] };
+      if (on === true) audit = { frames: 0, scenes: 0, walks: 0, steps: 0, jumps: 0, cuts: 0, shifts: 0, flips: 0, pops: 0, drops: 0, unseated: 0, close: 0, slides: 0, speedSteps: 0, headingSnaps: 0, floating: 0, inRoad: 0, pushes: 0, squeezes: 0, brushes: 0, dodges: 0, rounds: 0, keptRight: 0, waits: 0, gaveWay: 0, replans: 0, seams: 0, through: 0, blind: 0, short: 0, ways: 0, overlaps: 0, overlapFrames: 0, byFigure: 0, furniture: 0, furnitureFrames: 0, vanish: 0, feet: 0, feetFrames: 0, heads: 0, headFrames: 0, heads2: new Map(), spells2: new Map(), spells: [], near: new Map(), kinds: {}, examples: [] };
       // (the picture's count starts from what is on stage now: nobody came on at the moment it was turned on)
       if (on === true) for (const A of actors.values()) Object.assign(A, { pOn: !A.w.hide, pX: A.x, pZ: A.z, pRoom: A.room });
-      const out = audit ? { ...audit, near: undefined, heads2: undefined, kinds: undefined, lastPush: undefined, examples: audit.examples.slice() } : null;
+      const out = audit ? { ...audit, near: undefined, heads2: undefined, spells2: undefined, kinds: undefined, lastPush: undefined, examples: audit.examples.slice() } : null;
       if (on === false) audit = null;
       return out;
+    },
+    /**
+     * HEADS IN THE PICTURE, AS THE AUDIT SEES THEM (auditHeads' own box and share): if `id` stood at (x, z) facing
+     * `face` ([x, z]; else as they face now), the most of the smaller head they would share with anybody of ours who
+     * stands still there (or is walking to a place there: at that place; or has stepped aside for a walker: at the
+     * place they will step back to), → { share, with } (with: that person's id, or null). Left out, as the audit
+     * leaves them: the same contact step (`contact`, theirs by default), both halves of a pair clip, and whoever
+     * `skip` names. `shift` [dx, dz]: the camera as it will be once whoever it is locked on has moved that much (the
+     * player walked to his mark: the Lock goes with him).
+     */
+    headsAt(id, x, z, { face = null, skip = [], contact, shift = null } = {}) {
+      const A = actors.get(id);
+      const H = A?.head ?? HEAD_TYPICAL;
+      const key = contact === undefined ? A?.contact ?? null : contact;
+      let cam = city.camera;
+      if (shift && Math.hypot(shift[0], shift[1]) > 0.05) {
+        headCam ??= city.camera.clone();
+        headCam.copy(city.camera);
+        headCam.position.x += shift[0];
+        headCam.position.z += shift[1];
+        headCam.updateMatrixWorld();
+        cam = headCam;
+      } else city.camera.updateMatrixWorld();
+      const yaw = face ? Math.atan2(face[0] - x, face[1] - z) : A ? A.w.yawS ?? A.ry : 0;
+      const mine = headRectAt(H, x, groundAt(x, z), z, yaw, cam);
+      let best = { share: 0, with: null };
+      for (const B of actors.values()) {
+        if (B === A || skip.includes(B.id) || B.w.hide || B.room || (key && B.contact === key) || (A?.paired && B.paired)) continue;
+        const ats = [];
+        if (standsStill(B)) ats.push([B.x, B.y, B.z]);
+        else if (B.route && B.mode === 'free') {
+          const g = endOf(B.route);
+          ats.push([g[0], groundAt(g[0], g[1]), g[1]]);
+        }
+        // (and whoever has stepped aside for a walker, where they will step back to: stepYield)
+        if (B.yield && !B.yield.walk) ats.push([B.yield.home[0], groundAt(B.yield.home[0], B.yield.home[1]), B.yield.home[1]]);
+        for (const at of ats) {
+          if (Math.hypot(at[0] - x, at[2] - z) > 4) continue;
+          const share = headShare(mine, headRectAt(B.head ?? HEAD_TYPICAL, at[0], at[1], at[2], B.w.yawS ?? B.ry, cam));
+          if (share > best.share) best = { share, with: B.id };
+        }
+      }
+      return best;
+    },
+    /**
+     * headGap for two who stand at `p` and `q` ([x, z]): more when the two lie along the camera's bearing, the nearer
+     * head drawn over the farther (the stage's own rule for two places, stage/index.js `gap`).
+     */
+    headGapAt(a, b, p, q) {
+      const g = api.headGap(a, b);
+      const cam = city.camera.position;
+      const [dx, dz, cx, cz] = [q[0] - p[0], q[1] - p[1], cam.x - p[0], cam.z - p[1]];
+      const inline = Math.abs(dx * cx + dz * cz) / ((Math.hypot(dx, dz) || 1) * (Math.hypot(cx, cz) || 1));
+      return inline > 0.5 ? g * (1 + 0.45 * inline) : g;
     },
     /**
      * Adds a test for solids the city does not know (the set's pieces): fn(x, z, y, sure) → the name of what a body
@@ -2697,6 +2890,13 @@ export async function createActors({ city, CITY }) {
       return m;
     },
     /** Adds one to a count of the audit: the director reports its scene starts here, the proof that scenes played. */
+    /** A note of the stage's own for the audit's examples (its first word its kind, a few of each kept), while it is on. */
+    noteAudit(text) {
+      if (!audit) return;
+      const kind = text.slice(0, text.indexOf(' '));
+      audit.kinds[kind] = (audit.kinds[kind] ?? 0) + 1;
+      if (audit.kinds[kind] <= 12) audit.examples.push(text);
+    },
     count(name) {
       if (audit && name in audit) audit[name] += 1;
     },
@@ -2779,6 +2979,39 @@ export async function createActors({ city, CITY }) {
       let to = lotSide ? lot : kerb;
       if (Math.abs(to) < clear && Math.abs(lotSide ? kerb : lot) > Math.abs(to)) to = lotSide ? kerb : lot;
       return { x: lx + ax * to, z: lz + az * to, entry: L };
+    },
+    /**
+     * A PLACE TO STAND OFF THE WALKERS' LANE for somebody of ours where they are, to wait there a while: fitSpot's side
+     * of the sidewalk, else its other side, else the same a metre or two up or down the sidewalk. On the sidewalk by a
+     * body's half-width (fitSpot's own point is asked about nothing but the lane), nothing solid or low there, off the
+     * lane by a body's width and more, and a head
+     * and a hand from anybody of ours standing there or on their way to stand there (two heads one over the other in
+     * the picture: the audit's `heads`). [x, z], or null when there is none near.
+     */
+    offLaneSpot(id) {
+      const A = get(id);
+      const tries = [];
+      for (const along of [0, 1.3, -1.3, 2.6, -2.6]) {
+        const S = api.fitSpot(A.x, A.z, 0.75, along);
+        tries.push([S.x, S.z]);
+        if (S.entry) {
+          const [lx, lz] = laneXZ(S.entry);
+          tries.push([2 * lx - S.x, 2 * lz - S.z]);
+        }
+      }
+      for (const [x, z] of tries) {
+        const y = groundAt(x, z);
+        if (PLAN.kerbOut(x, z) < PED.body || solidAt(x, y, z) || lowAt(x, z, y, 0.25) || (sim.laneNear(x, z)?.d ?? 9) < 0.6) continue;
+        if (Math.hypot(x - A.x, z - A.z) > 3.5 || !lineFree(A.x, A.z, x, z)) continue;
+        if ([...actors.values()].some(C => {
+          if (C === A || C.w.hide || C.room) return false;
+          const [cx, cz] = C.route ? endOf(C.route) : [C.x, C.z];
+          return Math.hypot(cx - x, cz - z) < api.headGapAt(id, C.id, [x, z], [cx, cz]);
+        })) continue;
+        if (crowdNear(x, z, 2 * PED.body + 0.1, A.w)) continue;
+        return [x, z];
+      }
+      return null;
     },
     /** The point on the walkers' lane `metres` along the sidewalk from the lane point nearest (x, z) (either way: ±). */
     laneAlong(x, z, metres, clearOf = null) {
@@ -2937,6 +3170,70 @@ export async function createActors({ city, CITY }) {
       A.outfit = index === A.own ? null : outfit;
       return true;
     },
+
+    /**
+     * Dresses an actor in pieces of the cast over their own look (`{ hat: 'lucky7_dad', … }`; {} or null: their own
+     * clothes again), for the run's things to wear (demo/run/index.js, goods-1). Their own look becomes the dressed
+     * one, so a named outfit (the county issue) goes over it and comes off back to it. Each look is baked once.
+     */
+    dress(id, pieces = null) {
+      const A = actors.get(id);
+      if (!A) return false;
+      // (trying on, lib-1: what they really wear changes underneath; what is tried stays laid over it until tryOff)
+      if (A.trying && !A.trying.busy) {
+        A.trying.real = { ...(pieces ?? {}) };
+        A.trying.busy = true;
+        try {
+          return api.dress(id, { ...A.trying.real, ...A.trying.tried });
+        } finally {
+          A.trying.busy = false;
+        }
+      }
+      A.spec0 ??= A.spec;
+      const key = JSON.stringify(pieces ?? {});
+      if (key === (A.dressed ?? '{}')) return true;
+      A.dressings ??= new Map([['{}', { index: A.own, look: A.look, spec: A.spec0 }]]);
+      if (!A.dressings.has(key)) {
+        const spec = { ...A.spec0, wear: { ...(A.spec0.wear ?? {}), ...(pieces ?? {}) } };
+        const look = lookOf({ seed: id, ...spec });
+        const index = peds.addLook(LOOKS.bake(CH, look));
+        if (index < 0) return false;
+        A.dressings.set(key, { index, look, spec });
+      }
+      const d = A.dressings.get(key);
+      const outfit = A.outfit;
+      Object.assign(A, { own: d.index, look: d.look, spec: d.spec, suits: {}, portrait: null, dressed: key });
+      if (outfit) api.wear(id, outfit);
+      else A.w.look = d.index;
+      return true;
+    },
+
+    /**
+     * TRYING ON (lib-1; the owner: "people should be able to try it on tho without buying it"): the actor shown in
+     * `pieces` ({ hat: 'old_beanie', … }, cast slots) laid over what they really wear, until tryOff. Nothing of the
+     * run is touched (its state never hears of it): the look is the stage's alone, baked once like any dressing.
+     */
+    tryOn(id, pieces = {}) {
+      const A = actors.get(id);
+      if (!A) return false;
+      const real = A.trying ? A.trying.real : JSON.parse(A.dressed ?? '{}');
+      A.trying = { real, tried: { ...(A.trying?.tried ?? {}), ...pieces }, busy: true };
+      try {
+        return api.dress(id, { ...real, ...A.trying.tried });
+      } finally {
+        A.trying.busy = false;
+      }
+    },
+    /** Back to what they really wear (the last dress() while trying on counts). */
+    tryOff(id) {
+      const A = actors.get(id);
+      if (!A?.trying) return false;
+      const { real } = A.trying;
+      A.trying = null;
+      return api.dress(id, real);
+    },
+    /** What is being tried on ({ cast slot: id }), or null. */
+    trying: id => (actors.get(id)?.trying ? { ...actors.get(id).trying.tried } : null),
 
     remove(id) {
       const A = get(id);

@@ -1,0 +1,585 @@
+/* THE RUN'S NEW FRAME, PART 1 (ui-3, leg 1; demo/run/index.js paintWhere, paintSide, paintResult, paintJournal):
+   WHERE AND WHEN on a card at the top left, YOUR SITUATION and THE GOAL at the top right with the day's JOURNAL under
+   them, and THE RESULT CARD at the top in the middle after every step. Layout and type only: every colour, outline and
+   shadow is a token of skin.css (var(--u-…)), so the look changes by swapping that one file.
+   Type: the system's own face for everything read; the city's sign lettering for the place, money and headlines.
+   None of these is a panel the stage makes way for (no .hk-panel, .hk-top, .hk-left): they lie over the corners of
+   the picture, and the picture is framed as before. The top line stays as an empty strip of its old height, so the
+   stage leaves the same room at the top (stage/index.js fitToPanels, stage/inside.js freeRect). */
+
+#k .rn {
+  --u-gap: calc(8 * var(--k-px));
+  --u-m: 8px;
+  --u-r: calc(10 * var(--k-px));
+  --u-ui: -apple-system, "SF Pro Text", system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --u-sign: var(--k-font-sign, "AI City Sign"), "SF Mono", Menlo, monospace;
+  --u-fs: calc(13 * var(--k-px));     /* body */
+  --u-fs-s: calc(12.5 * var(--k-px)); /* the least anything readable is */
+  --u-fs-cap: calc(12.5 * var(--k-px)); /* capitals labels: at least 12.5 px as all words, spaced less */
+  --u-where-w: calc(300 * var(--k-px));
+  --u-side-w: calc(460 * var(--k-px));
+}
+
+/* the old top line: an empty strip of its old height, so the stage keeps the same room at the top */
+#k .rn .rn-top.u-strip { display: block; background: none; box-shadow: none; border: 0; padding: 0; pointer-events: none; min-height: 0; height: var(--hk-top-h); }
+/* (display: block although it is empty: the HUD's sheet hides an empty top line, hud.css, and the stage would then leave no room) */
+
+/* ── shared parts ──────────────────────────────────────────────────────────────────────────────────────────────── */
+#k .u-panel { box-sizing: border-box; background: var(--u-grid), var(--u-panel); border: 1.5px solid var(--u-line); border-radius: var(--u-r); box-shadow: var(--u-shadow);
+  color: var(--u-ink); font: 500 var(--u-fs)/1.4 var(--u-ui); pointer-events: auto; }
+#k .u-cap { font: 700 var(--u-fs-cap)/1.2 var(--u-ui); letter-spacing: .03em; text-transform: uppercase; color: var(--u-mute); }
+#k .u-sign { font-family: var(--u-sign); font-weight: 400; letter-spacing: .02em; }
+#k .u-ico { width: calc(16 * var(--k-px)); height: calc(16 * var(--k-px)); flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+#k .u-ico .f { fill: currentColor; stroke: none; }
+#k .u-pill { display: inline-flex; align-items: center; gap: 4px; min-height: calc(20 * var(--k-px)); padding: 0 calc(7 * var(--k-px)); border-radius: 999px; white-space: nowrap;
+  font: 700 var(--u-fs-s)/1 var(--u-ui); background: var(--u-mute-bg); color: var(--u-mute-on); }
+#k .u-pill .u-ico { width: calc(13 * var(--k-px)); height: calc(13 * var(--k-px)); }
+#k .u-pill.is-gain, #k .u-pill.is-win, #k .u-pill.is-good { background: var(--u-gain); color: var(--u-gain-on); }
+#k .u-pill.is-risk { background: var(--u-risk); color: var(--u-risk-on); }
+#k .u-pill.is-loss, #k .u-pill.is-fail { background: var(--u-loss-plate); color: var(--u-loss-on); }
+#k .u-pill.is-heat, #k .u-pill.is-news { background: var(--u-heat); color: var(--u-heat-on); }
+#k .u-pill.is-trust { background: var(--u-trust); color: var(--u-trust-on); }
+#k .u-pill.is-you { background: var(--u-you); color: var(--u-you-ink); }
+#k[data-skin] .rn .u-key { display: inline-flex; align-items: center; justify-content: center; min-width: calc(18 * var(--k-px)); height: calc(18 * var(--k-px)); padding: 0 4px; box-sizing: border-box;
+  border-radius: 4px; border: 1px solid var(--u-line); background: var(--u-key-bg); color: var(--u-key-ink); box-shadow: var(--u-key-shadow); font: 700 var(--u-fs-s)/1 "SF Mono", Menlo, monospace; }
+#k .u-btn { display: inline-flex; align-items: center; gap: 6px; min-height: calc(28 * var(--k-px)); padding: 0 calc(10 * var(--k-px)); box-sizing: border-box; cursor: pointer;
+  border-radius: calc(8 * var(--k-px)); border: 1.5px solid var(--u-line); background: var(--u-key-bg); color: var(--u-ink); box-shadow: var(--u-block); font: 700 var(--u-fs)/1 var(--u-ui); white-space: nowrap; }
+#k .u-btn:hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 var(--u-line); }
+#k .u-btn.is-go { background: var(--u-go-bg); color: var(--u-go-ink); border-color: var(--u-go-bg); }
+#k[data-skin] .rn .u-btn.is-go .u-key { background: var(--u-go-key-bg); color: var(--u-go-key-ink); border-color: var(--u-go-key-bg); box-shadow: none; }
+#k .u-btn.is-quiet { min-height: calc(22 * var(--k-px)); padding: 0 calc(7 * var(--k-px)); font-size: var(--u-fs-s); box-shadow: none; }
+#k .u-x { flex: none; display: inline-grid; place-items: center; width: calc(22 * var(--k-px)); height: calc(22 * var(--k-px)); padding: 0; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--u-line); background: var(--u-key-bg); color: var(--u-ink); }
+/* KEYBOARD FOCUS, everywhere on the run's frame: a yellow ring and an ink ring outside it, never a sliver */
+#k .rn :is(button, [role="button"], [tabindex]):focus-visible { outline: 3px solid var(--u-focus); outline-offset: 1px; box-shadow: 0 0 0 5px var(--u-ink); }
+
+/* ── WHERE AND WHEN, top left ──────────────────────────────────────────────────────────────────────────────────── */
+#k .u-where { position: absolute; left: var(--u-m); top: var(--u-m); z-index: 3; width: var(--u-where-w); padding: calc(9 * var(--k-px)) calc(12 * var(--k-px)) calc(9 * var(--k-px));
+  background: var(--u-grid), var(--u-place-bg); color: var(--u-place-ink); }
+#k .u-where .u-cap { color: var(--u-place-ink); opacity: .78; }
+#k .u-where-name { display: block; margin-top: 2px; font: 400 calc(26 * var(--k-px))/1.05 var(--u-sign); text-transform: uppercase; letter-spacing: .02em; overflow-wrap: anywhere; }
+#k .u-where-name.is-long { font-size: calc(20 * var(--k-px)); }
+#k .u-where-when { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; font-weight: 700; }
+#k .u-where-when > b { font: 400 calc(18 * var(--k-px))/1 var(--u-sign); }
+#k .u-where-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; padding-top: 7px; border-top: 1px solid var(--u-rule); font-size: var(--u-fs-s); }
+#k .u-where-foot .u-saved { color: var(--u-mute); font-weight: 600; }
+#k .u-where-foot .u-saved.is-off { color: var(--u-loss-text); font-weight: 700; }
+#k .u-where-foot .u-new { margin-left: auto; }
+#k .u-where-foot .u-new.is-ask { background: var(--u-risk); color: var(--u-risk-on); }
+
+/* ── YOUR SITUATION, top right: what you carry, what is banked, energy, heat, home risk; the goal; the journal ── */
+#k .u-side { position: absolute; right: var(--u-m); top: var(--u-m); z-index: 3; width: var(--u-side-w); max-height: calc(100% - var(--rn-card-h, 90px) - 2 * var(--u-m) - 8px);
+  display: flex; flex-direction: column; gap: var(--u-gap); pointer-events: none; }
+#k .u-stats { display: flex; align-items: stretch; gap: 0; padding: 0; overflow: hidden; }
+#k .u-stat { flex: 1 1 0; min-width: 0; padding: calc(7 * var(--k-px)) calc(9 * var(--k-px)) calc(7 * var(--k-px)); border-left: 1px solid var(--u-rule); display: flex; flex-direction: column; gap: 3px; }
+#k .u-stat:first-child { border-left: 0; }
+#k .u-stat.is-press { cursor: pointer; }
+#k .u-stat.is-press:hover { background: var(--u-inset); }
+#k .u-stat .u-cap { display: flex; align-items: center; gap: 4px; white-space: nowrap; overflow: hidden; }
+#k .u-stat .u-cap .u-ico { width: calc(13 * var(--k-px)); height: calc(13 * var(--k-px)); }
+#k .u-stat-v { font: 400 calc(22 * var(--k-px))/1 var(--u-sign); white-space: nowrap; }
+#k .u-stat-v small { font: 700 var(--u-fs-s)/1 var(--u-ui); color: var(--u-mute); margin-left: 2px; }
+#k .u-stat-sub { font-size: var(--u-fs-s); line-height: 1.25; color: var(--u-ink-2); font-weight: 600; overflow-wrap: anywhere; }
+#k .u-stat.is-risk { background: var(--u-risk); }
+#k .u-stat.is-risk .u-cap, #k .u-stat.is-risk .u-stat-sub { color: var(--u-risk-on); }
+#k .u-stat.is-hot .u-stat-sub { color: var(--u-heat-text); }
+#k .u-stat .u-bad { color: var(--u-loss-text); }
+#k .u-pips { display: flex; gap: 2px; flex-wrap: wrap; }
+#k .u-pips i { width: calc(8 * var(--k-px)); height: calc(8 * var(--k-px)); border: 1px solid var(--u-line); background: var(--u-inset); border-radius: 2px; }
+#k .u-pips i.is-on { background: var(--u-gain); }
+#k .u-pips.is-heat i.is-on { background: var(--u-heat); }
+#k .u-pips.is-heat i.is-line { border-color: var(--u-heat); border-width: 1.5px; }
+#k .u-pips.is-press i.is-on { background: var(--u-risk); }
+#k .u-pips.is-press i.is-line { border-color: var(--u-risk-mark); border-width: 1.5px; }
+#k .u-fold { align-self: flex-start; margin: calc(6 * var(--k-px)); }
+/* folded (D): the four numbers on one line, the goal and the journal stay as they are */
+#k .u-stats.is-folded .u-stat { flex: none; flex-direction: row; align-items: baseline; gap: 6px; padding: calc(6 * var(--k-px)) calc(8 * var(--k-px)); }
+#k .u-stats.is-folded .u-stat .u-cap { overflow: visible; }
+#k .u-stats.is-folded .u-stat-sub, #k .u-stats.is-folded .u-pips { display: none; }
+#k .u-stats.is-folded .u-stat-v { font-size: calc(16 * var(--k-px)); }
+#k .u-side-news { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; pointer-events: auto; }
+#k .u-side-news .u-pill { cursor: pointer; border: 1.5px solid var(--u-line); box-shadow: var(--u-block); white-space: normal; text-align: left; line-height: 1.2; padding: 3px 8px; }
+
+/* THE GOAL: the three things to own, the next one's price and how far banked (solid) and carried (striped) are */
+#k .u-goal { padding: calc(9 * var(--k-px)) calc(12 * var(--k-px)); }
+#k .u-goal-head { display: flex; align-items: center; gap: 6px; }
+#k .u-goal-head .u-cap { color: var(--u-ink); }
+#k .u-goal-head .u-pill { margin-left: auto; }
+#k .u-goal-three { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
+#k .u-goal-thing { position: relative; padding: 5px 7px; border-radius: 7px; border: 1px solid var(--u-line); background: var(--u-inset); min-width: 0; }
+#k .u-goal-thing b { display: block; font-size: var(--u-fs-s); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#k .u-goal-thing span { font-size: var(--u-fs-s); color: var(--u-mute); font-weight: 600; }
+#k .u-goal-thing.is-next { background: var(--u-you); }
+#k .u-goal-thing.is-next span { color: var(--u-you-ink); }
+#k .u-goal-thing.is-owned { background: var(--u-panel); border-style: dashed; }
+#k .u-goal-thing.is-owned b { color: var(--u-ink-2); }
+#k .u-goal-thing.is-owned span { color: var(--u-gain-text); font-weight: 800; }
+#k .u-goal-next { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; font-size: var(--u-fs-s); font-weight: 700; }
+#k .u-goal-bar { display: flex; height: calc(8 * var(--k-px)); margin-top: 4px; border-radius: 4px; overflow: hidden; border: 1px solid var(--u-line); background: var(--u-inset); }
+#k .u-goal-bar i { height: 100%; transition: width 420ms var(--k-ease, ease); }
+#k .u-goal-bar i.is-banked { background: var(--u-ink); }
+#k .u-goal-bar i.is-carried { background: repeating-linear-gradient(135deg, var(--u-ink) 0 3px, var(--u-inset) 3px 6px); }
+#k .u-goal-where { margin-top: 5px; font-size: var(--u-fs-s); color: var(--u-ink-2); }
+#k .u-goal.is-folded .u-goal-three, #k .u-goal.is-folded .u-goal-where { display: none; }
+
+/* THE JOURNAL: today's results, newest first; J folds it to its latest line */
+#k .u-journal { display: flex; flex-direction: column; min-height: 0; padding: calc(8 * var(--k-px)) calc(12 * var(--k-px)) calc(6 * var(--k-px)); }
+#k .u-journal-head { display: flex; align-items: center; gap: 6px; }
+#k .u-journal-head .u-cap { color: var(--u-ink); }
+#k .u-journal-head .u-x { margin-left: auto; width: auto; padding: 0 5px; gap: 4px; display: inline-flex; align-items: center; font: 700 var(--u-fs-cap)/1 var(--u-ui); text-transform: uppercase; letter-spacing: .05em; }
+#k .u-journal ol { list-style: none; margin: 4px 0 0; padding: 0; overflow: hidden auto; min-height: 0; scrollbar-width: thin; }
+#k .u-je { display: grid; grid-template-columns: calc(40 * var(--k-px)) calc(16 * var(--k-px)) minmax(0, 1fr); gap: 6px; align-items: start; padding: 6px 0 6px 4px; border-top: 1px solid var(--u-rule); }
+#k .u-je:first-child { border-top: 0; }
+#k .u-je-at { font: 700 var(--u-fs-s)/1.35 var(--u-ui); color: var(--u-mute); font-variant-numeric: tabular-nums; }
+#k .u-je .u-ico { margin-top: 2px; }
+#k .u-je-head { font: 700 var(--u-fs-s)/1.35 var(--u-ui); overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+#k .u-je-chips { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 3px; }
+#k .u-je-chips .u-pill { min-height: calc(18 * var(--k-px)); font-size: var(--u-fs-s); }
+#k .u-je.is-new { box-shadow: inset 4px 0 0 var(--u-you); background: var(--u-inset); }
+#k .u-je.is-loss, #k .u-je.is-fail { box-shadow: inset 4px 0 0 var(--u-loss); }
+#k .u-je.is-loss .u-ico, #k .u-je.is-fail .u-ico { color: var(--u-loss-text); }
+#k .u-journal-empty { padding: 4px 0 2px; color: var(--u-mute); font-size: var(--u-fs-s); }
+#k .u-journal.is-folded ol .u-je:not(:first-child) { display: none; }
+#k .u-journal.is-folded .u-je-chips { display: none; }
+#k .u-journal.is-folded .u-je-head { -webkit-line-clamp: 1; }
+
+/* ── THE RESULT CARD, top middle: after every step, until the next one (or OK, Enter, Esc) ───────────────────── */
+#k .u-res { position: absolute; z-index: 4; top: var(--u-m); left: calc(var(--u-m) + var(--u-where-w) + var(--u-gap) + 6px); right: calc(var(--u-m) + var(--u-side-w) + var(--u-gap) + 8px);
+  max-width: calc(560 * var(--k-px)); margin: 0 auto; padding: calc(10 * var(--k-px)) calc(14 * var(--k-px)) calc(10 * var(--k-px)); box-shadow: var(--u-shadow-l); border-top-width: 5px; }
+#k .u-res[hidden] { display: none; }
+#k .u-res.is-win, #k .u-res.is-good { border-top-color: var(--u-gain-text); }
+#k .u-res.is-fail, #k .u-res.is-loss { border-top-color: var(--u-loss); }
+#k .u-res.is-news { border-top-color: var(--u-heat); }
+#k .u-res-kick { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+#k .u-res-kick .u-at { margin-left: auto; }
+#k .u-res-head { margin: 6px 0 0; font: 400 calc(22 * var(--k-px))/1.12 var(--u-sign); text-transform: uppercase; letter-spacing: .02em; overflow-wrap: anywhere; }
+#k .u-res.is-big .u-res-head { font-size: calc(28 * var(--k-px)); }
+#k .u-res-body { margin: 6px 0 0; color: var(--u-ink-2); font-size: var(--u-fs); line-height: 1.4; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+#k .u-res-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+#k .u-res-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--u-rule); font-size: var(--u-fs); }
+#k .u-res-next { flex: 1 1 auto; min-width: 0; display: flex; align-items: flex-start; gap: 6px; color: var(--u-ink); }
+#k .u-res-next .u-ico { margin-top: 2px; }
+#k .u-res-foot .u-btn { margin-left: auto; }
+#k .u-res.is-big { max-width: calc(620 * var(--k-px)); }
+
+/* ── where the older slips go now that the corners are taken ───────────────────────────────────────────────────── */
+#k .rn .rn-left { top: calc(var(--u-where-b, 120px) + 10px); }
+/* (the rail is as tall as its keys, not the window's height: less of the city behind an empty strip) */
+@media (min-width: 721px) { #k .rn.is-rail .rn-left { bottom: auto; } #k .rn.is-rail .rn-dock { height: auto; } }
+#k .rn .rn-sheet { top: calc(var(--u-where-b, 120px) + 10px); z-index: 5; max-height: calc(100% - var(--u-where-b, 120px) - 10px - var(--rn-card-h, 90px) - 2 * var(--u-m) - 4px); }
+/* (a panel's own things in its head, after its title: the Library's kinds and count) */
+#k .rn-sheet-slot { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; }
+#k .rn-sheet-slot:empty { display: none; }
+#k .rn-sheet:has(.rn-sheet-slot:not(:empty)) .rn-sheet-title { flex: none; }
+/* (a panel open runs up to the situation's column, not under it; at phone width it is a sheet from the bottom) */
+@media (min-width: 721px) { #k .rn .rn-sheet { max-width: calc(100% - var(--rn-side) - var(--u-side-w) - 3 * var(--u-m) - var(--rn-g)); } }
+#k .rn .rn-notice { top: calc(max(var(--u-where-b, 120px), var(--u-res-b, 0px)) + 10px); left: calc(var(--rn-m) + var(--rn-side) + var(--rn-g)); right: auto; max-width: calc(420 * var(--k-px)); }
+#k .rn .rn-new-ask { top: calc(var(--u-where-b, 120px) + 10px); left: var(--u-m); right: auto; max-width: var(--u-where-w); }
+#k .rn .rn-alert { top: var(--u-m); left: 50%; transform: translateX(-50%); z-index: 5; }
+#k .rn .hk-toasts { top: auto; bottom: calc(var(--rn-card-h, 90px) + 24px); }
+/* the home risk slip (L) opens under the where card, over any notice slip, its close always in sight */
+#k .rn .rn-print.rn-home-print { top: calc(var(--u-where-b, 120px) + 10px); z-index: 4; max-height: calc(100% - var(--u-where-b, 120px) - var(--rn-card-h, 90px) - 30px); overflow: hidden auto; }
+/* QUICK FIX: the panels' rows never run past the panel's edge, so no price is cut off ("$1" for $10): a long
+   no-wrap line inside a row wraps instead of widening it */
+#k .rn .rn-jobs, #k .rn .rn-stuff { grid-template-columns: minmax(0, 1fr); }
+#k .rn .rn-job, #k .rn .rn-thing { min-width: 0; }
+#k .rn .rn-sheet .rn-job-odds { flex-wrap: wrap; }
+#k .rn .rn-sheet .rn-job-odds > * { white-space: normal; max-width: 100%; }
+/* (the dock is the rail of panel keys now: what it held is in the corners) */
+#k .rn .rn-dock.is-rail .rn-rail-stats { display: none; }
+
+/* ── THE THREE SIZES (I): full, compact, hidden. Faded, never removed, so the stage frames the picture as it was ── */
+/* COMPACT: where and when on one line, your numbers a slim strip, the goal its next thing, the journal its last line */
+#k .u-where.is-compact { padding: calc(6 * var(--k-px)) calc(10 * var(--k-px)); display: flex; align-items: center; gap: 8px; width: auto; max-width: calc(480 * var(--k-px)); }
+#k .u-where.is-compact > .u-cap, #k .u-where.is-compact .u-where-foot { display: none; }
+#k .u-where.is-compact .u-where-name { margin: 0; font-size: calc(17 * var(--k-px)); white-space: nowrap; flex: none; }
+#k .u-where.is-compact .u-where-when { min-width: 0; }
+#k .u-where.is-compact .u-where-when { margin: 0; flex-wrap: nowrap; }
+#k .u-where.is-compact .u-where-when > b { font-size: calc(15 * var(--k-px)); }
+#k .u-where.is-compact .u-where-when .u-pill { min-width: 0; max-width: calc(170 * var(--k-px)); overflow: hidden; text-overflow: ellipsis; }
+#k .u-where-fold { position: absolute; top: 6px; right: 6px; width: calc(20 * var(--k-px)); height: calc(20 * var(--k-px)); }
+#k .u-where.is-compact .u-where-fold { position: static; order: 9; }
+#k .rn.u-size-compact .u-side, #k .u-side:has(.u-stats.is-folded) { width: auto; max-width: var(--u-side-w); align-items: flex-end; }
+#k .rn.u-size-compact .u-stats .u-cap .u-ico, #k .u-stats.is-folded .u-cap .u-ico { display: none; }
+#k .u-goal.is-mini { padding: calc(6 * var(--k-px)) calc(10 * var(--k-px)); }
+#k .u-goal-mini { display: flex; align-items: center; gap: 8px; font-size: var(--u-fs-s); white-space: nowrap; }
+#k .u-goal-mini .u-goal-bar { width: calc(80 * var(--k-px)); margin: 0; flex: none; }
+#k .u-goal-mini span { font-weight: 700; color: var(--u-ink-2); }
+#k .u-goal-head .u-x { margin-left: 4px; width: calc(20 * var(--k-px)); height: calc(20 * var(--k-px)); }
+#k .u-goal-mini .u-x { width: calc(20 * var(--k-px)); height: calc(20 * var(--k-px)); }
+#k .u-journal.is-folded { flex-direction: row; align-items: center; gap: 6px; padding: calc(5 * var(--k-px)) calc(10 * var(--k-px)); max-width: var(--u-side-w); }
+#k .u-journal.is-folded .u-journal-head { order: 2; }
+#k .u-journal.is-folded .u-journal-head > .u-ico, #k .u-journal.is-folded .u-journal-head .u-cap { display: none; }
+#k .u-journal.is-folded ol { margin: 0; flex: 1 1 auto; min-width: 0; }
+#k .u-journal.is-folded .u-je { padding: 0; grid-template-columns: auto auto minmax(0, 1fr); }
+#k .u-journal.is-folded .u-je-head { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+#k .u-journal.is-folded .u-journal-empty { margin: 0; }
+#k .rn.u-size-compact .u-journal, #k .rn.u-size-compact .u-goal { align-self: stretch; }
+/* HIDDEN: the city alone, and a small way back. The result card, a notice at your door and the night's report stay */
+#k .rn.u-size-hidden > :not(.u-res):not(.rn-alert):not(.hk-overlay):not(.hk-toasts):not(.u-back):not(.rn-marks) { opacity: 0 !important; pointer-events: none !important; }
+#k .u-back { position: absolute; left: var(--u-m); bottom: var(--u-m); z-index: 6; }
+#k .u-back[hidden] { display: none; }
+/* QUICK FIX: the black between two places says what is happening, in the middle */
+#k .u-dark-say { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 2; margin: 0; color: var(--u-inset); font: 400 calc(20 * var(--k-px))/1.2 var(--u-sign); text-transform: uppercase; letter-spacing: .04em; pointer-events: none; text-align: center; }
+#k .u-dark-say[hidden] { display: none; }
+/* (while a scene plays a corner block over the player or someone the scene names steps aside: index.js clearFigures) */
+#k .u-clear { opacity: 0 !important; pointer-events: none !important; transition: opacity 160ms; }
+
+/* while arranging, the corners step back as the dock does */
+#k .rn.is-arranging .u-where, #k .rn.is-arranging .u-side { opacity: .4; pointer-events: none; }
+#k .rn.is-arranging .u-res { display: none; }
+/* (the opening hides the frame until it is over: stage/opening.js) */
+body.hk2-opening #k .u-where, body.hk2-opening #k .u-side, body.hk2-opening #k .u-res { visibility: hidden; }
+/* QUICK FIX: name tags and mood marks never float inside the subway car (the carriage's own picture, .sbw) */
+body:has(.sbw) .hk2-bubbles, body:has(.sbw) #k .rn-marks { visibility: hidden; }
+
+/* ── THE DOCK (leg 2; index.js paintBar): the three things in front of you (1 to 3), the six verbs that never move
+   (Shop B, Rob R and Bins X on the street, Travel T, Home H, Sleep Z), and the main button naming what Enter does.
+   One row when the frame is compact (I), folded on its own (F), or while an hour plays. Colours: skin.css only ── */
+#k .rn {
+  --u-dock-w: min(calc(1088 * var(--k-px)), calc(100% - 2 * var(--u-m)));
+  /* THE DOCK'S HEIGHT, from two values: a LINE (the header; a card is two of them) and a KEY (a verb, Go; the one-row
+     form is a little less). Full: line + 2 lines + key and the gaps, 127 px at 1280 */
+  --u-dock-line: calc(20 * var(--k-px));
+  --u-dock-key: calc(33 * var(--k-px));
+}
+#k .rn .rn-card.u-dock { left: 50%; right: auto; bottom: var(--u-m); transform: translateX(-50%); width: var(--u-dock-w); max-height: none; overflow: visible; box-sizing: border-box;
+  padding: calc(4 * var(--k-px)) calc(7 * var(--k-px)) calc(6 * var(--k-px)); background: var(--u-grid), var(--u-panel); border: 1.5px solid var(--u-line); border-radius: var(--u-r);
+  box-shadow: var(--u-shadow-l); color: var(--u-ink); font: 500 var(--u-fs)/1.3 var(--u-ui); }
+#k .rn .rn-card.u-dock .rn-meter { border-radius: var(--u-r) var(--u-r) 0 0; overflow: hidden; }
+#k .rn .rn-card.u-dock.is-playing { width: auto; max-width: min(calc(780 * var(--k-px)), calc(100% - 2 * var(--u-m))); }
+#k .rn .rn-card.u-dock .rn-card-body { display: block; }
+/* the head: the danger of one more hour here, what the place says, when the next jobs come, the fold */
+#k .u-dock-head, #k .u-dock-row { display: flex; align-items: center; gap: calc(8 * var(--k-px)); min-width: 0; }
+#k .u-dock-head { height: var(--u-dock-line); }
+#k .u-dock-row { min-height: calc(var(--u-dock-key) - 3 * var(--k-px)); }
+#k .u-dock .rn-pct { grid-area: auto; flex: none; display: flex; align-items: baseline; gap: 4px; min-width: 0; padding: 0 8px 0 2px; box-shadow: 1px 0 0 var(--u-rule); align-self: center; }
+#k .u-dock .rn-danger-pct { font: 400 calc(18 * var(--k-px))/1 var(--u-sign); }
+#k .u-dock .rn-pct.is-zero .rn-danger-pct { color: var(--u-mute); }
+#k .u-dock .rn-pct:not(.is-zero) .rn-danger-pct { color: var(--u-risk-text); }
+#k .u-dock .rn-pct-word, #k .u-dock .rn-pct-heat { font: 700 var(--u-fs-s)/1 var(--u-ui); text-transform: uppercase; color: var(--u-mute); }
+#k .u-dock .rn-said { flex: 1 1 auto; min-width: 0; height: auto; }
+/* (the head is one line: what the place says ends in … rather than going under the cards) */
+#k .u-dock-head .rn-said, #k .u-dock-head .rn-said > * { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-height: var(--u-dock-line); }
+#k .u-dock .rn-said-line { font: 600 var(--u-fs)/1.3 var(--u-ui); color: var(--u-ink-2); }
+#k .u-dock .rn-said-line.is-quiet { color: var(--u-mute); }
+#k .u-dock .u-next { flex: none; }
+/* the header's slot (WHERE_IN_DOCK, index.js): the place in the city's lettering, the hour, how safe; empty, nothing */
+#k .u-dock-slot { display: contents; }
+#k .u-dock-where { flex: none; display: flex; align-items: center; gap: calc(7 * var(--k-px)); min-width: 0; height: var(--u-dock-line); padding-right: 8px; box-shadow: 1px 0 0 var(--u-rule); }
+#k .u-dock-place { font: 400 calc(18 * var(--k-px))/1 var(--u-sign); text-transform: uppercase; white-space: nowrap; }
+#k .u-dock-hour { display: inline-flex; align-items: center; gap: 3px; font: 700 var(--u-fs)/1 var(--u-ui); }
+#k .u-dock-where .u-pill { padding-top: 1px; padding-bottom: 1px; }
+#k .u-dock .u-dock-fold { flex: none; width: calc(22 * var(--k-px)); height: calc(22 * var(--k-px)); }
+/* the three cards */
+#k .u-dock-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: calc(6 * var(--k-px)); margin-top: calc(4 * var(--k-px)); }
+#k .u-card { position: relative; display: grid; gap: calc(3 * var(--k-px)); align-content: center; min-width: 0; min-height: calc(2 * var(--u-dock-line) + 4 * var(--k-px)); box-sizing: border-box; padding: calc(3 * var(--k-px)) calc(9 * var(--k-px));
+  border: 1.5px solid var(--u-line); border-radius: calc(9 * var(--k-px)); background: var(--u-inset); box-shadow: var(--u-block); color: var(--u-ink); cursor: pointer; text-align: left; }
+#k .u-card:hover { box-shadow: 3px 3px 0 var(--u-line); }
+#k .u-card.is-on { outline: 3px solid var(--u-you); outline-offset: 0; border-width: 2px; }
+#k .u-card.is-off { background: var(--u-panel); border-color: var(--u-slate); box-shadow: none; }
+#k .u-card.is-off .u-card-t, #k .u-card.is-off .u-card-pay { color: var(--u-ink-2); }
+#k .u-card.is-empty { background: transparent; border: 1.5px dashed var(--u-slate); box-shadow: none; cursor: default; color: var(--u-mute); }
+#k .u-card.is-empty .u-card-t { font-weight: 600; color: var(--u-mute); }
+#k .u-card-main { display: flex; align-items: center; gap: calc(6 * var(--k-px)); min-width: 0; }
+#k .u-card-main .u-ico { color: var(--u-ink-2); }
+#k .u-card-t { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 calc(14 * var(--k-px))/1.2 var(--u-ui); }
+#k .u-card-pay { flex: none; font-size: calc(17 * var(--k-px)); line-height: 1; }
+#k .u-card-main.is-long .u-card-t { font-size: calc(13 * var(--k-px)); letter-spacing: -.005em; }
+/* (a tag that does not fit goes whole to a second line, which is not shown: never half a word) */
+#k .u-card-sub { display: flex; flex-wrap: wrap; align-items: center; align-content: flex-start; column-gap: calc(5 * var(--k-px)); row-gap: 4px; min-width: 0; height: calc(var(--u-dock-line) - 2 * var(--k-px)); overflow: hidden; white-space: nowrap; font: 600 var(--u-fs-s)/1.2 var(--u-ui); }
+#k .u-card-sub > * { flex: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+#k .u-card-sub .hk-tag, #k .u-card-sub .rn-uses, #k .u-card-sub .rn-hooked, #k .u-card-sub .rn-trust, #k .u-card-sub em, #k .u-card-sub b { font-family: var(--u-ui); font-size: var(--u-fs-s); }
+#k .u-dim { color: var(--u-mute); font-weight: 600; }
+#k .u-who { font-weight: 700; }
+#k .u-pick { display: inline-flex; align-items: center; gap: 3px; font-weight: 700; cursor: pointer; }
+#k .u-pick i { font-style: normal; color: var(--u-mute); }
+#k .u-odds { display: inline-flex; align-items: center; gap: 4px; font-weight: 800; }
+#k .u-odds-bar { width: calc(40 * var(--k-px)); height: 7px; border-radius: 4px; overflow: hidden; border: 1px solid var(--u-line); background: var(--u-loss); }
+#k .u-odds-bar i { display: block; height: 100%; background: var(--u-ink); }
+#k .u-take { display: inline-flex; align-items: center; gap: 4px; }
+#k .u-take b { font-size: calc(15 * var(--k-px)); }
+#k .u-step { display: inline-grid; place-items: center; width: calc(20 * var(--k-px)); height: calc(20 * var(--k-px)); padding: 0; border: 1px solid var(--u-line); border-radius: 5px;
+  background: var(--u-key-bg); color: var(--u-ink); font: 800 var(--u-fs)/1 var(--u-ui); cursor: pointer; }
+#k .u-step[disabled] { opacity: .4; cursor: default; }
+#k .u-card .u-why { max-width: 60%; overflow: hidden; text-overflow: ellipsis; }
+/* the six verbs and the main button */
+#k .u-dock-verbs { display: flex; align-items: stretch; gap: calc(8 * var(--k-px)); margin-top: calc(5 * var(--k-px)); min-width: 0; }
+#k .u-verbs { display: flex; gap: calc(6 * var(--k-px)); flex: 1 1 auto; min-width: 0; }
+#k .u-street { display: flex; gap: calc(4 * var(--k-px)); flex: 2 1 0; min-width: 0; padding: 2px; border: 1px dashed var(--u-slate); border-radius: calc(10 * var(--k-px)); }
+#k .u-verb { display: flex; align-items: center; gap: calc(6 * var(--k-px)); flex: 1 1 0; min-width: 0; height: var(--u-dock-key); box-sizing: border-box; padding: 0 calc(7 * var(--k-px));
+  border: 1.5px solid var(--u-line); border-radius: calc(8 * var(--k-px)); background: var(--u-key-bg); color: var(--u-ink); box-shadow: var(--u-block); text-align: left; cursor: pointer; font: inherit; }
+#k .u-verb > .u-ico { flex: none; }
+/* (the key as a badge on the verb's corner: the words get the room) */
+#k .u-verb { position: relative; }
+#k .rn .u-verb .u-key { position: absolute; top: -7px; right: -6px; min-width: calc(17 * var(--k-px)); height: calc(17 * var(--k-px)); font-size: calc(12.5 * var(--k-px)); }
+#k .u-dock-verbs.is-row .u-verb .u-key { top: -6px; right: -7px; min-width: calc(15 * var(--k-px)); height: calc(15 * var(--k-px)); }
+#k .u-verb:hover { box-shadow: 3px 3px 0 var(--u-line); }
+#k .u-verb.is-on { outline: 3px solid var(--u-you); border-width: 2px; }
+#k .u-verb.is-off { background: var(--u-panel); border-color: var(--u-slate); box-shadow: none; }
+#k .u-verb.is-off > .u-ico { color: var(--u-mute); }
+#k .u-verb-t { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+#k .u-verb-t b { font: 700 calc(13.5 * var(--k-px))/1.15 var(--u-ui); white-space: nowrap; }
+#k .u-verb-t small { font: 600 var(--u-fs-s)/1.15 var(--u-ui); color: var(--u-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#k .u-verb.is-off .u-verb-t b { color: var(--u-ink-2); }
+#k .u-btn.u-go { flex: none; justify-content: space-between; gap: 10px; min-width: calc(180 * var(--k-px)); max-width: calc(330 * var(--k-px)); height: var(--u-dock-key); box-shadow: 0 0 0 3px var(--u-you), 3px 3px 0 3px var(--u-line); }
+#k .u-btn.u-go[disabled] { background: var(--u-pale); color: var(--u-ink-2); border-color: var(--u-slate); box-shadow: none; cursor: default; transform: none; }
+#k .u-btn.u-go[disabled] .u-key { background: var(--u-inset); color: var(--u-ink-2); border-color: var(--u-slate); }
+#k .u-go-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* ONE ROW: the cards their name and pay, the verbs their icon and key */
+#k .u-dock-cards.is-row { display: flex; flex: 1 1 auto; min-width: 0; gap: 4px; margin: 0; }
+#k .u-card.is-row { flex: 1 1 0; min-height: 0; height: calc(var(--u-dock-key) - 5 * var(--k-px)); padding: 0 calc(7 * var(--k-px)); display: flex; align-items: center; }
+#k .u-card.is-row .u-card-main { flex: 1 1 auto; }
+#k .u-card.is-row .u-card-main > .u-ico { display: none; }
+#k .u-card.is-row .u-card-t { font-size: var(--u-fs); }
+#k .u-card.is-row .u-card-pay { font-size: calc(14 * var(--k-px)); }
+#k .u-dock-verbs.is-row { flex: none; gap: 9px; margin: 0 4px 0 0; }
+#k .u-dock-verbs.is-row .u-verb { flex: none; height: calc(var(--u-dock-key) - 5 * var(--k-px)); padding: 0 6px; gap: 3px; }
+#k .u-dock-verbs.is-row .u-verb-t { display: none; }
+#k .u-dock-row .u-btn.u-go { height: calc(var(--u-dock-key) - 5 * var(--k-px)); min-width: calc(130 * var(--k-px)); max-width: calc(180 * var(--k-px)); }
+#k .u-btn.u-go .u-key { flex: none; }
+#k .u-dock-row .u-btn.u-skip, #k .u-dock-row .u-btn.is-go { flex: none; }
+/* THE LIST over Shop or Travel: each thing, its price or fare, what it does or risks, why not */
+#k .u-list { position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 4; width: calc(380 * var(--k-px)); max-height: 46vh; overflow: hidden auto; padding: calc(6 * var(--k-px)); box-shadow: var(--u-shadow-l); }
+#k .u-list-head { display: flex; align-items: center; gap: 6px; padding: 2px 4px 6px; border-bottom: 1px solid var(--u-rule); }
+#k .u-list-head .u-cap { color: var(--u-ink); flex: 1 1 auto; min-width: 0; }
+#k .u-list ul { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 2px; }
+#k .u-li { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 5px 8px; box-sizing: border-box; border: 1.5px solid transparent; border-radius: 7px;
+  background: none; color: var(--u-ink); text-align: left; cursor: pointer; font: inherit; }
+#k .u-li:hover { border-color: var(--u-line); }
+#k .u-li.is-on { background: var(--u-you); border-color: var(--u-line); }
+#k .u-li.is-on small { color: var(--u-ink-2); }
+#k .u-li.is-off b { color: var(--u-ink-2); }
+#k .u-li-t { display: flex; flex-direction: column; min-width: 0; }
+#k .u-li-t b { font: 700 calc(13.5 * var(--k-px))/1.2 var(--u-ui); }
+#k .u-li-t small { font: 600 var(--u-fs-s)/1.25 var(--u-ui); color: var(--u-mute); }
+#k .u-li-p { flex: none; font-size: calc(17 * var(--k-px)); }
+/* the first steps of the first day, on the goal card */
+#k .u-first { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-bottom: 7px; margin-bottom: 7px; border-bottom: 1px solid var(--u-rule); font-weight: 600; }
+#k .u-first-t { flex: 1 1 calc(220 * var(--k-px)); min-width: 0; }
+#k .u-first .u-x { margin-left: auto; }
+#k .u-goal.is-mini .u-first { flex-wrap: wrap; }
+/* a toast is a word, not a loss: neutral */
+#k .hk-toast.u-toast { background: var(--u-grid), var(--u-panel); color: var(--u-ink); border: 1.5px solid var(--u-line); border-radius: 9px; box-shadow: var(--u-block); font: 700 var(--u-fs)/1.3 var(--u-ui); }
+/* arranging: the arrange bar over the dock, in its box */
+#k .rn .rn-arrange { left: 50%; right: auto; transform: translateX(-50%); width: var(--u-dock-w); }
+#k .rn.is-arranging .rn-card.u-dock { opacity: 0; }
+
+/* ── phone width: where and when one strip with the panel keys at its end, your numbers one line under it; the goal
+   and the journal folded away (J opens the journal); the result card under them. The strip the panel keys sit in is
+   as tall as the two lines, so the stage leaves the same room at the top as the old dock strip did ─────────────── */
+@media (max-width: 720px) {
+  #k .rn { --u-where-w: auto; --u-side-w: auto; }
+  #k .u-where { left: var(--u-m); right: calc(var(--u-m) + var(--u-keys-w, 120px) + 6px); width: auto; max-width: none; padding: 5px 9px; display: flex; align-items: center; gap: 8px; }
+  #k .u-where .u-cap, #k .u-where-foot, #k .u-where-fold, #k .u-where-when .u-pill { display: none; }
+  #k .u-where-name, #k .u-where.is-compact .u-where-name { flex: 0 1 auto; min-width: 0; margin: 0; font-size: calc(16 * var(--k-px)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #k .u-where-when { margin: 0 0 0 auto; flex: none; }
+  #k .u-where-when > b { font-size: calc(15 * var(--k-px)); }
+  #k .u-side { left: var(--u-m); right: var(--u-m); width: auto; max-width: none; top: calc(var(--u-where-b, 40px) + 5px); align-items: stretch; }
+  #k .u-stats .u-fold { display: none; }
+  #k .u-stats.is-folded .u-stat { flex: 1 1 auto; padding: 5px 6px; }
+  #k .u-stat-v { font-size: calc(16 * var(--k-px)); }
+  #k .u-goal, #k .u-journal:not(.is-open-phone) { display: none; }
+  #k .u-res { left: var(--u-m); right: var(--u-m); top: calc(var(--u-side-b, 90px) + 6px); max-width: none; }
+  #k .u-res-body { -webkit-line-clamp: 2; }
+  #k .rn .rn-left, #k .rn.is-rail .rn-left { top: var(--u-m); left: var(--u-m); right: var(--u-m); width: auto; bottom: auto; pointer-events: none; }
+  #k .rn .rn-dock.is-rail { min-height: calc(var(--u-side-b, 80px) - var(--u-m)); flex-direction: column; align-items: flex-end; justify-content: flex-start; padding: 0; background: none; box-shadow: none; overflow: visible; }
+  #k .rn .rn-dock.is-rail .rn-keys { pointer-events: auto; padding: 3px; border: 1.5px solid var(--u-line); border-radius: var(--u-r); background: var(--u-grid), var(--u-panel); box-shadow: var(--u-block); }
+  #k .rn .rn-dock.is-rail .rn-face { display: none; }
+  #k .rn .rn-notice { left: var(--u-m); right: var(--u-m); max-width: none; top: calc(var(--u-side-b, 90px) + 6px); }
+  #k .rn .rn-new-ask { top: calc(var(--u-side-b, 90px) + 6px); right: var(--u-m); max-width: none; }
+  #k .rn .rn-print.rn-home-print { top: calc(var(--u-side-b, 90px) + 6px); left: var(--u-m); right: var(--u-m); width: auto; }
+  /* the dock at phone width: the three cards one line each, the verbs a grid of six, the main button across; no key caps (touch) */
+  #k .rn { --u-dock-w: calc(100% - 2 * var(--u-m)); }
+  #k .rn .rn-card.u-dock { padding: 5px 6px 6px; }
+  #k .rn .u-dock .u-key, #k .rn .u-dock .u-verb .u-key { display: none; }
+  #k .u-first-card { padding: 7px 9px 0; }
+  #k .u-first-card .u-first { margin-bottom: 0; border-bottom: 0; }
+  /* the one row at phone width is two short lines: the danger and the three cards; the six verbs, Go and the fold */
+  #k .u-dock-row:not(.is-playing) { flex-wrap: wrap; row-gap: 5px; }
+  #k .u-dock-row .u-dock-cards.is-row { flex: 1 1 70%; }
+  #k .u-dock-verbs.is-row { gap: 4px; }
+  #k .u-dock-row .u-btn.u-go { flex: 1 1 0; min-width: 0; max-width: none; }
+  #k .u-dock-cards:not(.is-row) { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  #k .u-dock-cards:not(.is-row) .u-card { min-height: 0; padding: 5px 8px; }
+  #k .u-dock-cards:not(.is-row) .u-card-sub { display: none; }
+  #k .u-dock-verbs:not(.is-row) { flex-wrap: wrap; gap: 5px; }
+  #k .u-dock-verbs:not(.is-row) .u-verbs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; flex: 1 1 100%; }
+  #k .u-dock-verbs:not(.is-row) .u-street { display: contents; }
+  #k .u-dock-verbs:not(.is-row) .u-verb { height: calc(var(--u-dock-key) - var(--k-px)); }
+  #k .u-dock-verbs:not(.is-row) .u-verb-t small { display: none; }
+  #k .u-dock-verbs:not(.is-row) .u-btn.u-go { flex: 1 1 100%; max-width: none; }
+  #k .u-dock .u-next { display: none; }
+  #k .u-dock-cards.is-row .u-card-pay { display: none; }
+  #k .u-list { width: calc(100% - 12px); }
+}
+/* ── THE TILES (leg 3; tiles.js): a piece's picture, 64 px, rendered at 128; bone until it is drawn ─────────────── */
+#k .u-tile { position: relative; display: inline-grid; place-items: center; flex: none; width: var(--u-tile-s, 64px); height: var(--u-tile-s, 64px); box-sizing: border-box;
+  border: 1px solid var(--u-tile-edge); border-radius: calc(6 * var(--k-px)); background: var(--u-tile-bg); overflow: hidden; }
+#k .u-tile img { display: block; width: 100%; height: 100%; object-fit: contain; }
+#k .u-tile.is-wait img, #k .u-tile.is-none img { visibility: hidden; }
+#k .u-tile.is-wait::after { content: ""; position: absolute; width: 28%; height: 28%; border-radius: 50%; border: 2px dashed var(--u-tile-wait); }
+#k .u-tile.is-none::after { content: "no picture"; position: absolute; inset: 0; display: grid; place-items: center; padding: 4px; text-align: center; font: 600 var(--u-fs-s)/1.1 var(--u-ui); color: var(--u-mute); }
+
+/* ── THE LIBRARY (leg 3; library.js): everything there is, L. A panel a little wider than the others: its lead the
+   filters, its scroll the grid of tiles, its card under them (no foot). Compact (I, or a scene playing): the filters and
+   the card one line each ─────────────────────────────────────────────────────────────────────────────────────────── */
+#k .rn .rn-sheet[data-sheet="library"] { width: min(calc(486 * var(--k-px)), calc(100% - var(--rn-side) - 2 * var(--rn-m) - var(--rn-g))); }
+#k .rn-sheet[data-sheet="library"] .rn-sheet-foot { display: none; }
+#k .rn-sheet[data-sheet="library"] .rn-sheet-scroll { padding: 0 8px 4px; }
+#k .rn-sheet:not([data-sheet="library"]) .u-lib-card { display: none; }
+#k .u-lib-lead { display: grid; gap: 5px; padding: 0 10px 7px; border-bottom: 1px solid var(--u-rule); font: 500 var(--u-fs)/1.3 var(--u-ui); }
+#k .u-lib-head { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; font: 500 var(--u-fs)/1.3 var(--u-ui); }
+#k .u-lib-head .u-lib-count { margin-left: auto; }
+#k .u-lib-row { display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; min-width: 0; }
+#k .u-lib-row.is-folded { flex-wrap: nowrap; }
+#k .u-seg { display: inline-flex; flex-wrap: wrap; gap: 3px; min-width: 0; }
+#k .u-chip { display: inline-flex; align-items: center; gap: 4px; min-height: calc(24 * var(--k-px)); padding: 0 calc(8 * var(--k-px)); box-sizing: border-box; cursor: pointer; white-space: nowrap;
+  border: 1px solid var(--u-line); border-radius: 999px; background: var(--u-key-bg); color: var(--u-ink); font: 700 var(--u-fs-s)/1 var(--u-ui); }
+#k .u-chip small { font: 600 var(--u-fs-s)/1 var(--u-ui); color: var(--u-mute); }
+#k .u-chip:hover { box-shadow: var(--u-key-shadow); }
+#k .u-chip.is-on { background: var(--u-ink); color: var(--u-inset); }
+#k .u-chip.is-on small { color: var(--u-pale); }
+#k .u-seg.is-kinds .u-chip { min-height: calc(26 * var(--k-px)); font-size: var(--u-fs); }
+#k .u-tier-dot { width: 10px; height: 10px; border-radius: 3px; border: 1px solid var(--u-line); background: var(--u-tier-0); }
+#k .u-tier-dot.is-t1 { background: var(--u-tier-1); } #k .u-tier-dot.is-t2 { background: var(--u-tier-2); } #k .u-tier-dot.is-t3 { background: var(--u-tier-3); }
+#k .u-select { min-height: calc(24 * var(--k-px)); max-width: 100%; padding: 0 4px; box-sizing: border-box; border: 1px solid var(--u-line); border-radius: 6px; background: var(--u-key-bg); color: var(--u-ink); font: 700 var(--u-fs-s)/1 var(--u-ui); cursor: pointer; }
+#k .u-lib-sort { display: inline-flex; }
+#k .u-lib-count { margin-left: auto; padding: 2px 7px; border-radius: 999px; background: var(--u-mute-bg); color: var(--u-ink); font: 700 var(--u-fs-s)/1.2 var(--u-ui); white-space: nowrap; font-variant-numeric: tabular-nums; }
+#k .u-lib-fold { margin-left: auto; width: calc(22 * var(--k-px)); height: calc(22 * var(--k-px)); }
+#k .u-lib-count + .u-lib-fold { margin-left: 0; }
+#k .u-lib-said { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 var(--u-fs-s)/1.2 var(--u-ui); color: var(--u-ink-2); }
+/* the grid: a tile, its marks on its corner, the name, the rarity's word on its colour and the price, what it is to you */
+#k .u-lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(104 * var(--k-px)), 1fr)); gap: 4px; padding: 7px 0 4px; }
+#k .u-lib-cell { position: relative; display: grid; justify-items: start; align-content: start; gap: 3px; min-width: 0; padding: 5px 5px 6px; box-sizing: border-box; cursor: pointer;
+  border: 1.5px solid transparent; border-radius: 8px; background: none; color: var(--u-ink); text-align: left; font: inherit; }
+#k .u-lib-cell:hover { border-color: var(--u-line); background: var(--u-inset); }
+#k .u-lib-cell.is-pinned { border-color: var(--u-line); background: var(--u-inset); box-shadow: var(--u-block); }
+#k .u-lib-pic { position: relative; display: block; line-height: 0; }
+#k .u-lib-name { width: 100%; min-height: 2.5em; overflow: hidden; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font: 700 var(--u-fs-s)/1.25 var(--u-ui); }
+#k .u-lib-meta { display: flex; align-items: center; gap: 4px; width: 100%; min-width: 0; }
+#k .u-lib-price { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 var(--u-fs-s)/1.1 var(--u-ui); font-variant-numeric: tabular-nums; }
+#k .u-lib-state { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 var(--u-fs-s)/1.2 var(--u-ui); color: var(--u-ink); }
+#k .u-lib-state.is-empty { color: var(--u-mute); font-weight: 500; }
+#k .u-lib-none { margin: 10px 4px; color: var(--u-mute); font: 600 var(--u-fs)/1.3 var(--u-ui); grid-column: 1 / -1; }
+#k .u-tier { flex: none; display: inline-flex; align-items: center; padding: 2px 5px; border-radius: 4px; font: 700 var(--u-fs-s)/1.05 var(--u-ui); background: var(--u-tier-0); color: var(--u-tier-0-on); }
+#k .u-tier.is-t1 { background: var(--u-tier-1); color: var(--u-tier-1-on); }
+#k .u-tier.is-t2 { background: var(--u-tier-2); color: var(--u-tier-2-on); box-shadow: inset 0 0 0 1px var(--u-line); }
+#k .u-tier.is-t3 { background: var(--u-tier-3); color: var(--u-tier-3-on); box-shadow: inset 0 0 0 1px var(--u-line); }
+/* the marks on a tile's corner: yours (a tick), worn (the figure), on sale today (the bag), hangs on a wall (a frame) */
+#k .u-marks { position: absolute; top: -3px; right: -7px; display: flex; flex-direction: column; gap: 2px; }
+#k .u-mark { display: grid; place-items: center; width: 19px; height: 19px; box-sizing: border-box; border: 1px solid var(--u-line); border-radius: 5px; background: var(--u-inset); color: var(--u-ink); }
+#k .u-mark .u-ico { width: 13px; height: 13px; }
+#k .u-mark.is-owned, #k .u-mark.is-worn { background: var(--u-ink); color: var(--u-inset); }
+#k .u-mark.is-here { border-width: 2px; }
+/* the card: a bigger picture (on the player, to wear), what it is, where it is sold today, Try on, Put on, Buy */
+#k .u-lib-card { flex: none; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; margin: 0 8px 8px; padding: 8px; box-sizing: border-box;
+  border: 1.5px solid var(--u-line); border-radius: 9px; background: var(--u-inset); box-shadow: var(--u-block); color: var(--u-ink); font: 500 var(--u-fs)/1.3 var(--u-ui); }
+#k .u-lib-card.is-folded { display: block; padding: 5px 7px; }
+#k .u-lib-card-body { display: grid; gap: 4px; min-width: 0; align-content: start; }
+#k .u-lib-card-head { display: flex; align-items: flex-start; gap: 6px; }
+#k .u-lib-card-name { flex: 1 1 auto; min-width: 0; font: 700 calc(15 * var(--k-px))/1.2 var(--u-ui); overflow-wrap: anywhere; }
+#k .u-lib-card-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
+#k .u-lib-card-price { font: 400 calc(18 * var(--k-px))/1 var(--u-sign); white-space: nowrap; }
+#k .u-lib-card-kind, #k .u-lib-card-sold, #k .u-lib-card-marks { margin: 0; font: 600 var(--u-fs-s)/1.3 var(--u-ui); color: var(--u-ink-2); }
+#k .u-lib-card-kind { flex: 1 1 100%; }
+#k .u-lib-card-marks { color: var(--u-ink); }
+#k .u-lib-card-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 3px; }
+#k .u-lib-card-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+#k .u-lib-card-row .u-lib-card-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--u-fs); }
+#k .u-lib-card-row .u-btn { flex: none; min-height: calc(26 * var(--k-px)); }
+#k .u-lib-card-row .u-lib-buy-t small { display: none; }
+#k .u-lib-buy { flex: 1 1 calc(150 * var(--k-px)); min-width: 0; min-height: calc(34 * var(--k-px)); justify-content: flex-start; }
+#k .u-lib-wear { min-height: calc(34 * var(--k-px)); }
+#k .u-lib-buy-t { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+#k .u-lib-buy-t small { font: 600 var(--u-fs-s)/1.2 var(--u-ui); white-space: normal; text-align: left; }
+#k .u-lib-try { min-height: calc(34 * var(--k-px)); }
+#k .u-lib-try.is-on { background: var(--u-try); color: var(--u-try-on); border-color: var(--u-try); }
+#k .u-btn.is-no { background: var(--u-panel); border-color: var(--u-slate); color: var(--u-ink-2); box-shadow: none; cursor: help; }
+#k .u-btn.is-no:hover { transform: none; box-shadow: none; }
+/* THE SHELF HERE TODAY in the shop's list (B): tiles, rarity, price; Try on; the Library */
+#k .u-list.has-shelf { width: calc(404 * var(--k-px)); }
+#k .u-shelf { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--u-rule); }
+#k .u-list .u-list-head + .u-shelf { margin-top: 2px; border-top: 0; }
+#k .u-shelf-head { display: flex; align-items: center; gap: 6px; padding: 0 4px 5px; }
+#k .u-shelf-head .u-cap { flex: 1 1 auto; min-width: 0; color: var(--u-ink); }
+#k .u-shelf-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+#k .u-shelf-cell { display: grid; align-content: start; gap: 3px; min-width: 0; padding: 4px; border: 1.5px solid transparent; border-radius: 8px; }
+#k .u-shelf-cell:hover { border-color: var(--u-line); }
+#k .u-shelf-cell.is-on { background: var(--u-you); border-color: var(--u-line); }
+#k .u-shelf-cell.is-off .u-lib-name { color: var(--u-ink-2); }
+#k .u-shelf-pick { display: grid; justify-items: start; gap: 3px; min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+#k .u-shelf-why { width: 100%; font: 600 var(--u-fs-s)/1.2 var(--u-ui); color: var(--u-ink-2); overflow-wrap: anywhere; }
+#k .u-shelf-cell.is-on .u-shelf-why { color: var(--u-ink); }
+#k .u-btn.u-shelf-try { justify-self: start; min-height: calc(22 * var(--k-px)); padding: 0 6px; gap: 4px; }
+#k .u-btn.u-shelf-try .u-ico { width: calc(13 * var(--k-px)); height: calc(13 * var(--k-px)); }
+#k .u-btn.u-shelf-try.is-on { background: var(--u-try); color: var(--u-try-on); border-color: var(--u-try); }
+/* THE WARDROBE in the You panel (C): the six slots and what you own to wear */
+#k .u-wardrobe { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 4px; }
+#k .u-ward-slot { display: grid; justify-items: center; gap: 3px; min-width: 0; text-align: center; }
+#k .u-ward-label { font: 700 var(--u-fs-s)/1.1 var(--u-ui); color: var(--u-ink-2); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#k .u-ward-slot .u-tile { --u-tile-s: 56px !important; }
+#k .u-tile.u-ward-none { background: transparent; border: 1.5px dashed var(--u-slate); }
+#k .u-ward-name { max-width: 100%; font: 600 var(--u-fs-s)/1.2 var(--u-ui); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
+#k .u-ward-slot.is-empty .u-ward-name { color: var(--u-mute); font-weight: 500; }
+#k .u-ward-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(104 * var(--k-px)), 1fr)); gap: 4px; }
+#k .u-ward-cell { display: grid; justify-items: start; align-content: start; gap: 3px; min-width: 0; padding: 5px; border-radius: 8px; border: 1.5px solid transparent; }
+#k .u-ward-cell.is-worn { border-color: var(--u-line); background: var(--u-inset); }
+#k .u-ward-why { font: 600 var(--u-fs-s)/1.2 var(--u-ui); color: var(--u-mute); }
+#k .u-btn.u-ward-act { min-height: calc(22 * var(--k-px)); }
+#k .u-ward-more { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+/* THE TRAY while arranging (V): each piece its tile, a wall piece marked, why it could not come out */
+#k .rn-ar-tray.has-tiles { align-items: stretch; gap: 6px; padding: 2px 0 4px; }
+#k[data-skin] .hk .rn-arrange .k-btn.rn-ar-chip.u-ar-tile { flex-direction: column; align-items: center; justify-content: flex-start; gap: 3px; width: calc(92 * var(--k-px)); min-height: 0; padding: 4px 4px 5px; white-space: normal; }
+#k .rn-ar-chip.u-ar-tile .u-tile { --u-tile-s: 56px !important; }
+#k .u-ar-name { max-width: 100%; text-align: center; text-transform: none; font: 700 var(--u-fs-s)/1.15 var(--u-ui); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
+#k .u-ar-wall { display: inline-flex; align-items: center; gap: 3px; padding: 1px 5px; border: 1px solid currentColor; border-radius: 4px; font: 700 var(--u-fs-s)/1.1 var(--u-ui); }
+#k .u-ar-wall .u-ico { width: 12px; height: 12px; }
+#k .u-ar-why { max-width: 100%; text-align: center; font: 600 var(--u-fs-s)/1.15 var(--u-ui); color: var(--u-loss-text); }
+#k .rn-ar-chip.is-on .u-ar-why { color: inherit; }
+
+/* ── THE LEFT RAIL (leg 3, part E): the panel keys in the dock's style: its paper, outline and offset ink, each key an
+   icon, its word and its letter on the corner (as the dock's verbs); the open panel's key ringed in your yellow. The
+   rail keeps its width, so the stage frames the picture as before ──────────────────────────────────────────────── */
+@media (min-width: 721px) {
+  #k .rn .rn-dock.is-rail { padding: 6px 6px 8px; gap: 8px; border: 1.5px solid var(--u-line); border-radius: var(--u-r); background: var(--u-grid), var(--u-panel); box-shadow: var(--u-shadow); color: var(--u-ink); }
+}
+#k .rn .rn-dock.is-rail .rn-face { border: 1.5px solid var(--u-line); border-radius: calc(8 * var(--k-px)); background: var(--u-inset); box-shadow: var(--u-block); box-sizing: border-box; }
+#k .rn .rn-dock.is-rail .rn-face:hover { box-shadow: 3px 3px 0 var(--u-line); }
+#k .rn .rn-dock.is-rail .rn-keys { padding-top: 2px; border-top: 0; gap: 8px; }
+#k .rn .rn-key.u-rail-key { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 0; min-height: calc(46 * var(--k-px)); padding: 5px 2px 4px; box-sizing: border-box; cursor: pointer;
+  border: 1.5px solid var(--u-line); border-radius: calc(8 * var(--k-px)); background: var(--u-key-bg); color: var(--u-ink); box-shadow: var(--u-block); font: 700 var(--u-fs-s)/1.1 var(--u-ui); text-transform: none; white-space: nowrap; }
+#k .rn .rn-key.u-rail-key .u-ico { width: calc(18 * var(--k-px)); height: calc(18 * var(--k-px)); }
+#k .rn .rn-key.u-rail-key:hover { box-shadow: 3px 3px 0 var(--u-line); }
+#k .rn .rn-key.u-rail-key.is-on { outline: 3px solid var(--u-you); outline-offset: 0; border-width: 2px; }
+#k .rn .rn-key.u-rail-key.is-off { background: var(--u-panel); border-color: var(--u-slate); box-shadow: none; color: var(--u-ink-2); cursor: not-allowed; }
+#k[data-skin] .rn .rn-key.u-rail-key .u-key { position: absolute; top: -6px; right: -5px; min-width: calc(17 * var(--k-px)); height: calc(17 * var(--k-px)); font-size: calc(12.5 * var(--k-px)); }
+#k .rn .rn-key.u-rail-key.is-on .u-key { background: var(--u-you); }
+/* (at phone width the keys are a strip in the top corner: one line each, no icon, no corner letter: touch) */
+@media (max-width: 720px) {
+  #k .rn .rn-key.u-rail-key { flex-direction: row; min-height: calc(28 * var(--k-px)); padding: 0 7px; box-shadow: none; }
+  #k .rn .rn-key.u-rail-key .u-ico, #k[data-skin] .rn .rn-key.u-rail-key .u-key { display: none; }
+}
+
+/* TRYING ON: a slip over the top of the picture while it lasts, dashed (it is not yours), with the way back */
+#k .u-trying-slip { position: absolute; top: var(--u-m); left: calc(var(--u-m) + var(--u-where-w) + var(--u-gap) + 6px); right: calc(var(--u-m) + var(--u-side-w) + var(--u-gap) + 8px); z-index: 5;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 9px; width: fit-content; max-width: calc(560 * var(--k-px)); margin: 0 auto; padding: 6px 7px 6px 6px; border-style: dashed; border-width: 2px; box-shadow: var(--u-shadow-l); }
+#k .u-trying-slip[hidden] { display: none; }
+#k .u-trying-slip.is-in-sheet { position: static; flex: none; width: auto; max-width: none; margin: 0 10px 7px; box-shadow: var(--u-block); }
+#k .u-pill.u-trying { background: var(--u-try); color: var(--u-try-on); text-transform: uppercase; letter-spacing: .04em; }
+#k .u-trying-what { min-width: 0; max-width: calc(220 * var(--k-px)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#k .u-trying-not { font-weight: 600; color: var(--u-ink-2); }
+#k .u-trying-slip .u-btn { margin-left: auto; }
+
+@media (prefers-reduced-motion: reduce) { #k .u-goal-bar i { transition: none; } #k .u-btn:hover { transform: none; } }
+
+/* ── THE TRY-OUT STOP (join-1; tryout.js, trip.js): the last line of Travel's list, under a dashed rule of its own (it
+   is no way of the rules'), and its flag on the map, dashed: not a place of the run's, nothing counts there ───────── */
+#k .u-list li.u-li-tryout { margin-top: 3px; padding-top: 4px; border-top: 1.5px dashed var(--u-slate); }
+#k .u-li-tryout .u-li-t b { display: flex; align-items: center; gap: 6px; }
+#k .u-li-tryout .u-pill.u-trying { min-height: calc(17 * var(--k-px)); font-size: var(--u-fs-s); }
+#k .rn-flag.is-tryout { background: var(--u-inset); box-shadow: inset 0 0 0 1.5px var(--u-ink); outline: 1.5px dashed var(--u-ink); outline-offset: 2px; }
+#k .rn-flag.is-tryout.is-on { background: var(--u-ink); color: var(--u-inset); }
+#k .rn-stopcard .u-pill.u-trying { justify-self: start; }
+#k .rn-stopcard .rn-tryout-go { justify-self: start; margin-top: 3px; }
+

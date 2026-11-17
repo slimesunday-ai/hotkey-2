@@ -31,6 +31,17 @@
 #k[data-skin] .hk-top .k-btn.rn-new { min-height: calc(19 * var(--k-px)); min-width: 0; padding: 0 6px; box-shadow: inset 0 0 0 1px var(--k-ink); }
 #k[data-skin] .hk-top .k-btn.rn-new:hover { transform: none; box-shadow: inset 0 0 0 2px var(--k-ink); }
 #k[data-skin] .hk-top .k-btn.rn-new.is-ask { background: var(--hk-hot); color: var(--k-ink); }
+/* (save-1) the save's mark, quiet as the seed; "not saving" in the danger's ink. NEW RUN's second ask: a slip under the
+   button saying what it ends. Cousin Earl's last day and his going, small on the top line */
+#k .rn-saved { color: var(--k-ink-3); font-size: var(--k-fs-xs); white-space: nowrap; }
+#k .rn-saved.is-off { color: var(--hk-hot-text); font-weight: 700; }
+#k .rn-new-ask { position: absolute; top: var(--rn-body-t); right: var(--rn-m); z-index: 5; box-sizing: border-box; max-width: min(calc(420 * var(--k-px)), calc(100% - 2 * var(--rn-m)));
+  padding: 5px 9px; background: var(--zt-grid, none), var(--hk-plate); box-shadow: var(--rn-sh), inset 3px 0 0 var(--hk-hot); pointer-events: auto; color: var(--k-ink); font: 400 var(--k-fs-xs)/1.35 var(--k-font); }
+#k .rn-new-ask[hidden] { display: none; }
+#k .rn-earl { flex: none; padding: 1px 7px; white-space: nowrap; font: 700 var(--k-fs-xs)/1.3 var(--k-font); box-shadow: inset 0 0 0 1px var(--k-ink); color: var(--k-ink-2); }
+#k .rn-earl.is-last { background: var(--hk-yours); color: var(--k-ink); }
+#k .rn-notice.is-refused { box-shadow: var(--rn-sh), inset 3px 0 0 var(--hk-fail); }
+#k .rn-alert .rn-alert-picked { padding-bottom: 4px; border-bottom: 1px dashed var(--k-line); color: var(--k-ink-2); }
 
 /* THE LINE on the top line: its three stops as a strip, where you are lit (a click, or M, opens the map panel) */
 #k .rn-stops { display: inline-flex; align-items: center; gap: 4px; padding: 1px 5px; border: 0; background: var(--hk-paper); box-shadow: inset 0 0 0 1px var(--k-ink); cursor: pointer; font: 700 var(--k-fs-xs)/1 var(--k-font); color: var(--k-ink-2); text-transform: uppercase; }
@@ -78,6 +89,11 @@
 #k .rn-carried span { font-weight: 700; }
 #k .rn-carried b { font: 400 calc(18 * var(--k-px))/1 var(--k-font-sign, var(--k-font-display)); white-space: nowrap; }
 #k .rn-carried.is-risk { background: var(--hk-hot); animation: hk-stamp 220ms var(--k-ease) both; }
+/* (the market's longer label gives way before the amount does: where the two do not fit on one line it breaks after
+   its dot, "Carried ·" over "at risk", and the amount keeps its place at the right of the box, whole) */
+#k .rn-carried span { min-width: 0; }
+#k .rn-carried b { flex: none; }
+#k .rn-carried.is-at span { white-space: normal; text-wrap: balance; }
 #k .rn-carried.is-none { background: var(--hk-paper); }
 #k .rn-banked { padding: 2px 6px; background: var(--hk-paper); box-shadow: inset 0 0 0 1px var(--k-line); color: var(--k-ink-3); }
 #k .rn-banked b { font: 700 var(--k-fs-xs)/1.2 var(--k-font); color: var(--k-ink-2); white-space: nowrap; }
@@ -117,6 +133,11 @@
 #k[data-skin] .hk .k-btn.rn-key kbd { margin: 0; flex: none; }
 #k[data-skin] .hk .k-btn.rn-key.is-on kbd { background: var(--hk-clean); color: var(--k-ink); }
 #k .rn-key .is-short, #k .rn-dock.is-rail .rn-key .is-long { display: none; }
+/* ARRANGE with the panel keys, at the crib only (index.js arrangeKey): the whole row on the open dock; greyed when it
+   cannot start now, why in its tooltip */
+#k .rn-dock:not(.is-rail) .rn-key-arrange { grid-column: 1 / -1; }
+#k[data-skin] .hk .k-btn.rn-key.rn-key-arrange.is-off { opacity: .45; cursor: not-allowed; }
+#k[data-skin] .hk .k-btn.rn-key.rn-key-arrange.is-off:hover { box-shadow: inset 0 0 0 1px var(--k-ink); }
 #k .rn-dock.is-rail .rn-key .is-short { display: inline; }
 
 /* FOLDED: a slim rail that still shows what you carry and your heat (the owner's "the left side looks good") */
@@ -124,10 +145,12 @@
 #k .rn-dock.is-rail .rn-fold { align-self: stretch; }
 #k .rn-dock.is-rail .rn-face { width: 100%; height: calc(58 * var(--k-px)); }
 #k .rn-rail-stats { display: grid; gap: 7px; }
-#k .rn-dock.is-rail .rn-carried { display: grid; justify-items: center; gap: 2px; padding: 4px 2px 5px; }
+#k .rn-dock.is-rail .rn-carried { display: grid; justify-items: center; justify-content: center; gap: 2px; padding: 4px 2px 5px; }
 #k .rn-dock.is-rail .rn-carried span { font-size: var(--k-fs-xs); }
-#k .rn-dock.is-rail .rn-carried.is-risk span { font-size: 0; }
-#k .rn-dock.is-rail .rn-carried.is-risk span::before { content: "At risk"; font-size: var(--k-fs-xs); }
+/* (the market's label on the rail is "At risk", whatever is carried: with nothing carried the whole label was cut at both
+   edges of the rail, "RIED · AT R") */
+#k .rn-dock.is-rail .rn-carried.is-at span { font-size: 0; }
+#k .rn-dock.is-rail .rn-carried.is-at span::before { content: "At risk"; font-size: var(--k-fs-xs); }
 #k .rn-dock.is-rail .rn-carried b { font-size: calc(18 * var(--k-px)); }
 #k .rn-dock.is-rail .hk-heat { grid-template-columns: 1fr; justify-items: center; gap: 3px; }
 #k .rn-dock.is-rail .hk-heat > span:first-child { font-size: var(--k-fs-xs); text-transform: uppercase; }
@@ -146,6 +169,8 @@
 /* its parts on a grid: the danger's number at the start, the choices, then one slim row (what is said, the ways, Go) */
 #k .rn-card-body { display: grid; grid-template-columns: auto minmax(12%, 1fr) auto; grid-template-areas: "pct top top" "pct said ways"; align-items: center; gap: 4px 6px; min-width: 0; }
 #k .rn-card-body.is-one-row { grid-template-areas: "pct said ways"; }
+/* (goods at stake on the danger's brief: the row keeps room for them, the ways' small print gives it) */
+#k .rn-card-body:has(.rn-at-goods) { grid-template-columns: auto minmax(26%, 1fr) auto; }
 #k .rn-card-body > .rn-options, #k .rn-card-body > .rn-held { grid-area: top; }
 
 /* THE DANGER OF ONE MORE HOUR HERE: a line along the bar's top edge (a hairline at none), its number at the start */
@@ -231,13 +256,18 @@
 #k .rn-chip.is-off { opacity: .55; }
 
 #k .rn-ways { grid-area: ways; display: flex; align-items: center; justify-content: flex-end; gap: 4px; min-width: 0; }
-#k .hk .rn-move { flex: 0 1 auto; min-width: 0; max-width: calc(330 * var(--k-px)); min-height: 0; height: var(--rn-row); gap: 5px; padding: 0 7px 0 2px; box-shadow: inset 0 0 0 1px var(--k-ink); }
+#k .hk .rn-move { flex: none; min-width: 0; min-height: 0; height: var(--rn-row); gap: 5px; padding: 0 7px 0 2px; box-shadow: inset 0 0 0 1px var(--k-ink); }
 #k .hk .rn-move:hover { transform: none; box-shadow: inset 0 0 0 2px var(--k-ink); }
 #k .hk .rn-move.is-on { background: var(--k-ink); color: var(--hk-plate); box-shadow: 0 0 0 2px var(--hk-hot); }
 #k .hk .rn-move.is-off { opacity: .55; }
+/* (save-1) Cousin Earl on, not his last day: nothing to press, his days left said quietly */
+#k .hk .rn-move.rn-guard-on { display: inline-flex; align-items: center; padding: 0 7px; box-shadow: inset 0 0 0 1px var(--k-line); background: var(--hk-yours); cursor: default; }
+#k .hk .rn-move.rn-guard-on:hover { box-shadow: inset 0 0 0 1px var(--k-line); }
 #k .rn-move .hk-move-text { display: flex; align-items: baseline; gap: 6px; line-height: 1.2; }
 #k .rn-move .hk-move-text b { flex: none; font-weight: 700; }
 #k .rn-move .hk-move-text span { flex: 0 1 auto; min-width: 0; font-size: var(--k-fs-xs); }
+/* (the ways home and on keep their fare and odds whole; the street's moves' small print gives the room first) */
+#k .hk .rn-move:is([data-do="subway"], [data-do="inside"], [data-do="out"]), #k .rn-move:is([data-do="subway"], [data-do="inside"], [data-do="out"]) .hk-move-text span { flex: none; }
 /* (while what just happened is said, the ways give it the room of their small print: in their tooltips meanwhile) */
 #k .rn-card.has-result .rn-move .hk-move-text span { display: none; }
 /* the bar's buttons: Go, Skip, Continue, the fold, the take-out's: small, one thin rule */
@@ -245,6 +275,8 @@
 #k[data-skin] .hk .rn-card .k-btn:hover { transform: none; box-shadow: inset 0 0 0 2px var(--k-ink); }
 #k[data-skin] .hk .rn-card .k-btn[disabled] { opacity: .5; cursor: default; box-shadow: inset 0 0 0 1px var(--k-ink); }
 #k[data-skin] .hk .rn-card .k-btn.rn-go, #k[data-skin] .hk .rn-card .k-btn.rn-skip, #k[data-skin] .hk .rn-card .k-btn.rn-barfold { flex: none; }
+/* (the opening keeps the other panels out of its picture; the bar shows, saying Skip) */
+body.hk2-opening #k .rn-card { visibility: visible; }
 #k[data-skin] .hk .rn-card .k-btn.rn-barfold { padding: 0 4px; background: none; color: var(--k-ink-2); }
 #k[data-skin] .hk .rn-card .k-btn.rn-barfold span { font: 700 var(--k-fs-xs)/1 var(--k-font); }
 #k[data-skin] .hk .rn-card .k-btn.hk-bump { min-height: calc(16 * var(--k-px)); padding: 0 4px; background: none; box-shadow: none; }
@@ -424,7 +456,7 @@
   #k .rn, #k .rn.is-rail { --rn-side: 0px; --rn-m: 6px; }
   #k .rn-top { gap: 7px; overflow: hidden; }
   /* (one line: the clock, the day, the line, a new run. "Done in N days" is the dock's goal row) */
-  #k .rn-top .hk-mode, #k .rn-top .rn-where, #k .rn-top .rn-seed, #k .rn-top .hk-clock-note { display: none; }
+  #k .rn-top .hk-mode, #k .rn-top .rn-where, #k .rn-top .rn-seed, #k .rn-top .hk-clock-note, #k .rn-top .rn-saved, #k .rn-top .rn-earl { display: none; }
   #k .rn-stops { gap: 3px; padding: 1px 4px; }
   #k .rn-stops kbd, #k .rn-line, #k .rn-stop em { display: none; }
   #k[data-skin] .hk-top .k-btn.rn-new { padding: 0 4px; }
@@ -530,8 +562,9 @@ body.hk2-inside #k .rn-marks { visibility: hidden; }
 #k .rn-move .hk-move-text span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #k .hk .rn-move[data-do="rob"] kbd, #k .hk .rn-move[data-do="bins"] kbd, #k .hk .rn-move[data-do="shop"] kbd, #k .hk .rn-move[data-do="rough"] kbd { background: var(--k-ink); color: var(--hk-plate); }
 #k .hk .rn-move.is-on[data-do] kbd { background: var(--hk-clean); color: var(--k-ink); }
-/* (the street's moves give way first when the row is short: the ways on keep their words longest) */
-#k .hk .rn-move[data-do="rob"], #k .hk .rn-move[data-do="bins"], #k .hk .rn-move[data-do="shop"], #k .hk .rn-move[data-do="rough"] { flex-shrink: 3; }
+/* (a move draws whole, never squeezed: when the row is short, index.js fitWays takes the small print off the moves not
+   picked (is-bare, still in their tooltips), then the least of them leave for one "+N more" that opens All moves, A) */
+#k .rn-move.is-bare .hk-move-text > span, #k .rn-move.is-bare .rn-tell-pct { display: none; }
 
 /* THE HEAT HERE under the danger's number, and the police when they are about (the bar keeps its height) */
 #k .rn-pct-heat { display: grid; justify-items: start; gap: 1px; font-size: var(--k-fs-xs); line-height: 1.1; color: var(--k-ink-2); white-space: nowrap; }
@@ -673,13 +706,13 @@ body.hk2-inside #k .rn-marks { visibility: hidden; }
 #k .rn-move.is-on .rn-tell-pct { color: var(--hk-hot); }
 #k .rn-card.has-result .rn-move .rn-tell-pct { display: none; }
 /* what it did: a plate per trust change on the row of what just happened (all of it in its tooltip) */
-/* (with trust news the row is shared: a bad line shrinks to a quarter, told on or not to a fifth, a plate to a fifth
-   (up to two fifths); the dice after it are what the row's end cuts first) */
+/* (with trust news the row is shared: a bad line shrinks to a quarter; told on or not, and each plate, are whole, and
+   the least of them gives way whole when the row is short, index.js fitRow) */
 #k .rn-result.has-chips .rn-bad { flex: 0 1 auto; min-width: 24%; overflow: hidden; text-overflow: ellipsis; }
-#k .rn-result.has-chips .rn-roll.is-told { flex: 0 1 auto; min-width: 22%; overflow: hidden; }
+#k .rn-result.has-chips .rn-roll.is-told { flex: none; }
 #k .rn-result.has-chips .rn-roll.is-told .hk-tick-roll { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 #k .rn-result.has-chips .rn-roll.is-told .hk-bar { flex: none; }
-#k .rn-result .rn-tchip { flex: 0 1 auto; min-width: 18%; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 5px; font-weight: 700; }
+#k .rn-result .rn-tchip { flex: none; white-space: nowrap; padding: 0 5px; font-weight: 700; }
 #k .rn-tchip.is-bad { background: var(--hk-bad-plate); color: var(--hk-bad-ink); }
 #k .rn-tchip.is-luck { background: var(--hk-clean); color: var(--k-ink); }
 #k .rn-tchip.is-with { background: var(--k-ink); color: var(--hk-clean); }
@@ -693,6 +726,8 @@ body.hk2-inside #k .rn-marks { visibility: hidden; }
   padding: 3px 4px 3px 10px; background: var(--zt-grid, none), var(--hk-plate); box-shadow: var(--rn-sh), inset 3px 0 0 var(--hk-hot);
   pointer-events: auto; color: var(--k-ink); font: 400 var(--k-fs-xs)/1.3 var(--k-font); }
 #k .rn-notice[hidden] { display: none; }
+/* (the first day's line on how it goes, in the same place: quiet) */
+#k .rn-notice.is-way-in { box-shadow: var(--rn-sh), inset 3px 0 0 var(--k-line); color: var(--k-ink-2); }
 #k .rn-notice-h { flex: none; font: 400 var(--zt-fs-label, var(--k-fs-s))/1.2 var(--zt-font-label, var(--k-font)); text-transform: uppercase; }
 #k .rn-notice-text { flex: 0 1 auto; min-width: 0; }
 #k .rn-suggest { flex: none; padding: 0 5px; font-weight: 700; background: var(--hk-yours); white-space: nowrap; }
@@ -703,3 +738,141 @@ body.hk2-inside #k .rn-marks { visibility: hidden; }
      is on the crime's card and in the panels) */
   #k .rn-ways .rn-move .rn-tell-pct { display: none; }
 }
+/* GOODS ON THE PAGE (goods-1): on you, at risk with the cash; at home, safe with the banked */
+#k .rn-carried.has-goods, #k .rn-banked.has-goods { flex-wrap: wrap; row-gap: 0; }
+#k .rn-carried .rn-goods-on { flex: 1 0 100%; font: 700 var(--k-fs-xs)/1.25 var(--k-font); font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#k .rn-banked .rn-goods-home { flex: 1 0 100%; font: 400 var(--k-fs-xs)/1.25 var(--k-font); font-style: normal; color: var(--k-ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#k .rn-dock.is-rail .rn-carried .rn-goods-on { flex: none; font-size: var(--k-fs-xs); }
+/* what a sale uses and what is left after, on the option's small line; picked when it takes more than one */
+#k .rn-o-sub > .rn-uses { flex: none; padding: 0 4px; font-weight: 700; box-shadow: inset 0 0 0 1px var(--k-line); }
+#k .rn-uses.is-pick { cursor: pointer; display: inline-flex; align-items: center; gap: 3px; }
+#k .rn-uses.is-pick i { font-style: normal; color: var(--k-ink-3); }
+#k .rn-uses .rn-uses-key { padding: 0 3px; font: 700 var(--k-fs-xs)/1 var(--k-font); box-shadow: inset 0 0 0 1px currentColor; }
+#k .rn-option.is-on .rn-uses { box-shadow: inset 0 0 0 1px var(--hk-plate); color: var(--hk-plate); }
+/* the goods at stake on the danger's brief; a selling job missing for want of goods, one quiet line beside it */
+#k .rn-danger-sum .rn-at-goods { padding: 0 4px; font-weight: 700; color: var(--k-ink); box-shadow: inset 0 0 0 1px var(--k-ink); }
+#k .rn-sell-note { flex: 0 1 auto; min-width: 0; max-width: 58%; margin-left: 10px; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--k-ink-3); font-size: var(--k-fs-xs); box-shadow: inset 2px 0 0 var(--k-line); }
+#k .rn-sell-note b { font-weight: 700; color: var(--k-ink-2); margin-right: 4px; }
+/* the crib's row: the goods taken out beside the cash; what you wear, each a toggle by its number */
+#k .rn-take-goods > b { min-width: 0; padding: 0 3px; white-space: nowrap; }
+#k .rn-options.rn-shop.has-wear { grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, .9fr); }
+#k .rn-wear-tile { cursor: default; background: none; box-shadow: inset 0 0 0 1px var(--k-line); }
+#k .rn-wear-tile:hover { background: none; }
+#k .rn-wear-tile .rn-o-sub { gap: 3px; }
+#k[data-skin] .hk .rn-card .k-btn.rn-wear-chip { min-height: 0; height: calc(15 * var(--k-px)); padding: 0 5px 0 1px; gap: 3px; margin-left: 2px; background: none; box-shadow: inset 0 0 0 1px var(--k-line); font: 700 var(--k-fs-xs)/1 var(--k-font); }
+#k[data-skin] .hk .rn-card .k-btn.rn-wear-chip.is-worn { background: var(--hk-yours); box-shadow: inset 0 0 0 1px var(--k-ink); }
+#k[data-skin] .hk .rn-card .k-btn.rn-wear-chip.is-on { background: var(--k-ink); color: var(--hk-plate); box-shadow: 0 0 0 2px var(--hk-hot); }
+#k .rn-wear-chip i { font-style: normal; }
+#k[data-skin] .rn .rn-wear-chip kbd { min-width: calc(13 * var(--k-px)); height: calc(13 * var(--k-px)); padding: 0 2px; font-size: .85em; }
+/* the Stuff panel: the connect's pack among the place's shops */
+#k .rn-thing.is-connect .rn-pay s { color: var(--k-ink-3); font-weight: 400; }
+/* (every plate on the one row is whole: when the row is short the least of them gives way, index.js fitRow) */
+#k .rn-danger-sum > [data-rank] { flex: none; }
+
+/* ── ARRANGE MODE (demo/run/arrange.js): the arrange bar in the bar's own place, the page's paper; while it is up the
+   dock and the top line are dimmed and do nothing, the panels and slips are shut. Their boxes keep their places, so
+   the inside view's frame of the room is not made again ─────────────────────────────────────────────────────────── */
+#k .rn.is-arranging .rn-dock, #k .rn.is-arranging .rn-top { opacity: .4; pointer-events: none; }
+#k .rn.is-arranging .rn-sheet, #k .rn.is-arranging .rn-print, #k .rn.is-arranging .rn-notice { display: none; }
+#k .rn.is-arranging .rn-card { pointer-events: none; }
+#k .rn-arrange { position: absolute; left: calc(var(--rn-m) + var(--rn-side) + var(--rn-g)); right: var(--rn-m); bottom: var(--rn-m); min-height: var(--rn-card-h, 0px); box-sizing: border-box; z-index: 3;
+  display: grid; align-content: center; gap: 3px; padding: 6px 8px 5px; pointer-events: auto; color: var(--k-ink);
+  background: var(--zt-grid, none), var(--hk-plate); box-shadow: var(--rn-sh), inset 0 3px 0 var(--hk-yours); font: 400 var(--k-fs-xs)/1.25 var(--k-font); }
+#k .rn-ar-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+#k .rn-ar-title { font: 400 var(--zt-fs-label, var(--k-fs-s))/1 var(--zt-font-label, var(--k-font)); text-transform: uppercase; }
+#k .rn-ar-sub { color: var(--k-ink-3); text-transform: uppercase; white-space: nowrap; }
+#k .rn-ar-status { flex: 1; min-width: 0; padding-left: 8px; box-shadow: -1px 0 0 var(--k-line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 700; }
+#k[data-skin] .hk .rn-arrange .k-btn { min-height: var(--rn-row); min-width: 0; padding: 0 7px; gap: 4px; flex: none; box-shadow: inset 0 0 0 1px var(--k-ink); font: 400 var(--zt-fs-label, var(--k-fs-s))/1 var(--zt-font-label, var(--k-font)); }
+#k[data-skin] .hk .rn-arrange .k-btn:hover { transform: none; box-shadow: inset 0 0 0 2px var(--k-ink); }
+#k[data-skin] .hk .rn-arrange .k-btn[disabled] { opacity: .5; cursor: default; box-shadow: inset 0 0 0 1px var(--k-ink); }
+#k .rn-ar-keys { margin: 0; display: flex; flex-wrap: wrap; gap: 2px 12px; color: var(--k-ink-2); }
+#k .rn-ar-keys b { font-weight: 700; color: var(--k-ink); }
+#k .rn-ar-tray { display: flex; align-items: center; gap: 4px; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
+#k .rn-ar-tray-h { flex: none; color: var(--k-ink-3); text-transform: uppercase; margin-right: 3px; }
+#k[data-skin] .hk .rn-arrange .k-btn.rn-ar-chip { font: 700 var(--k-fs-xs)/1 var(--k-font); background: var(--hk-paper); }
+#k[data-skin] .hk .rn-arrange .k-btn.rn-ar-chip.is-on { background: var(--k-ink); color: var(--hk-plate); box-shadow: 0 0 0 2px var(--hk-hot); }
+#k .rn-ar-none { color: var(--k-ink-3); font-style: normal; }
+@media (max-width: 720px) { #k .rn-arrange { left: var(--rn-m); } }
+
+/* ROUTES (routes-1): the way's stop on the top line, between its two ends, on a dashed line (on foot, not the train) */
+#k .rn-line.is-way { height: 0; background: none; border-top: 2px dashed var(--k-ink); }
+#k .rn-stop.is-way i { border-radius: 50%; }
+#k .rn-stop.is-way:not(.is-here) { color: var(--k-ink-2); }
+/* THE WAY'S METER: a way picked on the bar, the meter is the way's (its number's word says so, the line is dashed at its end) */
+#k .rn-meter.is-way { background: repeating-linear-gradient(90deg, var(--hk-paper) 0 6px, var(--k-line) 6px 8px); }
+#k .rn-meter.is-way.is-zero { height: 2px; }
+#k .rn-pct.is-way .rn-pct-word { color: var(--k-ink); font-weight: 700; }
+#k .rn-print .rn-legs { margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 2px; font-size: var(--k-fs-xs); }
+#k .rn-print .rn-legs li { display: flex; gap: 6px; color: var(--k-ink-3); }
+#k .rn-print .rn-legs li.is-rolls { color: var(--k-ink); }
+#k .rn-print .rn-legs b { font-weight: 700; white-space: nowrap; }
+/* the stop's hand: the cards as the hour's options */
+#k .rn-hand .rn-card-tile .rn-o-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#k .hk-tag.is-ride { text-transform: none; }
+
+/* ── HOME PRESSURE (home-1, RUN.md "Home pressure"): the meter on the dock beside the heat and the energy, its slip,
+   the warning on the top line, THE NOTICE over the picture's top, an option's "home +1" as heat's "+1" ───────────────── */
+#k .rn-press { cursor: pointer; }
+#k .rn-press:hover > span:first-child, #k .rn-press.is-open > span:first-child { color: var(--k-ink); font-weight: 700; }
+#k .rn-press-pips i.is-on { background: var(--hk-yours); }
+#k .rn-press.is-high .rn-press-pips i.is-on { background: var(--hk-fail); }
+/* (the warning's line: from here somebody may come to case your crib) */
+#k .rn-press-pips i.is-line { box-shadow: inset 0 0 0 1.5px var(--k-ink), 2px 0 0 0 var(--hk-fail); }
+#k .rn-press.is-due em { color: var(--hk-hot-text); font-weight: 700; }
+#k .rn-dock.is-rail .rn-press { grid-template-columns: 1fr; justify-items: center; gap: 3px; }
+#k .rn-dock.is-rail .rn-press > span:first-child { font-size: var(--k-fs-xs); text-transform: uppercase; }
+@media (max-width: 720px) { #k .rn-dock.is-rail .hk-heat.rn-press { display: flex; align-items: center; gap: 4px; flex: none; } #k .rn-dock.is-rail .rn-press .rn-pips { display: none; } }
+/* the slip: beside the dock at its top, as the panels open (one of the two at a time) */
+#k .rn-print.rn-home-print { top: var(--rn-body-t); bottom: auto; width: min(calc(400 * var(--k-px)), calc(100% - var(--rn-side) - 2 * var(--rn-m) - var(--rn-g)));
+  max-height: calc(100% - var(--rn-body-t) - var(--rn-m) - var(--rn-card-h, 0px) - var(--rn-g)); overflow: hidden auto; scrollbar-width: thin; box-shadow: var(--rn-sh), inset 0 3px 0 var(--hk-yours); }
+#k .rn-home-print p { margin: 0; }
+#k .rn-home-print .rn-hp-h { margin-top: 3px; font-weight: 700; text-transform: uppercase; color: var(--k-ink-3); }
+#k .rn-home-print .rn-hp-warn { padding: 2px 6px; font-weight: 700; background: var(--hk-hot); box-shadow: inset 0 0 0 1px var(--k-ink); }
+#k .rn-home-print .rn-hp-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+#k .rn-home-print .rn-hp-list b { display: inline-block; min-width: calc(30 * var(--k-px)); font-weight: 700; }
+#k .rn-home-print .rn-hp-list b.is-up { color: var(--hk-hot-text); }
+#k .rn-home-print .rn-hp-chance { color: var(--hk-hot-text); }
+/* the warning, small and steady on the top line while it stands; red once it is today */
+#k .rn-warn { flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 1px 7px; border: 0; cursor: pointer; background: var(--hk-hot); color: var(--k-ink);
+  font: 700 var(--k-fs-xs)/1.3 var(--k-font); white-space: nowrap; box-shadow: inset 0 0 0 1px var(--k-ink); }
+#k .rn-warn i { width: 7px; height: 7px; background: var(--k-ink); transform: rotate(45deg); }
+#k .rn-warn.is-now { background: var(--hk-fail); color: var(--hk-plate); }
+#k .rn-warn.is-now i { background: var(--hk-plate); animation: rn-warn-beat 1.2s steps(2, jump-none) infinite; }
+@keyframes rn-warn-beat { 50% { opacity: .2; } }
+/* THE NOTICE: over the picture's top beside the dock, loud; it stays until it is answered or over */
+#k .rn-alert { position: absolute; top: var(--rn-body-t); left: calc(var(--rn-m) + var(--rn-side) + var(--rn-g)); z-index: 3; box-sizing: border-box;
+  width: min(calc(560 * var(--k-px)), calc(100% - var(--rn-side) - 2 * var(--rn-m) - var(--rn-g))); display: grid; gap: 5px; padding: 8px 9px 8px 10px;
+  background: var(--zt-grid, none), var(--hk-plate); box-shadow: var(--rn-sh), inset 0 5px 0 var(--hk-fail); pointer-events: auto; color: var(--k-ink);
+  font: 400 var(--k-fs-xs)/1.3 var(--k-font); animation: rn-sheet-in 160ms var(--k-ease) both; }
+#k .rn-alert[hidden] { display: none; }
+#k .rn-alert.is-held { box-shadow: var(--rn-sh), inset 0 5px 0 var(--hk-clean); }
+#k .rn-alert p { margin: 0; }
+#k .rn-alert-head { display: flex; align-items: center; gap: 8px; padding-top: 2px; }
+#k .rn-alert-head b { flex: 1; min-width: 0; font: 400 var(--zt-fs-label, var(--k-fs-s))/1.2 var(--zt-font-label, var(--k-font)); text-transform: uppercase; }
+#k .rn-alert-clock { flex: none; padding: 1px 6px; font-weight: 700; white-space: nowrap; background: var(--hk-fail); color: var(--hk-plate); }
+#k .rn-alert.is-held .rn-alert-clock { background: var(--k-ink); }
+#k .rn-alert-ways { display: flex; flex-wrap: wrap; gap: 4px; }
+#k[data-skin] .hk .k-btn.rn-alert-way { min-height: var(--rn-row); min-width: 0; padding: 0 3px 0 2px; gap: 5px; box-shadow: inset 0 0 0 1px var(--k-ink); font: 400 var(--k-fs-xs)/1 var(--k-font); }
+#k[data-skin] .hk .k-btn.rn-alert-way:hover:not([disabled]) { transform: none; box-shadow: inset 0 0 0 2px var(--k-ink); }
+#k[data-skin] .hk .k-btn.rn-alert-way[disabled] { opacity: .55; cursor: default; }
+#k[data-skin] .hk .k-btn.rn-alert-way.is-on { background: var(--k-ink); color: var(--hk-plate); }
+#k .rn-alert-way b { font-weight: 700; }
+#k .rn-alert-way em { font-style: normal; font-weight: 700; padding: 1px 4px; background: var(--hk-clean); color: var(--k-ink); }
+#k .rn-alert-way.is-late em { background: var(--k-bg-3); color: var(--k-ink-2); }
+#k .rn-alert-stay { color: var(--k-ink-2); }
+#k .rn-alert-stay b { color: var(--k-ink); }
+#k .rn-alert-none { font-weight: 700; color: var(--hk-hot-text); }
+@media (max-width: 720px) { #k .rn-alert { left: var(--rn-m); right: var(--rn-m); width: auto; } }
+#k .rn.is-arranging .rn-home-print, #k .rn.is-arranging .rn-alert { display: none; }
+/* an option's "home +1" (home −1 eases it): as heat's tag, in the warning's colour */
+#k .rn-press-tag { box-shadow: inset 0 0 0 1px var(--hk-fail); color: var(--hk-hot-text); }
+#k .rn-press-tag.is-eases { box-shadow: inset 0 0 0 1px var(--k-line); color: var(--k-ink-2); }
+/* the warning's card and the card of an attempt you were not there for: the day's report's plate */
+#k .rn-home-card .rn-could { display: grid; gap: 3px; margin-top: 6px; }
+#k .rn-home-card .rn-could b { text-transform: uppercase; font-weight: 700; }
+#k .rn-home-card .rn-could ul { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
+/* (on the rail: the ten pips in one row, narrow; the count and when, short) */
+#k .rn-dock.is-rail .rn-press .rn-pips { flex-wrap: nowrap; gap: 1px; }
+#k .rn-dock.is-rail .rn-press .rn-pips i { width: 5px; min-width: 0; height: 11px; }
+#k .rn-dock.is-rail .rn-press-pips i.is-line { box-shadow: inset 0 0 0 1px var(--k-ink), 1px 0 0 0 var(--hk-fail); }
+#k .rn-dock.is-rail .rn-press em { white-space: nowrap; }

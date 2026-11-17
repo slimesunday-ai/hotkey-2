@@ -66,13 +66,14 @@ test('run-marks: the measuring runs on the real engine and judges all seven mark
 });
 
 test('run-play: the new moves have keys and replay: rob, bins, a target, the drink, sleeping rough', () => {
-  // seed 3: out with the fare, the market, option 2 on its second target, the bins, then stay out to nothing and sleep rough
-  const keys = '4=2,5,2@2,b,1,1,1,z';
+  // seed 3: out with the fare and a carton's price, the carton from Cousin Earl (11), the market, option 2 on its second
+  // target (selling a pack's worth to the crowd), the bins, then stay out to nothing and sleep rough
+  const keys = '4=12,11,5,2@2,b,1,1,1,z';
   const a = play('--seed', '3', '--choices', keys);
   assert.equal(a.status, 0, a.stderr);
   assert.equal(a.stdout, play('--seed', '3', '--choices', keys).stdout);
   assert.doesNotMatch(a.stdout, /Stopped the replay/);
-  assert.match(a.stdout, /> 2@2\n {2}- Sell to Pockets in the crowd/);
+  assert.match(a.stdout, /> 2@2\n {2}- Sell to Lola in the crowd/); // (Pockets dealt, Lola the second of four buyers)
   assert.match(a.stdout, /> b\n {2}- You dug through the bins/);
   assert.match(a.stdout, /> z\n {2}- You slept rough at the flea market\./);
   assert.match(a.stdout, /Day 2\. You wake on the street at the flea market/);

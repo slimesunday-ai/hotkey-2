@@ -45,6 +45,8 @@ const PACE = 2.3;
 const WATCHED = 14;
 /** …unless they are still in it: then this many more at the most. */
 const WATCHED_MORE = 30;
+/** Seconds a watched departure may stand held up on the walkers' lane in the picture before it is given up there. */
+const HELD_S = 3;
 /**
  * And an arrival that has not got to its place after this many is put there.
  * (36, was 24: a watched arrival on foot starts as far as 26 m back along the lane, at the rides' own 1.5 m/s, and
@@ -75,6 +77,20 @@ export function createTravel({ city, actors, map }) {
     VIEW.S.center.set(A.x, (A.y ?? 0) + 1, A.z);
     VIEW.S.radius = r;
     return VIEW.F.intersectsSphere(VIEW.S);
+  };
+  /**
+   * NOBODY OF OURS IS LEFT STANDING IN THE WALKERS' LANE: whoever is left in the picture to be taken off once the
+   * camera has lost them steps to the side of the sidewalk first (actors.fitSpot: off the lane's line), ending the walk
+   * that had them held up there. The city's walkers piled up behind one such on the flea market's sidewalk.
+   */
+  const offLane = id => {
+    if (!actors.has(id) || !actors.laneDistance) return;
+    const A = actors.get(id);
+    const d = actors.laneDistance(A.x, A.z);
+    if (d === null || d > 0.5) return;
+    // (on the sidewalk and a head from anybody standing there: actors.offLaneSpot)
+    const q = actors.offLaneSpot?.(id);
+    if (q && Math.hypot(q[0] - A.x, q[1] - A.z) > 0.2) actors.stepTo(id, q[0], q[1], { v: 1.3 }).catch(() => {});
   };
   let dark = 0;
   // (black: the veil is all the way over, from the end of the fade out to the start of the fade in. The audit's
@@ -306,7 +322,26 @@ export function createTravel({ city, actors, map }) {
       if (actor.lead) await api.black(actor);
       // off stage, whatever the ride did: nobody is left walking where nobody is looking. A ride's scene is ended
       // (its scooter, board or cab cleared); place() ends a walk.
+      // (STILL IN THE PICTURE ON FOOT when a ride's scene is given up, a watched departure capped: the scene's own end
+      // takes a leaver off the stage at once, rides/index.js settle, and they went in plain sight. A buyer off for the
+      // day, held up on the lane behind one of the city's own standing at a crossing for the whole cap, was taken off
+      // there: flea market, burner seed 12, 2026-11-14. They are put back the same frame, before any frame is drawn
+      // without them, their walk left to go on, and taken off once the camera has lost them, as below)
+      const onFoot = !actor.lead && !!impl.cancel && actors.has(actor.id) && seen(actor.id, 3) && !api.rides?.kit?.owned?.has(actor.id);
       impl.cancel?.(actor);
+      if (onFoot && actors.has(actor.id)) {
+        count.stood = (count.stood ?? 0) + 1;
+        actors.show(actor.id, true);
+        offLane(actor.id);
+        actors.until(() => !!actor.gone?.() || !actors.has(actor.id) || !seen(actor.id, 3)).then(() => {
+          if (actor.gone?.() || !actors.has(actor.id)) return;
+          const A = actors.get(actor.id);
+          (actors.cutClip ?? actors.stop)(actor.id);
+          actors.place(actor.id, A.x, A.z, A.ry);
+          actors.show(actor.id, false);
+        });
+        return;
+      }
       if (actors.has(actor.id)) {
         const A = actors.get(actor.id);
         // (off stage at a cut: the clip ends there, it is not left to blend out where they next appear)
@@ -440,12 +475,17 @@ export function createTravel({ city, actors, map }) {
           // WATCHED (the camera stays where it is): the scene plays on until they are out of the picture and takes
           // them off the stage itself. Not for ever: someone still in the picture after WATCHED seconds is taken off
           let capped = false;
-          await Promise.race([actors.until(() => !R.busy(actor.id) || actor.gone?.()), actors.seconds(WATCHED).then(() => (capped = true))]);
+          // (HELD UP ON THE LANE in the picture, behind somebody who does not move on, for HELD_S: given up there, and
+          // stood off the lane below. Left to wait out the caps they stood in the walkers' way for up to 44 s, and the
+          // city's walkers piled up behind them on the flea market's sidewalk)
+          const held = () => (actors.get(actor.id)?.route?.stood ?? 0) > HELD_S && seen(actor.id);
+          await Promise.race([actors.until(() => !R.busy(actor.id) || actor.gone?.() || held()), actors.seconds(WATCHED).then(() => (capped = true))]);
+          if (held()) capped = true;
           // (STILL IN THE PICTURE at that moment, walking off toward a station 80 m up the street: taken off there
           // they vanish in plain sight. They are left to walk on until they are out of it, WATCHED_MORE seconds at
           // the most. `capped` counts only the ones cut while the camera could still see them)
           if (capped && R.busy(actor.id) && seen(actor.id)) {
-            await Promise.race([actors.until(() => !R.busy(actor.id) || actor.gone?.() || !seen(actor.id)), actors.seconds(WATCHED_MORE)]);
+            await Promise.race([actors.until(() => !R.busy(actor.id) || actor.gone?.() || !seen(actor.id) || held()), actors.seconds(WATCHED_MORE)]);
           }
           if (capped && R.busy(actor.id) && seen(actor.id)) count.capped += 1;
         },

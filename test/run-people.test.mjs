@@ -17,7 +17,10 @@ function at(place, extra = {}, seed = 1, c = cfg) {
   return { ...s, place, ...extra, owned: { ...s.owned, ...(extra.owned ?? {}) } };
 }
 const safeRole = (c, place) => Object.values(c.jobs[place]).find(j => j.safe).role;
-const toWork = (c, place) => c.people[place].filter(p => p.role !== safeRole(c, place));
+// (everyone a job could work: not the safe job's people, nor a connect or anyone else no job is done to)
+const toWork = (c, place) => c.people[place].filter(p => p.role !== safeRole(c, place) && Object.values(c.jobs[place]).some(j => j.role === p.role));
+// goods on you, so the selling jobs are dealt (goods-1: a selling job needs goods it takes)
+const STOCK = { smokes: 20, discs: 20 };
 
 /** Work a place dry: take the first option that is not the safe one until only the safe one is dealt. */
 function workDry(c, state) {
@@ -68,7 +71,7 @@ test('people: a debt collected is named, the debtor is sour and out for the day,
 test('people: once a day, everyone worked is out for the rest of it and nobody is worked twice', () => {
   for (const [place, c, extra] of [['park', cfg, {}], ['market', CALM, {}], ['market', CALM, { owned: { cutter: true } }]]) {
     for (const seed of [1, 2, 3, 4]) {
-      const { state, trail } = workDry(c, at(place, { energy: 40, ...extra }, seed, c));
+      const { state, trail } = workDry(c, at(place, { energy: 40, goods: STOCK, ...extra }, seed, c));
       const worked = trail.map(t => t.option.who.id);
       assert.equal(new Set(worked).size, worked.length, 'nobody worked twice in a day');
       assert.deepEqual([...worked].sort(), toWork(c, place).map(p => p.id).sort(), 'and a place runs dry only when everyone has been worked');

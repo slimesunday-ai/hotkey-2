@@ -97,6 +97,8 @@ export function stepPlan(step, salt = 0) {
   if (step.spot) out.spot = step.spot;
   if (step.say) out.say = step.say;
   if (LASTING.has(step.action)) out.lasting = true;
+  // (a fist that draws blood: the scene's author asks for it on the step, gore.js; nothing bleeds unasked)
+  if (step.blood) out.blood = true;
   return out;
 }
 

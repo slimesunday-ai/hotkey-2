@@ -63,8 +63,12 @@ const tools = page => {
   };
   /** The key of the first dealt option that is not sure (a roll), else the first. */
   const risky = () => ev(`(window.__demo.hud.view.options.find(o => !o.sure && o.available) ?? window.__demo.hud.view.options[0]).key`);
+  // (ui-3, leg 2: the rules' choice key k reached on the dock, by its card's 1 to 3 or its verb's letter, and in the
+  // verb's list by its line; then Enter)
   const choose = async k => {
-    await key(String(k));
+    const at = await ev(`window.__demo.hud.keyFor(${JSON.stringify(String(k))})`);
+    if (at) await key(at);
+    await ev(`window.__demo.hud.pick(${JSON.stringify(String(k))})`);
     await key('Enter');
   };
   const scene = (re, ms = 30000) => page.waitFor(`window.__demo.stage.debug().playing.some(s => ${re}.test(s.kind))`, ms, 100);

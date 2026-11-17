@@ -17,10 +17,11 @@ const DOCKS = {
   links: { market: { via: 'subway' } },
   supply: { strangers: { max: 2, refill: 1 }, bins: { max: 2, refill: 1 } },
   shop: [],
+  connect: { who: 'npc:connect:docks', spot: 'bait-shed' }, // sells the docks' good (`goods` below: pills)
   jobs: {
     load: { label: 'Load a truck', named: 'Load a truck for {who}', role: 'foreman', with: 'a foreman', safe: true, odds: 100, base: [10, 14], mood: { win: 'friendly' }, scene: { win: { action: 'carry' } } },
     crate: { label: 'Lift a crate', named: "Lift a crate off {who}'s truck", role: 'driver', with: 'a driver', odds: 50, base: [30, 50], failHeat: 2, mood: { win: 'unaware', fail: 'wary' }, scene: { win: { action: 'grab' }, fail: { action: 'grab' } } },
-    sell: { label: 'Sell to the night shift', named: 'Sell to {who} on the night shift', role: 'buyer', with: 'the night shift', odds: 70, base: [15, 25], failHeat: 1, mood: { win: 'friendly', fail: 'wary' }, scene: { win: { kind: 'work:deal' }, fail: { kind: 'work:deal:dry' } } },
+    sell: { label: 'Sell to the night shift', named: 'Sell to {who} on the night shift', role: 'buyer', with: 'the night shift', odds: 70, base: [36, 52], goods: { pills: [36, 52] }, failHeat: 1, mood: { win: 'friendly', fail: 'wary' }, scene: { win: { kind: 'work:deal' }, fail: { kind: 'work:deal:dry' } } },
   },
   people: [
     { id: 'npc:foreman:docks', name: 'Mr. Haines', role: 'foreman' },
@@ -28,9 +29,12 @@ const DOCKS = {
     { id: 'npc:driver:docks', name: 'a driver', role: 'driver' },
     { id: 'npc:driver:docks:2', name: 'Big Lou', role: 'driver' },
     { id: 'npc:buyer:docks', name: 'Nails', role: 'buyer', regular: true },
+    { id: 'npc:connect:docks', name: 'Marguerite', role: 'connect' },
   ],
 };
-const cfg = withRunConfig({ places: { docks: DOCKS, market: { links: { docks: { via: 'subway' } } } }, subwayStops: [...RUN_CONFIG.subwayStops, 'docks'] });
+// the docks' good: something harder, dearer, and better paying than the park's or the market's
+const PILLS = { label: 'pills', pack: 'a bottle of pills', at: 'docks', price: 54, sales: 3, perDay: 1 };
+const cfg = withRunConfig({ places: { docks: DOCKS, market: { links: { docks: { via: 'subway' } } } }, goods: { pills: PILLS }, subwayStops: [...RUN_CONFIG.subwayStops, 'docks'] });
 const CALM = withRunConfig({ jump: { basePct: 0, perHourPct: 0, perStepPct: 0 }, police: { perHeat: 0 } }, cfg);
 const bytes = x => JSON.stringify(x);
 const at = (place, extra = {}, seed = 1, c = cfg) => {
@@ -50,6 +54,11 @@ test('places: the docks are added by data alone, priced by their tier, and leave
   assert.equal(d.jump.chance, Math.round((4 + 4 * 2 + 5) * 1.5));
   assert.equal(d.jump.strength, 55 + 10);
   assert.equal(danger(cfg, at('docks', { heat: 4 })).stop.chance, Math.round(2 * 20 * 1.25));
+  // its good, from its connect: dearer a sale than the market's, and paying more there (× the tier's 3)
+  assert.deepEqual(cfg.jobs.docks.sell.goodsPay.pills, [108, 156]);
+  assert.ok(PILLS.price / PILLS.sales > cfg.goods.discs.price / cfg.goods.discs.sales && cfg.goods.discs.price / cfg.goods.discs.sales > cfg.goods.smokes.price / cfg.goods.smokes.sales);
+  const c = view(cfg, { ...at('docks'), carried: 60, books: { ...at('docks').books, earned: 60 } }).connects.find(x => x.place === 'docks');
+  assert.deepEqual([c.who.name, c.good, c.price, c.sales, c.here, c.available], ['Marguerite', 'pills', 54, 3, true, true]);
   // the market's and the park's numbers are what they were
   assert.equal(bytes(cfg.places.market.jobs), bytes(RUN_CONFIG.places.market.jobs));
   assert.equal(bytes(cfg.places.park), bytes(RUN_CONFIG.places.park));
@@ -61,7 +70,7 @@ test('places: the per-place checks pass on every place, the docks included', () 
     const safeRole = Object.values(p.jobs).find(j => j.safe).role;
     for (const seed of [1, 2, 3]) {
       // work it dry: nobody worked twice, the safe job first and always there, dry only when everyone is worked
-      let s = at(place, { energy: 40, owned: { cutter: true } }, seed, CALM);
+      let s = at(place, { energy: 40, owned: { cutter: true }, goods: { smokes: 20, discs: 20, pills: 20 } }, seed, CALM);
       const worked = [];
       for (let i = 0; i < 40; i++) {
         const v = view(CALM, s);
@@ -73,7 +82,7 @@ test('places: the per-place checks pass on every place, the docks included', () 
         assert.ok(checkRunBooks(s).ok);
       }
       assert.equal(new Set(worked).size, worked.length, `${place}: nobody worked twice`);
-      assert.deepEqual([...worked].sort(), p.people.filter(x => x.role !== safeRole).map(x => x.id).sort(), `${place}: everyone else worked once before it runs dry`);
+      assert.deepEqual([...worked].sort(), p.people.filter(x => x.role !== safeRole && Object.values(p.jobs).some(j => j.role === x.role)).map(x => x.id).sort(), `${place}: everyone else worked once before it runs dry`);
       const v = view(CALM, s);
       assert.ok(v.dry, `${place}: worked dry says so`);
       assert.match(v.dry.text, new RegExp(`^Nobody left to work ${p.where} today, ${p.onlySafe}\\.`));

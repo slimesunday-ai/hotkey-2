@@ -1,6 +1,7 @@
 // Every dollar of the run, accounted for. src/ledger.mjs is built around the ten seats (agents, crews, loans, the
 // clinic's debt), so this is its small equivalent with the same rule: money comes in only as pay, leaves only to
-// whoever jumped or robbed you, the police, the subway, a shop or somebody at your door, and checkRunBooks() proves
+// whoever jumped or robbed you, the police, the subway, a shop, somebody at your door or on your step, or whoever got
+// into your crib (home-1: `burgled`, out of what was banked), and checkRunBooks() proves
 // nothing was made or lost.
 
 const whole = (n, what) => {
@@ -37,6 +38,15 @@ export function spend(state, amount, { from = 'banked', on = null } = {}) {
   return { amount, from, to: 'spent', ...(on ? { on } : {}) };
 }
 
+/** Out of what is banked, to whoever got into your crib (an attempt that worked: a share, never all of it). */
+export function burgle(state, amount) {
+  whole(amount, 'burgled');
+  if (amount > state.banked) throw new Error(`can't take $${amount} with $${state.banked} banked`);
+  state.banked -= amount;
+  state.books.burgled = (state.books.burgled ?? 0) + amount;
+  return { amount, from: 'banked', to: 'burgled' };
+}
+
 /** Between your pocket and your crib. */
 export function bank(state, amount) {
   whole(amount, 'banked');
@@ -56,7 +66,7 @@ export function withdraw(state, amount) {
 /** The conservation check. */
 export function checkRunBooks(state) {
   const b = state.books;
-  const expected = b.start + b.earned - b.jumped - b.seized - b.fares - b.spent;
+  const expected = b.start + b.earned - b.jumped - b.seized - b.fares - b.spent - (b.burgled ?? 0);
   const actual = state.carried + state.banked;
   const ok = expected === actual && state.carried >= 0 && state.banked >= 0;
   return { ok, expected, actual };

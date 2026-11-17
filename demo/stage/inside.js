@@ -83,6 +83,8 @@ export const LAYER = 7;
 const NEAR_IN = 2.2;
 /** Coming out: it stays at the door until they are this far from the step (m), or stand. */
 const NEAR_OUT = 3.6;
+/** How much the door's shot may miss of holding a scene's people (doorView `holds`) before the Lock is the picture instead. */
+const HOLDS_AT_MOST = 100;
 /** The inside view's lens (degrees). */
 const FOV = 38;
 /** How steeply it looks down into the room (degrees), and how far round from straight on (toward the door). */
@@ -139,6 +141,10 @@ export function createInside({ city, actors, fade, lead = () => null, who = () =
   let switching = null;
   /** Who is at a door now: id → { key, phase }. */
   const doors = new Map();
+  /** THE PEOPLE THE DOOR'S SHOT MUST HOLD WHOLE, while the page asks (keep): ids, or null; its last view, and how well it held them. */
+  let kept = null;
+  let keptAlso = null;
+  let keptView = null;
   /** The camera's layers outside (what the city draws). */
   let mask0 = null;
   let onInside = false;
@@ -966,7 +972,7 @@ export function createInside({ city, actors, fade, lead = () => null, who = () =
       // (the picture's half width, as a slope: the page's aspect through the lens)
       const wide = (innerWidth / innerHeight) * Math.tan((fov * Math.PI) / 360);
       let c = Math.abs(a) * 6 + Math.abs(d - 7.5) * 1.2 + Math.abs(hgt - 2.6) * 1.5;
-      for (const q of others) {
+      for (const q of othersNow) {
         const [qx, qz] = [q[0] - pos[0], q[2] - pos[2]];
         const f = (qx * vx + qz * vz) / vl;
         const side = Math.abs((qx * vz - qz * vx) / vl);
@@ -990,27 +996,113 @@ export function createInside({ city, actors, fade, lead = () => null, who = () =
       if (swing && segSeg([pos[0], pos[2]], door2, swing[0], swing[1]) < 0.3) c += 120;
       return c;
     };
+    // THE PEOPLE OF A SCENE AT THE DOOR, WHOLE (the run's visitor at the trailer door: demo/run/index.js keep, the one
+    // camera change the owner allowed, 2026-11-16). While the page names who the scene is about, the same low shot is
+    // aimed at the middle of them and stands back as far as it must for every one of them, feet to head, to be inside
+    // the stage's free part of the picture (gap: under the top line, beside the dock, over the bar), and none of them
+    // nearer the lens than 6.5 m (filling the foreground). They are not the people it keeps out of the picture; anybody
+    // else still is. Otherwise the shot is as it was. Those asked for only if the frame allows (keep's `also`: Cousin
+    // Earl) count a little: the shot is aimed at the others and is never kept from them for him
+    // (where each stands for it: the lead, coming out of the door, at the foot of the step he comes out to)
+    const held = [...(kept ?? []).map(k => [k, false]), ...(keptAlso ?? []).map(k => [k, true])].filter(([k]) => actors.has(k)).map(([k, opt]) => [k, opt, actors.get(k)])
+      .filter(([, , A]) => !A.w?.hide && A.y < g + 2 && Math.hypot(A.x - o.step[0], A.z - o.step[1]) < 12)
+      .map(([k, opt, A]) => (k === id && Math.hypot(A.x - o.sill[0], A.z - o.sill[2]) < 2.5 ? { id: k, opt, x: o.step[0], z: o.step[1] } : { id: k, opt, x: A.x, z: A.z }));
+    const whole = held.filter(A => !A.opt).length >= 2 ? held : null;
+    if (whole) {
+      const must = whole.filter(A => !A.opt);
+      const mx = must.reduce((n, A) => n + A.x, 0) / must.length;
+      const mz = must.reduce((n, A) => n + A.z, 0) / must.length;
+      tgt.splice(0, 3, mx, g + 0.95, mz);
+    }
+    const heldIds = new Set(whole?.map(A => A.id) ?? []);
+    const othersNow = whole ? others.filter(q => !whole.some(A => actors.has(A.id) && Math.hypot(actors.get(A.id).x - q[0], actors.get(A.id).z - q[2]) < 0.05)) : others;
+    /** How a lens at `pos` with `fov` holds the scene's people: 0 whole and clear of the foreground, more the worse. */
+    const holds = (pos, fov) => {
+      if (!whole) return 0;
+      const f = [tgt[0] - pos[0], tgt[1] - pos[1], tgt[2] - pos[2]];
+      const fl = Math.hypot(...f) || 1;
+      f[0] /= fl; f[1] /= fl; f[2] /= fl;
+      const rl = Math.hypot(f[2], f[0]) || 1;
+      const r = [-f[2] / rl, 0, f[0] / rl];
+      const u = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]];
+      const Wd = innerWidth;
+      const Ht = innerHeight;
+      const G = gap() ?? { left: 0, top: 0, right: Wd, bottom: Ht };
+      // (the free part, as the picture's -1…1, less a margin: a name over a head, a hand out)
+      const box = { l: (2 * (G.left + 18)) / Wd - 1, r: (2 * (G.right - 18)) / Wd - 1, t: 1 - (2 * (G.top + 30)) / Ht, b: 1 - (2 * (G.bottom - 14)) / Ht };
+      const ty = Math.tan((fov * Math.PI) / 360);
+      const tx = ty * (Wd / Ht);
+      let c = 0;
+      const seen = [];
+      for (const A of whole) {
+        // (each one's misses, counted whole for those the scene is about, a little for one asked for if it allows)
+        let p = 0;
+        const near = Math.hypot(A.x - pos[0], A.z - pos[2]);
+        if (near < 6.5) p += 200 + (6.5 - near) * 60;
+        const ys = [];
+        for (const [dx, dy, dz] of [[0, 0, 0], [0, 2.3, 0], [0.5, 1.6, 0], [-0.5, 1.6, 0], [0, 1.6, 0.5], [0, 1.6, -0.5]]) {
+          const v = [A.x + dx - pos[0], g + dy - pos[1], A.z + dz - pos[2]];
+          const z = v[0] * f[0] + v[1] * f[1] + v[2] * f[2];
+          if (z < 0.5) {
+            p += 400;
+            continue;
+          }
+          const x = (v[0] * r[0] + v[1] * r[1] + v[2] * r[2]) / (z * tx);
+          const y = (v[0] * u[0] + v[1] * u[1] + v[2] * u[2]) / (z * ty);
+          ys.push(y);
+          p += 90 * (Math.max(0, box.l - x) + Math.max(0, x - box.r) + Math.max(0, box.b - y) + Math.max(0, y - box.t)) + (x < box.l || x > box.r || y < box.b || y > box.t ? 120 : 0);
+        }
+        // (and not behind anything of the city's: a stall, a sign, a mailbox between the lens and their head or body)
+        if (!clearTo(pos, [A.x, g + 1.7, A.z])) p += 160;
+        if (!clearTo(pos, [A.x, g + 1.2, A.z])) p += 120;
+        if (!clearTo(pos, [A.x, g + 0.6, A.z])) p += 60;
+        // (none of them a giant: feet to head at most a third of the picture's height)
+        if (ys.length > 1) p += Math.max(0, ys[1] - ys[0] - 0.66) * 400;
+        c += A.opt ? p * 0.15 : p;
+        // (where they stand across the picture, and how wide, head and a step either way: for one in front of another)
+        const v = [A.x - pos[0], g + 1.2 - pos[1], A.z - pos[2]];
+        const z = v[0] * f[0] + v[1] * f[1] + v[2] * f[2];
+        if (z > 0.5 && ys.length > 1) seen.push({ x: (v[0] * r[0] + v[1] * r[1] + v[2] * r[2]) / (z * tx), w: 0.6 / (z * tx), lo: ys[0], hi: ys[1], opt: A.opt });
+      }
+      // (and nobody of them in front of another in the picture: how much of the smaller one's box the other covers)
+      for (let i = 0; i < seen.length; i++) for (let j = i + 1; j < seen.length; j++) {
+        const [P, Q] = [seen[i], seen[j]];
+        const ox = Math.max(0, Math.min(P.x + P.w, Q.x + Q.w) - Math.max(P.x - P.w, Q.x - Q.w));
+        const oy = Math.max(0, Math.min(P.hi, Q.hi) - Math.max(P.lo, Q.lo));
+        const share = (ox * oy) / Math.min(2 * P.w * (P.hi - P.lo), 2 * Q.w * (Q.hi - Q.lo));
+        if (share > 0.1) c += (100 + share * 400) * (P.opt || Q.opt ? 0.3 : 1);
+      }
+      return c;
+    };
     let view = null;
     let best = Infinity;
     let tried = 0;
-    for (const hgt of [2.6, 2.1, 3.2, 1.75, 3.8]) {
-      for (const d of [7.5, 6.4, 8.8, 5.4, 10]) {
+    let held1 = 0;
+    for (const hgt of whole ? [2.6, 3.2, 3.8, 4.5, 5.5, 6.5, 8] : [2.6, 2.1, 3.2, 1.75, 3.8]) {
+      for (const d of whole ? [8.8, 10, 11.5, 13, 7.5] : [7.5, 6.4, 8.8, 5.4, 10]) {
         for (const a of [0, 0.2, -0.2, 0.4, -0.4, 0.6, -0.6, 0.8, -0.8]) {
           const [ux, uz] = [fx * Math.cos(a) + fz * Math.sin(a), -fx * Math.sin(a) + fz * Math.cos(a)];
           const pos = [o.sill[0] + ux * d, g + hgt, o.sill[2] + uz * d];
           if (!free(pos) || !free([pos[0] + ux * 0.6, pos[1], pos[2] + uz * 0.6])) continue;
           if (!sees.every(p => clearTo(pos, p))) continue;
           tried += 1;
-          // (a lens further off sees as much through a longer lens)
-          const fov = Math.max(30, Math.min(44, 44 * (6.4 / d)));
-          const c = cost(pos, a, d, hgt, fov);
-          if (c < best) [best, view] = [c, { pos, tgt, fov }];
+          // (a lens further off sees as much through a longer lens; holding the scene's people, the first of a few that
+          // holds them whole)
+          const fov0 = Math.max(30, Math.min(44, 44 * (6.4 / d)));
+          const fovs = whole ? [fov0, fov0 + 5, fov0 + 10, 50].filter(x => x <= 50) : [fov0];
+          for (const fov of fovs) {
+            const h = holds(pos, fov);
+            // (holding them, a raised lens: at eye height heads line up one behind another)
+            const c = cost(pos, a, d, hgt, fov) + h + (whole ? (fov - fov0) * 1.5 + Math.max(0, 3.8 - hgt) * 25 : 0);
+            if (c < best) [best, view, held1] = [c, { pos, tgt: tgt.slice(), fov }, h];
+            if (!h) break;
+          }
         }
       }
     }
     // (nowhere low stands clear: from higher up, in front of it)
     view ??= { pos: [o.sill[0] + fx * 8, g + 6, o.sill[2] + fz * 8], tgt, fov: 44 };
-    stats.doorShot = { key: place.key, pos: view.pos.map(v => +v.toFixed(2)), cost: +best.toFixed(1), tried, people: others.length };
+    stats.doorShot = { key: place.key, pos: view.pos.map(v => +v.toFixed(2)), cost: +best.toFixed(1), tried, people: others.length, held: [...heldIds], holds: +held1.toFixed(1), fov: +view.fov.toFixed(1) };
     return view;
   }
   /** Who is at a place's door (doorway.js), or on the way to their own and near it. */
@@ -1064,7 +1156,27 @@ export function createInside({ city, actors, fade, lead = () => null, who = () =
       if (up && lead() === id) return { kind: 'inside', key: up.key, view: () => cutFrame(up.place) };
       if (lead() !== id) return null;
       const d = doorOf(id);
-      return d ? { kind: 'door', key: d.key, view: () => doorView(places.get(d.key)) } : null;
+      if (!d) return null;
+      // (holding a scene's people: when no low lens there holds them whole, none, and the camera keeps the Lock on the
+      // player, which does. Asked of a view made at most a second before: the cut takes that one)
+      if (kept) {
+        const now = performance.now();
+        if (!keptView || keptView.key !== d.key || now - keptView.at > 1000) keptView = { key: d.key, at: now, view: doorView(places.get(d.key)), holds: stats.doorShot?.holds ?? 0 };
+        if (keptView.holds > HOLDS_AT_MOST) return null;
+        const v = keptView.view;
+        return { kind: 'door', key: d.key, view: () => v };
+      }
+      return { kind: 'door', key: d.key, view: () => doorView(places.get(d.key)) };
+    },
+    /**
+     * The people the door's low shot must hold whole while a scene at the door plays (ids; null: nobody), as the run
+     * asks for the one who comes for the crib and the player, and `also` those to hold only if the frame allows (Cousin
+     * Earl): doorView. Asked again at every cut; when no low lens holds the first ones, the camera keeps the Lock.
+     */
+    keep(ids, also = null) {
+      kept = ids?.length ? ids.slice() : null;
+      keptAlso = kept && also?.length ? also.slice() : null;
+      keptView = null;
     },
     /** camera.js, at every cut: the inside view draws its layer alone; any other shot, the city. */
     cut(key) {
