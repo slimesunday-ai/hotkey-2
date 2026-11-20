@@ -6,7 +6,9 @@
 //   "+$12" when it is walked over   your ammo and the reload at your feet   the stairs
 //   A SHOT (fight-2): a blocky flash at the gun's muzzle (the clip's own muzzle, anim.js), a short tracer that runs
 //   from it to where the shot went, and a puff there: a few hard sparks on whoever it hit, grey dust off the ground
-//   where it missed. A HIT THE STAB VEST TOOK: a grey-blue puff off the chest and "vest −4" (what it took off). Small,
+//   where it missed. THE LONG GUNS (fight-3): the Doorman's shell, a spread of short tracers through its cone, a
+//   heavier flash and a puff of smoke at the muzzle, sparks on each one it hit and a skid of dust where it threw them
+//   back; the Long-eye's shot, one long hard line that hangs a moment. A HIT THE STAB VEST TOOK: a grey-blue puff off the chest and "vest −4" (what it took off). Small,
 //   flat squares, in the city's blocky look; no glow.
 //
 // Every effect is timed on the FIGHT's clock (fx.now), so a paused fight holds its effects still for a picture.
@@ -47,6 +49,7 @@ export function createFx({ city, skin = null }) {
   const streaks = [];
   const flashes = [];
   const puffs = [];
+  const skids = [];
   let now = 0;
   /** A few squares thrown out from a point (seeded per puff, so a held picture holds still). */
   function squares(k, age, life, s, colors, size, reach) {
@@ -167,18 +170,47 @@ export function createFx({ city, skin = null }) {
       pops.push({ p, s, kind, t0: now, dx: kind === 'gain' ? 34 : (Math.random() - 0.5) * 26 });
       if (pops.length > 60) pops.shift();
     },
-    /** A shot: a flash at the muzzle, a tracer to where it went, a puff there (sparks on a body, dust off the ground). */
-    shot(from, to, hit, who) {
-      streaks.push({ from, to, hit, who, t0: now });
-      flashes.push({ p: from, who, t0: now, seed: 1 + Math.floor(Math.random() * 1e6) });
+    /**
+     * A shot: a flash at the muzzle, a tracer to where it went, a puff there (sparks on a body, dust off the ground).
+     * `kind` 'long': the Long-eye's, one long hard line that hangs a moment.
+     */
+    shot(from, to, hit, who, kind = null) {
+      streaks.push({ from, to, hit, who, t0: now, kind });
+      flashes.push({ p: from, who, t0: now, seed: 1 + Math.floor(Math.random() * 1e6), big: kind === 'long' ? 1.25 : 1 });
       puffs.push({ p: to, kind: hit ? 'hit' : 'dust', t0: now, seed: 1 + Math.floor(Math.random() * 1e6), n: hit ? 5 : 6 });
       if (streaks.length > 40) streaks.shift();
       if (flashes.length > 40) flashes.shift();
       if (puffs.length > 60) puffs.shift();
     },
+    /**
+     * THE DOORMAN'S SHELL: a short tracer to each of `ends` (its cone), a heavier flash and smoke at the muzzle, sparks
+     * on each of `struck` (world points).
+     */
+    blast(from, ends, struck, who) {
+      for (const to of ends) streaks.push({ from, to, hit: false, who, t0: now, kind: 'pellet' });
+      flashes.push({ p: from, who, t0: now, seed: 1 + Math.floor(Math.random() * 1e6), big: 1.6 });
+      puffs.push({ p: from, kind: 'smoke', t0: now, seed: 1 + Math.floor(Math.random() * 1e6), n: 8, rise: 10 });
+      for (const p of struck) puffs.push({ p, kind: 'hit', t0: now, seed: 1 + Math.floor(Math.random() * 1e6), n: 8 });
+      while (streaks.length > 60) streaks.shift();
+      while (puffs.length > 60) puffs.shift();
+    },
+    /** Thrown back (the Doorman's): a skid of dust along the ground from where they stood to where they landed. */
+    skid(from, to) {
+      skids.push({ from, to, t0: now, seed: 1 + Math.floor(Math.random() * 1e6) });
+      if (skids.length > 20) skids.shift();
+    },
     /** A hit the stab vest took a share of (`took`, points): a grey-blue puff off the chest, and the share said. */
     vest(p, took) {
       puffs.push({ p, kind: 'vest', took, t0: now, seed: 1 + Math.floor(Math.random() * 1e6), n: 7, rise: 6 });
+      if (puffs.length > 60) puffs.shift();
+    },
+    /**
+     * (anim-1) A BLOW LANDING, where it lands: a hard white star that is there for a few frames and a few squares
+     * knocked off it, bigger for a harder one (`w` 0..1). `kind` 'blow' a fist's, 'cut' a blade's (a white sliver, red
+     * off it), 'guard' one caught on the arms (small, grey), 'slam' somebody put on the ground (dust, wide and low).
+     */
+    impact(p, w = 0.5, kind = 'blow') {
+      puffs.push({ p, kind, w, t0: now, seed: 1 + Math.floor(Math.random() * 1e6), n: kind === 'guard' ? 3 : kind === 'slam' ? 10 : 4 + Math.round(5 * w) });
       if (puffs.length > 60) puffs.shift();
     },
     clear() {
@@ -186,6 +218,7 @@ export function createFx({ city, skin = null }) {
       streaks.length = 0;
       flashes.length = 0;
       puffs.length = 0;
+      skids.length = 0;
     },
     /**
      * Draws one frame. `S`: { people: [{ id, who: 'you'|'ally'|'foe'|'boss', p: [x, y, z], head: y of the bar, frac,
@@ -214,6 +247,50 @@ export function createFx({ city, skin = null }) {
         g.stroke();
         g.setLineDash([]);
         g.globalAlpha = 1;
+      }
+      // COUSIN EARL TOLD A WAY (fight-3): a dashed line in his colour from him to the one he goes for, and where he
+      // holds a spot (out in front, one at a time) a small diamond on the ground there (his way is on his name plate)
+      if (S.earl) {
+        const K = colours();
+        const E = S.earl;
+        const a = scr(...E.at);
+        const b = E.to ? scr(...E.to) : null;
+        if (a && b) {
+          g.setLineDash([7, 6]);
+          g.lineCap = 'round';
+          g.strokeStyle = K.ink;
+          g.globalAlpha = 0.55;
+          g.lineWidth = 5;
+          g.beginPath();
+          g.moveTo(...a);
+          g.lineTo(...b);
+          g.stroke();
+          g.globalAlpha = 0.95;
+          g.strokeStyle = K.trust;
+          g.lineWidth = 2.5;
+          g.stroke();
+          g.setLineDash([]);
+          g.globalAlpha = 1;
+        }
+        const c = E.spot ? scr(...E.spot) : null;
+        if (c) {
+          g.fillStyle = K.ink;
+          g.beginPath();
+          g.moveTo(c[0], c[1] - 9);
+          g.lineTo(c[0] + 13, c[1]);
+          g.lineTo(c[0], c[1] + 9);
+          g.lineTo(c[0] - 13, c[1]);
+          g.closePath();
+          g.fill();
+          g.fillStyle = K.trust;
+          g.beginPath();
+          g.moveTo(c[0], c[1] - 5.5);
+          g.lineTo(c[0] + 8, c[1]);
+          g.lineTo(c[0], c[1] + 5.5);
+          g.lineTo(c[0] - 8, c[1]);
+          g.closePath();
+          g.fill();
+        }
       }
       // the stairs: the way out (a ring on the ground and its word on a plate; yours, yellow, once you are near it)
       if (S.exit) {
@@ -281,24 +358,68 @@ export function createFx({ city, skin = null }) {
           text('?', x, y + 1, { size: 13, color: K.ink, lw: 0 });
         }
       }
+      // THROWN BACK (the Doorman's): a skid of dust squares along the ground, from where they stood to where they
+      // landed, settling over 0.5 s
+      for (const k of [...skids]) {
+        const age = now - k.t0;
+        if (age > 0.5 || age < -0.5) {
+          if (age > 0.5) skids.splice(skids.indexOf(k), 1);
+          continue;
+        }
+        const [a, b] = [scr(...k.from), scr(...k.to)];
+        if (!a || !b || age < 0) continue;
+        let seed = k.seed;
+        const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+        const f = age / 0.5;
+        g.globalAlpha = f > 0.5 ? 1 - (f - 0.5) / 0.5 : 1;
+        for (let j = 0; j < 9; j++) {
+          const u = j / 8;
+          const q = Math.round(6 - 3 * u - 2 * f);
+          if (q < 1) continue;
+          g.fillStyle = ['#c9c2b4', '#a59d8f', '#e3ddd0'][j % 3];
+          g.fillRect(Math.round(a[0] + (b[0] - a[0]) * u + (rnd() - 0.5) * 8 - q / 2), Math.round(a[1] + (b[1] - a[1]) * u + (rnd() - 0.5) * 6 - q / 2 - 4 * f), q, q);
+        }
+        g.globalAlpha = 1;
+      }
       // THE SHOTS, all on the frame the rules fire it (a shot is no slower than the picture): the tracer (from the muzzle
       // to where it went, its tail running in after it over 0.07 s), the flash at the muzzle (a few hard squares,
       // 0.06 s), the puff where it landed (sparks on a body, dust off the ground)
       for (const k of [...streaks]) {
         const age = now - k.t0;
-        if (age > 0.1 || age < -0.5) {
+        const life = k.kind === 'long' ? 0.22 : k.kind === 'pellet' ? 0.09 : 0.1;
+        if (age > life || age < -0.5) {
           streaks.splice(streaks.indexOf(k), 1);
           continue;
         }
         const [a, b] = [scr(...k.from), scr(...k.to)];
         if (!a || !b) continue;
-        const f = Math.min(1, age / 0.07);
+        if (k.kind === 'long') {
+          // (the Long-eye: the whole line at once, an ink edge, a hot core, held and then thinning out)
+          const fade = age < 0.08 ? 1 : 1 - (age - 0.08) / (life - 0.08);
+          g.lineCap = 'butt';
+          g.globalAlpha = Math.max(0, fade);
+          g.strokeStyle = 'rgba(23,23,27,0.55)';
+          g.lineWidth = 7 * (0.6 + 0.4 * fade);
+          g.beginPath();
+          g.moveTo(...a);
+          g.lineTo(...b);
+          g.stroke();
+          g.strokeStyle = k.who !== 'foe' ? '#ffe27a' : '#ffb37a';
+          g.lineWidth = 4.5 * (0.6 + 0.4 * fade);
+          g.stroke();
+          g.strokeStyle = '#fffbe6';
+          g.lineWidth = 1.8;
+          g.stroke();
+          g.globalAlpha = 1;
+          continue;
+        }
+        const f = Math.min(1, age / (k.kind === 'pellet' ? 0.05 : 0.07));
         // (the dash: its head at the target from the first frame, its tail running in after it)
         const [h, tl] = [1, 0.25 + 0.75 * f];
         const P = u => [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u];
         g.lineCap = 'butt';
         g.strokeStyle = k.who !== 'foe' ? 'rgba(255,236,150,0.95)' : 'rgba(255,170,120,0.95)';
-        g.lineWidth = 3;
+        g.lineWidth = k.kind === 'pellet' ? 2.5 : 3;
         g.beginPath();
         g.moveTo(...P(tl));
         g.lineTo(...P(h));
@@ -306,13 +427,14 @@ export function createFx({ city, skin = null }) {
       }
       for (const k of [...flashes]) {
         const age = now - k.t0;
-        if (age > 0.06 || age < -0.5) {
+        if (age > 0.06 * Math.max(1, (k.big ?? 1) * 0.9) || age < -0.5) {
           flashes.splice(flashes.indexOf(k), 1);
           continue;
         }
         const s = scr(...k.p);
         if (!s) continue;
-        const q = age < 0.03 ? 1 : 0.6;
+        // (a long gun's flash is bigger: the Doorman's the biggest)
+        const q = (age < 0.03 ? 1 : 0.6) * (k.big ?? 1);
         // (a blocky star: a white core and four yellow arms, and four short diagonal ones)
         g.fillStyle = '#ffb21f';
         for (const [dx, dy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) g.fillRect(Math.round(s[0] + dx * 7 * q - 2), Math.round(s[1] + dy * 7 * q - 2), 4, 4);
@@ -324,15 +446,41 @@ export function createFx({ city, skin = null }) {
       }
       for (const k of [...puffs]) {
         const age = now - k.t0;
-        const life = k.kind === 'vest' ? 0.5 : k.kind === 'hit' ? 0.22 : 0.4;
+        const life = k.kind === 'vest' ? 0.5 : k.kind === 'hit' ? 0.22 : k.kind === 'smoke' ? 0.6 : k.kind === 'blow' || k.kind === 'cut' ? 0.26 : k.kind === 'guard' ? 0.2 : k.kind === 'slam' ? 0.45 : 0.4;
         if (age > life || age < -0.5) {
           if (age > life) puffs.splice(puffs.indexOf(k), 1);
           continue;
         }
         const s = scr(...k.p);
         if (!s || age < 0) continue;
-        if (k.kind === 'hit') squares(k, age, life, s, ['#fff4c2', '#ffb347', '#ffffff'], 4, 13);
+        if (k.kind === 'blow' || k.kind === 'cut') {
+          const w = k.w ?? 0.5;
+          const red = k.kind === 'cut';
+          squares(k, age, life, s, red ? ['#ffffff', '#e8232a', '#ff7a7a'] : ['#ffffff', '#ffd23f', '#fff4c2'], 4, 12 + 16 * w);
+          // (the star: four bars and a block, hard-edged, gone in a tenth of a second)
+          const q = age / 0.11;
+          if (q < 1) {
+            const r = Math.round((9 + 12 * w) * (0.55 + 0.45 * q));
+            const t = Math.max(3, Math.round((5 + 3 * w) * (1 - 0.5 * q)));
+            g.fillStyle = '#17171B';
+            g.fillRect(Math.round(s[0] - r - 2), Math.round(s[1] - t / 2 - 2), 2 * r + 4, t + 4);
+            g.fillRect(Math.round(s[0] - t / 2 - 2), Math.round(s[1] - r - 2), t + 4, 2 * r + 4);
+            g.fillStyle = red ? '#ffe9e9' : '#fffbe6';
+            if (red) {
+              // (a blade's: one long sliver across it)
+              g.fillRect(Math.round(s[0] - r * 1.5), Math.round(s[1] - t / 2), Math.round(3 * r), t);
+            } else {
+              g.fillRect(Math.round(s[0] - r), Math.round(s[1] - t / 2), 2 * r, t);
+              g.fillRect(Math.round(s[0] - t / 2), Math.round(s[1] - r), t, 2 * r);
+            }
+            g.fillStyle = '#ffffff';
+            g.fillRect(Math.round(s[0] - t), Math.round(s[1] - t), 2 * t, 2 * t);
+          }
+        } else if (k.kind === 'guard') squares(k, age, life, s, ['#e3ddd0', '#c9c2b4', '#ffffff'], 4, 9);
+        else if (k.kind === 'slam') squares(k, age, life, s, ['#c9c2b4', '#a59d8f', '#e3ddd0'], 6, 26);
+        else if (k.kind === 'hit') squares(k, age, life, s, ['#fff4c2', '#ffb347', '#ffffff'], 4, 13);
         else if (k.kind === 'dust') squares(k, age, life, s, ['#c9c2b4', '#a59d8f', '#e3ddd0'], 5, 11);
+        else if (k.kind === 'smoke') squares(k, age, life, s, ['#d8d4cc', '#b9b4aa', '#efece6'], 7, 16);
         else {
           squares(k, age, life, s, ['#b7c4d6', '#8e9db3', '#dfe6ef'], 6, 18);
           if (k.took > 0) {

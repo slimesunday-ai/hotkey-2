@@ -34,6 +34,10 @@ const PATHS = {
   ammo: '<path d="M5 21v-9.5L6.5 7 8 11.5V21zM10.5 21v-9.5L12 7l1.5 4.5V21zM16 21v-9.5L17.5 7l1.5 4.5V21z"/>',
   crowd: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20.5c0-3.4 2.7-6 6-6s6 2.6 6 6"/><path d="M15.5 5.1a3.2 3.2 0 1 1 0 5.8M17 14.8c2.4.6 4 2.9 4 5.7"/>',
   back: '<path d="M9.5 5 3 11.5 9.5 18"/><path d="M3.5 11.5H15a6 6 0 0 1 6 6V19"/>',
+  // (tree-1: the Ahead panel's: a branching path, a fist for the fight, a lock for what is not open yet)
+  tree: '<circle cx="6" cy="5" r="2.2"/><circle cx="6" cy="19" r="2.2"/><circle cx="18" cy="12" r="2.2"/><path d="M6 7.2v9.6M6 12h9.8"/>',
+  fight: '<path d="M7 12V8.2a1.6 1.6 0 0 1 3.2 0V11M10.2 10.5V6.8a1.6 1.6 0 0 1 3.2 0v3.7M13.4 10.5V7.6a1.6 1.6 0 0 1 3.2 0v3.2M16.6 11V9.6a1.6 1.6 0 0 1 3.2 0v4.6c0 4.2-2.8 7.3-6.8 7.3-3.6 0-6.4-2.6-6.6-6.2L6 12.6"/>',
+  lock: '<rect x="5" y="10.5" width="14" height="10.5" rx="1.6"/><path d="M8.2 10.5V7.8a3.8 3.8 0 0 1 7.6 0v2.7"/>',
   fold: '<path d="m6 15 6-6 6 6"/>',
   unfold: '<path d="m6 9 6 6 6-6"/>',
 };

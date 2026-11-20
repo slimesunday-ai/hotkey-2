@@ -27,8 +27,7 @@
  "slots": [
   {"id":"frame","label":"the frame","place":"wall","x":3,"z":0,"foot":[7,9],"rot":0,"demo":"frame-gilded","variant":0,"fits":["collectible"],"wall":"E","y":0.5},
   {"id":"neon","label":"the neon · over the bar","place":"wall","x":1,"z":0,"foot":[8,2],"rot":0,"demo":"neon-sign","variant":0,"fits":["collectible"],"wall":"N","y":1.7},
-  {"id":"safe","label":"the safe","place":"floor","x":0,"z":13,"foot":[4,5],"rot":0,"demo":"safe-big","variant":0,"fits":["gear","security","stash"]},
-  {"id":"on-the-table","label":"on the table","place":"surface","x":11,"z":11,"foot":[2,2],"rot":0,"demo":"chain-bust","variant":0,"fits":["collectible","trophy"],"on":11}
+  {"id":"safe","label":"the safe","place":"floor","x":0,"z":13,"foot":[4,5],"rot":0,"demo":"safe-big","variant":0,"fits":["gear","security","stash"]}
  ],
  "vacant": [
   {"id":"door-front","x":13,"z":0,"rot":0,"variant":2,"on":{"wall":"E"}},

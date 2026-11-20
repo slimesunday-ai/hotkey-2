@@ -427,7 +427,8 @@ earnings first.
 **Errands: money and no hour.** A place's `shop` is its errands, each with a keeper (a person of the place) and a spot:
 food for energy, one a day, never over your day's full energy: a bologna sandwich, $4, from Gloria's kitchen window in
 the trailer park; the energy drink, $5, from Mrs. Bao's cooler at the market (kept as the market's food). At most 2
-energy a day bought this way. **Things**, cosmetic only (no number changes), owned for the run like the bed, bought on
+energy a day bought this way: since batch-1 a real rule, one count for the day across every food and drink of every
+place (`food.perDay` in `src/run/config.mjs`, below). **Things**, cosmetic only (no number changes), owned for the run like the bed, bought on
 the street from what you carry: to wear, from Mrs. Kowalski's clothes rail at the market, a casino visor (head, $6), a
 bowling shirt (top, $12), a gold-tone chain (neck, $18), white high-tops (feet, $25); for the trailer, from Mr. Pruitt's
 yard sale in the park, a lava lamp ($8), a box fan ($10), a beanbag ($20), a fish tank ($30), each with the spot in the
@@ -501,6 +502,17 @@ Teo is now modestly worth it for a market player. **The cost**: the both-places 
 by it, because the cartons they already carry sell to the same crowd and the crowd buys only twice a day; mixed at
 $79.7 against the market's ~$73 puts mark 12 near +9%, under its 10% bar (not measured in full: the 23-minute marks
 were not run). A fix, for slime to decide: the players buy a good only when no good they carry sells to that buyer.
+
+**Food: one cap a day (batch-1).** Until batch-1 the "at most 2" held only because there were two food spots: each
+food's own `perDay` was its only limit. Now `food: { perDay: 2 }` counts every food and drink bought anywhere that day
+(a shop entry of `kind: 'food'` that gives energy), and at the cap every food's option says "you have eaten all you
+can today" and is not open; the place card, the shop panel and the bar's tile say how many of the day's 2 are eaten. It
+resets each morning. Measured (500 seeds, a park player that eats when spent, the run66 harness), three foods in the
+park, uncapped: $73.3 a day against the market's $72.5 (the park as good as the market: what the cap is for); capped at
+2: $68.4 (the market +6%); capped at 1: $62.5, as with one food (+16%). With bed: $112.5, $107.1, $101.2 against the
+market's $103.5. 2 is RUN.md's own number and changes nothing today (the park and the market have one food each); a
+city with more food spots and an eating park player would still put the market only 6% ahead of the park at 2
+(mark 2 wants 15%), so 1 is the number if that matters: the owner's call.
 
 **The sandwich**, measured (1,000 seeds, mattress): a park player who eats it when spent banks $65 against $60 (0.86
 a day), both places $86 against $82. No mark's player eats, so the marks are unmoved; but a park player who eats would
@@ -994,6 +1006,1525 @@ that just landed, Earl's going. A choice half made is never in it: a reload come
   just before the reload, the link naming another seed, and the arrangement must come back). The node tests:
   `test/run-page-save.test.mjs`.
 
+## Fights (duel-1)
+
+Added 2026-11-17, the owner's direction: when you cross somebody to their face and it goes wrong, they fight you there
+and then. You do not steer: the fight drives itself and is decided by what you own and how much energy you have. You
+see it, yourself getting beaten included; it is short and skippable. "What you own is actually helping you." The
+decisions below were the owner's; the numbers are tuned with the table (below). Everything new is one block of
+`src/run/config.mjs`, `duel`.
+
+**When.** A job whose entry says `fight: 'fail'` is a fight when it goes wrong: the trailer park's debt (`collect`) and
+its wallet (`wallet`, you were caught). And the regular at your door who swings when you refuse them (`duel.door`; the
+60% that they swing is still the dice). The market's jobs, getting jumped and the attempt on your crib are the
+contest's dice as before. More jobs are switched on by their flag alone (a test switches the market's wallet on that
+way). Getting jumped (two of them) and the attempt on your crib are not built as fights; the door's mapping
+(`rules.mjs duelBand`, below) is the shape they would take, a few lines each where they roll now.
+
+**The fight decides it.** One run of the fight's own simulation (`src/fight/`: `createFight` with `duel`, one of them,
+no waves, nothing dropped, nobody leaves), its seed drawn from the run's dice (`rng(seed, 'run-duel', day, hour,
+place, job)`; the door's from the day, the regular and how the door was shut), IS the outcome: no other roll. Both
+sides move by the brawl (`src/fight/brawl.mjs`): whoever has the next blow ready steps in to throw it; whoever is waiting
+on theirs gives ground to just outside the other's reach and circles; so they come together, trade, part and circle.
+In a one-on-one 45% of the blows thrown land (two thirds of that on one backing off fast). It lasts at most 20 s of
+fight time; at the cap the one with more health left wins (a tie is theirs) and the other goes down. The same inputs
+and the same seed are the same fight, headless (`runDuel`), stepped a tick at a time as the page steps it
+(`startDuel` and `step(F, brawl(F))`), skipped (the rules' result stands) and with no acting out (`&scenes=0`); the
+event carries the fight's inputs and seed (`duel`), so the page plays exactly that one.
+
+**What each brings** (`rules.mjs duelOf`, every number in `duel`).
+
+| | You | Them |
+|---|---|---|
+| Weapon | the box cutter if you own it (the fight's `blade`, its blows × 1.45), else bare hands (× 1.8) | fists (× 2.0) |
+| Health | your energy before the hour, on a slope with a floor, measured against the bed's 10: a full bar (100) at 10, half (50) at 0, 5 a point; fresh on the mattress (6) 80, tired (2) 60 | their toughness: the role's base, give or take 5, seeded by the person's id (the same neighbour is always as tough): a debtor 64, a mark 52, a buyer 48, else the ordinary 55 |
+
+The trailer park's: Benny Two-Coats 64 ("tough"), the man at the bus stop 56, the woman at the bus stop 55, Shaky Dee 43
+("slight").
+
+**What it costs and changes.** A fight costs energy: 1 won, 2 lost. It replaces a job's `failEnergy` (never both: the
+debt's 2 is the fight's now) and is never the clinic. The "tired" rule for a job's odds is untouched.
+- A job fight **lost** is today's failure as it was: no pay, the failure's heat, trust, pressure and mood, and the
+  fight's 2 energy.
+- A job fight **won** pays as a win (the same pay roll the win would have had), but their trust, the place's heat and
+  the pressure at home move as for a failure, and the mood is the failure's: it was a fight in the street.
+- The door: **lost** is their win as the contest had it: their clean win (energy −4) while they have more than half
+  their health left, else the scuffle (−2); **won** is their losing (nothing). Sour and out either way, as before.
+  `duel.doorClean` is that half.
+
+**No hidden roll.** Each card says what going wrong means, from a sample of the very same fight at the same inputs
+(`duelChance`: 200 fights of seeds of their own, cached by the inputs): the view's option carries `fight` (`pct`,
+`in10`, `n`, what each side brings and why, the costs, `text`: "a fight: you win about 4 in 10") and so does each of its
+targets (each person their own); its `ifFail` says it in words ("heat +1, a fight: you win about 5 in 10 (won: paid,
+energy −1; lost: energy −2)"), and `failEnergy` is the fight's 2. Shutting the door says its swing as a fight
+("Shut, 60% they swing: a fight: you win about 6 in 10."). Over 300 of the run's own fights the share won is within 10
+points of the card's (a test).
+
+**The table** (`node scripts/duel-table.mjs [--fights 2000] [--out dir] [--with json]`, free, 2,000 fights a cell, about
+40 s): every park person who can fight you and an ordinary one, bare hands and the box cutter, at every energy.
+
+```
+who                       tough  kit           1   2   3   4   5   6   7   8   9  10
+an ordinary one              55  bare hands   27  33  40  42  47  50  56  61  65  69
+an ordinary one              55  box cutter   43  50  57  59  64  65  71  74  76  79
+Shaky Dee                    43  bare hands   41  49  56  59  62  65  72  75  78  81
+Shaky Dee                    43  box cutter   53  59  65  69  73  73  79  82  83  86
+a man at the bus stop        56  bare hands   26  32  39  41  46  49  55  60  64  68
+a man at the bus stop        56  box cutter   42  48  55  57  63  64  70  72  75  78
+a woman at the bus stop      55  bare hands   27  33  40  42  47  50  56  61  65  69
+a woman at the bus stop      55  box cutter   43  50  57  59  64  65  71  74  76  79
+Benny Two-Coats              64  bare hands   19  24  31  32  36  40  45  49  54  58
+Benny Two-Coats              64  box cutter   35  41  48  50  55  58  65  67  70  73
+```
+
+The targets, all passing: bare hands fresh on the mattress against an ordinary one 50.1% (40 to 55); the box cutter
+65.3% (65 to 80, at its edge); energy 2 or less at least 15 points under fresh, the same kit (bare hands 33.0% against
+50.1%, the box cutter 49.5% against 65.3%); the toughest of the park (Benny, 64) against the weakest (Dee, 43) at least
+15 points apart fresh (bare hands 39.6% against 65.3%, the box cutter 57.8% against 73.5%); no kit and energy in the
+park under 10% or over 90% (18.6% to 86.1%); the cells' median lengths 5.1 to 11.3 s of fight time (5 to 12), none over 20 s
+(382 of 200,000 fights went to the cap). The tuning, in order: with the stop's own numbers and the brawl, health
+decided it almost without fail (with the blows scaled up, bare hands against one man of 48: 23% at energy 1, 91% at
+10; unscaled, the box cutter won 86% fresh against a man of 70, and bare hands 27%), so in a one-on-one a blow lands 45% of the time and each side's blows are scaled (yours
+× 1.8 bare-handed and × 1.45 with the cutter, theirs × 2.0); then the toughness spread by role so that the toughest and the weakest are 15 points apart
+with the cutter too, without the weakest at full health with the cutter going over 90.
+
+**On the page** (`demo/run/duel.js`). At the spot the job's scene already uses, between the two already in frame: the
+job's scene plays to the first move of it (a debt: he will not pay and shoves you off; a lift: the mark turns on you
+and shoves you; the door: shut, and he shoves you), then both square up on the nearest open ground round them (a walk
+of a few steps, nobody put anywhere: the brawl keeps both within 2.9 m of the middle, so the page looks for the nearest disc
+of 3 m that is nine tenths open ground: level, nothing low, nothing solid, open sky over it, a stall's canopy hiding
+whoever falls under it), and the fight is the rules' own, stepped a tick at a time on the stage's
+clock: the stage's people moved by hand (`rides/kit.js own`), in the fight's own clips and effects (`demo/fight/anim.js`:
+each blow's wind-up started before it lands, the flinch, the fall; its numbers off each hit, `fx.js`; the stage's blood,
+`gore.js blow`). Both fall on their back (nobody is killed here: `anim.js` takes `falls`). Two bars with names over the
+picture's top, in the run's tokens (`ui.css` `.rn-duel`): yours yellow, theirs pink, each with why it starts where it
+does ("bare hands · energy 6: you start at 80%", "fists · tough"), and a Skip button. The end: the loser goes down
+and we stay on it; the winner comes and stands over them; you beaten, they walk off and you get up; you the winner,
+they get up and back off. Then the result card and the row with what it cost ("A fight: you won", +$16, −2 energy,
+home risk +2, Benny against you; "won the fight" / "lost the fight" first of its chips). Space, Enter or a click on
+Skip: under the stage's black, both stood where they are, the rest of the hour settled, the same result. No camera
+or zoom is added or changed: it follows you as on any hour. The fight page (`?mode=fight`) and the try-out are as they
+were (the fight's sim, anim and policies changed only by additions none of them use).
+The frame check of the fight page (`demo/fight/watch.js`, `frame.js`) watches every picture while a fight is on; the
+page keeps each fight's record for the tools (`hud.duel`: the rules' result, the one seen, skipped or not, the stage
+seconds, the frame check's faults; a fight seen to end otherwise is said as an error).
+`HK2_DEBUG_PORT=<port> node demo/tools/run-duel.mjs --port <p> --out <dir>` finds a won debt, a lost one and the door
+headless, plays each in the page with real keys and pictures, skips the door with a real mouse press on Skip and the
+debts with Space and Enter, plays one with no acting out, and ends `duel-ok` or `duel-fail`.
+
+**Saves.** The state's shape is unchanged (state version 8): the fight rides on its event, not in the state, so a save
+from before loads and its fights are the same before and after the save (a test).
+
+### What the fights moved in the marks
+
+Measured 2026-11-17. The full run before the fights (`node scripts/run-marks.mjs`, 3,000 seeds, at f5dc489) took 5,357 s
+of one core, about 89 minutes (not the five minutes of the first test's twelve marks: the home marks' ten-day seasons are
+most of it), and passed 26 of 28 (12 and 15 failing, as before). The full run after was stopped at 75 minutes; the two
+were then run side by side at `--seeds 500`, the same seeds: before 909 s, after 944 s (+4%); 25 of 28 pass in both,
+the same three failing (12, 13 and 15; 13 passes at 3,000 seeds before, fails at 500 by a hair either way: with the
+bed the good neighbour and the burner 11% apart before, 10% after; with all three 10% and 9%). Every mark that passed
+before passes after. What moved, before then after (500 seeds): mark 2 the market against the park +40% and +64% →
++42% and +66% (the park's best $55 either way on the mattress; with the cutter the park player banks $58 → $62: the
+box cutter wins its fights); mark 9 the park with bins $35 → $41 against $55; mark 11 worst tenth of days leaning on Dee
+−$36.4 → −$38.6, not leaning $6.3 → −$3.2 (still worse leaning; the regular at the door is a fight now, and Dee is slight);
+mark 12 +10% and +9% → +11% and +10% (still failing); H2 the park's crime player loses 9.5% → 12.4% of what it earns
+to attempts (8 to 25%); H5 the trailer park's player banking $51.9 against $33.9 carrying all → $50.3 against $41.2;
+the rest within a dollar or exactly as before. No number older than the fights was changed.
+
+**What a fight costs a season, headless.** One fight is about 0.15 ms of the simulator. The park's crime player fights
+0.9 times a day (wins 39% bare-handed, 58% with the cutter); a six-day season of it is 7.8 ms before and 10.6 ms after
+(about 5.5 fights, and the cards' sample of 200 fights the first time each case is seen in a process: 17.5 simulator
+runs a season over 400 seasons, falling as the sample is kept); a season of the players who mostly work the market
+6.7 to 7.5 ms before and 6.7 to 7.8 after. The card's estimate is kept per config and case (the cutter, the energy, the
+person), so a view drawn every hour asks it once per case.
+
+### Every weapon its job (fight-3)
+
+Added 2026-11-18, the owner's direction: "more strategy play vs grinding". Every weapon has its own job, none is a
+step up from another; the study that tuned the numbers was measured on a throwaway copy (run70, 600 seeds a cell) and
+is landed here as it was. All of it is the fight's simulation (`src/fight/data.mjs`, the rules in `sim.mjs`), its
+table and the try-out page. **The run reads none of it yet.** Its one-on-ones are as they were: `node
+scripts/duel-table.mjs` prints the same table before and after, and every fight that existed before (every stop level
+and preset, Earl's old way, the run's one-on-ones with bare hands and the box cutter) is the same fight, tick for tick,
+for the same seed. The one thing changed on purpose is "built" (below).
+
+**The guns' jobs** (`WEAPONS`; the build list says each in these words, `demo/fight/dock.js JOBS`):
+
+| Gun | Its job | Numbers |
+|---|---|---|
+| six-shot (`pistol`) | for anything | as before |
+| chopper (`chopper`) | strong, and hungry for rounds | as before |
+| **Doorman** (`doorman`), a short double barrel | several at once, up close | a shell takes every one of them inside 22° either side of the one it is aimed at, out to 7 m, each hit rolled on its own; full damage (24 to 32) to 2.5 m, then less in a straight line to a fifth at 7 m, and it throws them back a metre up close, less as far as the damage is less; 2 shells, reload 1.8 s, 20 shells carried |
+| **Long-eye** (`longeye`), a scoped rifle | one hard shot, from far off | 36 to 46 a shot, 0.75 a second, out to 20 m, 5 in it, reload 2.6 s, 15 rounds; with one of them within 1.6 m of you its hit chance is 0.55 of what it would be |
+
+Backing away while firing (`policies.mjs kite`) keeps the ones who hit at a gun's own distance where it has one
+(`stand`: the Doorman close, 2.6 m, and walks to the nearest when none is in its 7 m; the Long-eye far, 6 m). A dropped
+pack of rounds gives a long gun half of it (`pick`: its own shells or cartridges). The tire iron is Cousin Earl's
+alone: not on the build list.
+
+**Punch styles** (`PUNCHES`: bare hands, each bought once and chosen before a fight; data only, the page does not
+offer them yet):
+- **quick hands** (`jab`): 5 to 8, 2.2 a second, light. Keeps a flinchy man staggered (its cycle stays over a heavy's
+  stagger, so it never locks one).
+- **the haymaker** (`haymaker`): 18 to 24, 0.6 a second, lands 0.85 as often (seen coming), throws them back a metre.
+- **the throw** (`throw`): 7 to 10, and a throw that lands puts them down 1.6 s (no blows, no steps), 0.8 s more
+  before they can be thrown again; you stay on your feet; the ground does the damage, so no soak takes any off.
+
+**Opponent styles** (`RIVALS`, for one-on-ones; `rivalFoe(style, { hp })` gives a duel's `foe`). Fields new to a foe:
+`reel` (how long a blow of yours staggers them), `heft` (the share of its throw back they take), `soak` (points off
+every blow of yours, never under 1), `slip` (the share of a hold they take).
+
+| Style | The card's words | Weapon | Hits ×, speed | reel | heft | soak | slip | Health as most |
+|---|---|---|---|---|---|---|---|---|
+| `brawler` | a plain brawler | fists | 2.0, 3.2 | 0.35 | 1 | 0 | 1 | 55 |
+| `bigman` | big, slow, hits like a truck | big fists (`mauler`) 14 to 20 | 2.0, 2.6 | 0.12 | 0.35 | 7 | 1 | 70 |
+| `quick` | quick and slippery | quick fists (`quickfists`) 5 to 8, 2 a second | 2.0, 4.0 | 0.45 | 1.2 | 0 | 0.3 | 45 |
+| `knife` | carries a blade | box cutter | 1.6, 3.4 | 0.35 | 1 | 0 | 1 | 50 |
+| `grabber` | grabs and won't let go | grabbing hands (`grab`) 8 to 11: it holds you 1 s, you cannot hit back and neither of you moves | 2.0, 3.0 | 0.30 | 0.8 | 5 | 1 | 60 |
+
+The plain brawler is the run's opponent as he is now (the same fight, tick for tick, a test). The study's matchups,
+fresh at 80 health against each style at its usual health (win %, 600 seeds): quick hands are the answer to the quick
+one (94), the haymaker to the grabber (69), the throw to the big man (47), the box cutter to the knife (78), brass
+knuckles to the plain brawler (75); each is worst against another style. **Who has which: nobody yet.** The
+coordinator's call, with the owner: in the run the trailer park's people stay plain brawlers and the quick one; the
+demanding styles are for people deeper in the city. So no person of `src/run/` has a style in this build (since styles-1 everybody does: "Fights in the run: styles and getting jumped").
+
+**No gun in a one-on-one.** `createFight({ duel })` refuses a gun on either side ("no gun in a one-on-one"): a
+one-on-one is a street fight, hands, a blade, knuckles.
+
+**Cousin Earl's ways** (`EARL_WAYS`, a build's `earl`; the three the player is offered are `WAYS_OFFERED`):
+
+| Way | Said | What he does |
+|---|---|---|
+| `side` (left out: his old way, the loadouts') | fights whoever comes at you | the nearest of them near you, else at your shoulder |
+| `front` | Out in front: stands in front, takes the hits | a step (1.2 m) in front of you toward the nearest one who walks up to hit; fights what reaches him or you |
+| `hunt` | Goes hunting: goes after the shooters | the ones who shoot, wherever they are; then the one furthest from you |
+| `block` | One at a time: keeps the second one off you | with two or more who hit on their way to you, he stands 1.5 m out between you and the second nearest and fights him there |
+
+When each is the call (the study): out in front when you fight with your hands and they walk up and hit; hunting when
+someone shoots from the back and you cannot reach him (bare hands in the corner 22% against 1% at your side, the table
+below); one at a time when you carry a gun and several come together, and it keeps Earl on his feet (the raid with the
+six-shot: down in 16% of fights against 46% at your side).
+
+**The small street fights** (`STREET`, levels of the stop's own simulation by name): `jumped`, two at once and one a
+runner; `the corner`, two hang back and shoot and two come at you; `a raid`, four at once. And the Sixes at your door
+(`sixes1`, `sixes4`, on `YARD`, 10 by 8 m): a first look, not tuned; a Six who gets past you to the door is not
+counted yet.
+
+**"Built"** (the gym's mark, `GEAR.strength`): +10 health and fists and blades × 1.1 (it was +30 and × 1.2, and the box
+cutter built beat a plain six-shot).
+
+**The table** (`node src/fight/table.mjs [--seeds 200] [--out dir]`, free): the five loadouts and the two long guns,
+alone, on the stop's three levels and the three street fights, still and backing away; then Earl's ways against what you
+carry. The new rows, 200 seeds (win %, still / kite):
+
+```
+loadout                 level     still  kite   secs  hp-left  dropped
+Bare hands              jumped     62%  100%   13.4    80%     100%
+Bare hands              corner      0%    0%   11.8     0%       3%
+Bare hands              raid        0%   14%   15.2    13%      41%
+Starter                 jumped    100%  100%    8.3    96%     100%
+Starter                 corner      0%    0%   18.6     0%      46%
+Starter                 raid        0%   51%   12.2    36%      71%
+Handgun                 jumped    100%  100%    7.3    99%     100%
+Handgun                 corner     63%   93%   14.9    52%      96%
+Handgun                 raid       20%   78%   12.1    63%      87%
+Handgun + vest          jumped    100%  100%    7.3    99%     100%
+Handgun + vest          corner     85%   99%   15.1    63%      99%
+Handgun + vest          raid       52%   86%   12.6    69%      92%
+Chopper + vest + Earl   jumped    100%  100%    5.6   100%     100%
+Chopper + vest + Earl   corner    100%  100%   11.8    85%     100%
+Chopper + vest + Earl   raid      100%  100%    9.6    99%     100%
+Doorman                 easy       99%  100%   20.7    89%     100%
+Doorman                 real        0%   23%   33.0    21%      75%
+Doorman                 hard        0%    0%   27.8     0%      57%
+Doorman                 jumped    100%  100%    9.7    99%     100%
+Doorman                 corner      0%   18%   21.2    27%      61%
+Doorman                 raid       45%   86%   12.0    63%      92%
+Long-eye                easy       97%  100%   16.9    98%     100%
+Long-eye                real       33%   59%   29.6    59%      79%
+Long-eye                hard        4%   13%   30.5    56%      60%
+Long-eye                jumped     99%  100%    5.1    98%     100%
+Long-eye                corner     74%   96%   13.3    73%      98%
+Long-eye                raid       11%   57%   12.3    75%      70%
+```
+
+Cousin Earl's ways (win %, backing away; alone without him; * the best of his four within 2 points), and the share of
+fights he goes down in:
+
+```
+              easy                          real                          hard                        
+             alone  side front  hunt block alone  side front  hunt block alone  side front  hunt block
+bare hands    100   100*  100*   99*  100*    0     0     0     0     0     0     0     0     0     0 
+box cutter    100   100*  100*  100*  100*   18    37    52*   36    52*    0     0*    0*    0*    2*
+six-shot      100   100*  100*  100*  100*   61    93    95    85    99*    2    19*   20*   11    17 
+chopper       100   100*  100*  100*  100*   83    99*   96    98*   97*    2    19*   16    12    18*
+Doorman       100   100*  100*  100*  100*   23    69    78    53    84*    0     1*    1*    1*    1*
+Long-eye      100   100*  100*  100*  100*   59    91    95*   96*   97*   13    64*   59    51    61 
+
+              jumped                        corner                        raid                        
+             alone  side front  hunt block alone  side front  hunt block alone  side front  hunt block
+bare hands    100   100*  100*  100*  100*    0     1     2    22*    0    14    59    71*    9    39 
+box cutter    100   100*  100*  100*  100*    0    42    60    91*   69    51   100*  100*   97    99*
+six-shot      100   100*  100*  100*  100*   93   100*  100*  100*  100*   78   100*  100*   99*  100*
+chopper       100   100*  100*  100*  100*   97   100*  100*  100*  100*   93   100*  100*  100*  100*
+Doorman       100   100*  100*  100*  100*   18    47    56    78*   69    86    99*  100*   98   100*
+Long-eye      100   100*  100*  100*  100*   96   100*  100*  100*   99*   57    93*   89    94*   93*
+
+Earl down (%): side front hunt block, at easy, real, hard, jumped, corner, raid
+bare hands   100  84 100 100   100 100 100 100   100 100 100 100    45   4  40  14   100 100 100 100    98 100 100 100
+box cutter   100  13 100 100   100 100 100 100   100 100 100 100    20   0  40  34    92  88 100  71    53 100 100 100
+six-shot       0   0   0   0    91  48  96  64   100  97 100 100     0   0   0   0    48  18  72  34    46  22  91  16
+chopper        0   0   0   0    61  38  82  52   100  97 100 100     0   0   0   0    34  13  55  23    27   7  77   4
+Doorman       41   0  51  46   100  85 100 100   100 100 100 100     1   1   8   4   100  34  99 100    98  28 100   9
+Long-eye       0   0   0   0    44  22  46  33    95  89 100  94     0   0   0   0    12   3  17   5    38  27  38  31
+```
+
+The stop's own fifteen rows (the five loadouts on its three levels) are what they were, figure for figure; the long guns'
+jobs show in them: the Doorman takes a raid alone (86%) and loses the corner (18%), the Long-eye takes the corner (96%) and
+is the best gun alone on the bad night (13%, the chopper 2%, the six-shot 2%).
+
+**The try-out page** (`?mode=fight`, and the run's try-out stop). Build your own (B) lists each weapon with its job
+and its numbers ("Doorman: several at once, up close · 24–32 a shell · 2 in it · reload 1.8 s · 20 shells"), in two
+columns; with Cousin Earl brought, his three ways under him, one at most (none: at your side). The five loadouts stay
+on 1 to 5. How hard has a fourth, small level first: Jumped. In a round: the Doorman's shell is a spread of short
+tracers through its cone with a heavier flash and smoke, sparks on each one it hits and a skid of dust where it threw
+them; the Long-eye's shot is one long hard line that hangs a moment, slow between shots; both are held in both hands
+(`demo/fight/clips/long.js`: drawn new for the fight, nothing in the game held a long gun; the lab shows them,
+`?mode=fightlab`); Earl told a way shows it: a dashed line in his colour to the one he goes for, a small diamond on the
+spot he holds, and his way on a plate under him. The losing card's advice tries the other guns and Earl's other ways
+too ("Consider the Doorman. They rushed you: two of them on you at once. A shell of the Doorman hits every one of them
+in front of you up close"). `demo/tools/fight-run.mjs --guns` plays the long guns and Earl's ways and takes their
+pictures; `demo/tools/fight-clicks.mjs` presses each new choice with a real mouse.
+
+**What is wired and what is not.** Wired: the simulation, its tests (`test/fight-jobs.test.mjs`), the table, the
+try-out page. Not wired (the run-side job that follows): choosing a punch style at home, an opponent's style on a card
+and in `rules.mjs duelOf` (the foe's `reel`, `heft`, `soak`, `slip` from `rivalFoe`), giving Earl an order in the run
+(the guard), any gun bought in the run reaching the try-out, the Sixes' home fight and its rules (breaking in, what Earl
+hurt costs), and the brass knuckles' one-on-one scale the study assumed (× 1.6, a run number).
+
+## Low Tide Docks (batch-1)
+
+Added 2026-11-17, the owner's first batch of places: a place must differ from the others in its danger, in what only
+it offers and in who is there. The market is where you get jumped; **the docks are tougher people and honest money**;
+no drugs ("I don't want drugs to be the only path to earn money": no connect, no good, no selling job here). Its whole
+entry is `places.docks` in `src/run/config.mjs`; no rule changed for it.
+
+**One ride from home, and only from there.** `links: { park }`, and the park's `links.docks` back (LOW TIDE station on
+the stage, places.json `docks.ways.subway`). Measured in the review (run66): the same docks reached through the market,
+two rides, banked $40.9 a day against $65.4 one ride away; on 6 energy a second ride eats the day. The park's ride to
+the docks is `late` (listed after every older move), so no older move's key changed.
+
+| Job | Odds | Pay | If it fails |
+|---|---|---|---|
+| Haul a shift for the foreman (the safe one; Mr. Haines, Rosa) | sure | $30–39 (base $10–13 × 3) | |
+| Lift a box off a driver's semi (Big Lou, a big man; Nadia Petrakis, a plain brawler) | 60% | $84–141 (base $28–47 × 3) | trust −2, **a fight with the driver**: won, paid and heat +1; lost, heat +2 |
+
+The `mean` tier: pay × 3, the jumpers 1.5 × as often and 10 stronger, patrolled (police × 1.25), a night rough 80%
+robbed. Strangers 2 (1 back a morning), bins 2 (1 back). Two foremen, two drivers: at most two lifts a day.
+
+**Its own character, the two calls asked for.** (1) A failed lift, done at the driver's own cab, **is a fight**
+(`fight: 'fail'`, duel-1's): the driver turns on you. Drivers are tougher than the trailer park's people: `duel.foe.base.
+driver` 62 (66 for part of a day in bigman-1, below; an ordinary one is 55, Benny Two-Coats 64): bare-handed, an hour
+in (energy 5), you beat Nadia Petrakis about 4 in 10 and Big Lou under 1 in 10; with the throw about 6 and 5 in 10. A won fight pays the box and heats the
+docks +1 (the lift's own `wonHeat`); a lost one heats them +2 and costs 2 energy (the fight's cost, as anywhere). (2) **Crossing a driver does not lose you
+the foreman's shift.** Trust is one number per person and stays so: the driver you crossed is against you (off your
+table, and about on 60% of hours to call in whatever you do on the docks next: heat +2 there), but the foremen's shift
+is the honest money the place is for, and taking it away would be a new rule (one person's grudge moving another's);
+nothing exists that does it, so it was not built.
+
+**Measured** (500 seeded six-day seasons, the market's homeAt player at each place, `policies.mjs` `docks`): the fight
+on a failed lift is worth money to the player who can win it, so it was tuned with the drivers' toughness and the pay:
+
+| | mattress | box cutter | bed |
+|---|---|---|---|
+| The starting numbers (shift $30–42, lift $90–150, fight with an ordinary 55), home at $120 | −10.7% | −4.0% | −4.9% |
+| The same, no fight | −16.4% | −11.5% | −17.2% |
+| As first built (shift $30–39, lift $96–162, drivers 62), home at $120, 500 seasons | $67.5 against $76.6, −11.9% | $83.4 against $90.0, −7.4% | $105.8 against $112.8, −6.2% |
+| The same at 3,000 seasons (the full marks run, with the fight build joined) | −14.9% | −9.0% | −9.9% |
+| Shift $30–42 (2026-11-18, before the fights of styles-1), lift $96–162, drivers 62, home at $120, 3,000 seasons | $66 against $76, −13.4% | $82 against $89, −7.9% | $104 against $113, −7.3% |
+| The same at 500 seasons | −10.3% | −5.9% | −3.8% |
+| Shift $30–42 with the fights of styles-1 joined (the drivers a knife and a quick one), 3,000 seasons | −9.0% | −4.7% | −4.2% |
+| The same at 500 seasons (under the 3% floor on the bed) | −10.4% | −4.0% | −2.6% |
+| Shift $30–39 again, lift $96–162, the fights joined (Big Lou a quick one), home at $120, 3,000 seasons | **$67 against $74, −10.3%** | **$84 against $89, −6.1%** | **$105 against $113, −6.8%** |
+| The same at 500 seasons | −11.8% | −5.3% | −5.1% |
+| **Big Lou a big man** (bigman-1), the same numbers, the docks player lifting blind (as before) | −18.8% | −11.0% | −12.7% |
+| Big Lou a big man (bigman-1), the careful player passes a fight it mostly loses (`FIGHT_MIN` 30), 3,000 seasons | **$66 against $74, −11.8%** | **$82 against $89, −8.2%** | **$101 against $113, −10.2%** |
+| The same at 500 seasons | −12.1% | −7.2% | −10.6% |
+| A fight won heats +1 (bigman-1, second part), the numbers as they were, 500 seasons | −10.4% | −2.9% | −7.8% |
+| Bigman-1, second part: odds 75, $78–126, drivers 66, 3,000 seasons (kept for part of a day) | $66 against $74, −11.8% | $81 against $89, −8.6% | $106 against $113, −6.4% |
+| The same at 500 seasons | −12.3% | −6.1% | −5.6% |
+| Re-measured (2026-11-18, later): the lift back to 50%, $93–156 (base $31–52), drivers 62, 500 seasons; **not kept** (P5 misses) | −12.6% | −5.6% | −9.2% |
+| The same at 3,000 seasons | −12.2% | −6.2% | −8.6% |
+| **As it stands** (bigman-1, third part): the lift at 60%, $84–141 (base $28–47), drivers 62, 3,000 seasons | **$65 against $74, −12.4%** | **$82 against $89, −7.3%** | **$103 against $113, −8.4%** |
+| The same at 500 seasons | −12.3% | −6.1% | −8.8% |
+| As built, home at $90 | −11.2% | −7.4% | −6.6% |
+| Days banking nothing, home at $120: docks against market | 29% against 23% | 22% against 17% | 38% against 32% |
+| The shift alone (honest work), home at $120 | $52.6 | $66.3 | $83.7 |
+
+**The lift at 60%, for more fights (bigman-1, third part, 2026-11-18; the coordinator's decision).** Odds 60, $84–141
+(base 28–47), drivers 62 again; a fight won +1, lost +2; the shift ($30–39) and the throw ($80) unchanged. Why: the
+docks are where what you bring to a fight decides your money (the throw taught there, Big Lou its big man, a fight won
+only +1), and at 75% a lift became a fight 1 time in 4; now 2 in 5. Ten days, 500 seasons, a day: the plain mattress
+player lifts 0.61 times and fights 0.24 times; the one who knows the throw lifts 0.85 times (Big Lou 0.24) and fights
+0.33 times (it was 0.24 at 75%). Traded for it: the throw's income reading, +8.9% over ten days at 75% (3,000 seasons)
+down to about +6%, so P5's bars are 4% and day 7 (two points and two days inside the 3,000-season reading). The card
+shows the throw where the income mark does not: Big Lou from under 1 in 10 bare-handed to about 5 in 10.
+
+**Re-measured with the lift at 1 in 2 (2026-11-18, later; the coordinator's ask: the lift at 75% makes the fight rare).
+Not kept (the lift stayed at 75%, then went to 60%: above).** With the lift back at 50% and a fight won heating +1, the balance taken out of the
+pay (and the drivers' toughness, the shift, tried), P1 holds but P5 does not, with the throw at $80. 500 seasons
+(mattress / cutter / bed % under the market; P5 the mattress over ten days, lesson counted): drivers 62, base 31–52:
+12.6 / 5.6 / 9.2, P5 +5.6% back on day 5 (3,000: 12.2 / 6.2 / 8.6, **P5 +4.7%**, day 6); drivers 60, base 30–50: 13.4 /
+7.9 / 10.2, +6.7% (3,000: 13.5 / 7.9 / 9.4, **+5.0%**, day 6); drivers 62, base 30–51: 13.9 / 7.0 / 10.2, +6.8% (3,000:
+13.7 / 7.5 / 9.7, **+4.9%**). 24 settings at 500 in all: base 28 to 38 low, drivers 60 to 70, the shift $21–30 to
+$33–42; P5 at $80 was 4.1% to 6.8% at 500 across all of them, and reads 1 to 2 points lower at 3,000. The tougher the
+drivers or the dearer the lift, the less the throw adds; a lower shift with a dearer lift took the box cutter to the
+market. Why the 75% lift is worth more to the throw (500 seasons, ten days, a day): at 75% the throw player lifts Big
+Lou 0.40 times (a lift that works heats nothing, so it goes on to his truck) and its lifts pay $92 against the plain
+player's $56; at 50% it lifts him 0.14 times, $73 against $50. A lift becomes a fight 0.37 times a day for the throw
+player at 50%, 0.24 at 75% (the plain one 0.28 and 0.17). The nearest to both: **the lift at 60%, base 28–47 ($84–141),
+drivers 62**: P1 12.3 / 6.1 / 8.8 at 500 and 12.4 / 7.3 / 8.4 at 3,000 (inside the margins), P5 +8.5% back on day 3 at
+500 and **+5.9%**, day 5 at 3,000: 0.1 under the bar of 6%. A fight in 2 lifts of 5.
+
+**A fight won after a lift costs heat +1, not +2 (bigman-1, second part, 2026-11-18; the owner's yes).** The first
+part found that a docks day held one lift (any lift gone wrong, +2, put the careful player at its limit), so no way to
+fight could be worth much there. Now the lift has its own `wonHeat: 1` (`config.mjs`; read by `step.mjs` where a job's
+fight is fought: gone wrong and the fight won, the heat is the job's `wonHeat` if it has one, else its `failHeat`, so
+any later job can say the same). Lost, +2 as before. The card says both ways (`view.mjs`, the option's `wonHeat` and its
+`ifFail`): "a fight: you win about 4 in 10 (won: paid, heat +1, energy −1; lost: heat +2, energy −2)". **The page still
+says only "heat +2"**: the pill's tag and the bar's row ("If it goes wrong (heat +2), a fight with …") are written from
+`failHeat` in `demo/run/index.js` (`fightPill`, `fightHint`), which this job did not touch: to be read from the
+option's `wonHeat` there.
+
+The scripted docks players are unchanged: they weigh a lift by the worst heat it can leave (+2), so at heat 1 after a
+fight won they do not lift again that day (1 + 2 is over their limit of 2); the heat on you drops 1 a night, so they
+lift again the next morning, where a fight lost (+2) left them at 1 and kept them off it a day more. (Tried and dropped:
+weighing the heat by the likelier way the card says the fight goes. It let the box cutter lift on most mornings and put
+it 0.5% under the market.) So the lever pays whoever wins fights: the throw, and the box cutter against Nadia.
+
+Measured, the docks' numbers as they were (500 seasons, % under the market, mattress / cutter / bed): 10.4 / 2.9 /
+7.8, the cutter under the band's floor. Retuned, docks numbers only: the lift surer and cheaper, so less of a docks day
+is the fight, and the drivers tougher: **odds 75, $78–126 (base $26–42), drivers 66** (were 50, $96–162, 62). 18
+settings at 500 seasons with the players as they are (odds 50 to 75, lift base 26 to 29 low, drivers 62 to 68, once
+the shift $27–36; and 22 more while the likelier-heat reading was tried), four confirmed at 3,000: the cutter reads 1.3 to 2.9 points further under the market at 3,000 than at 500, so 500 is the binding size.
+Kept (500 / 3,000): 12.3 / 6.1 / 5.6 and 11.8 / 8.6 / 6.4 (the bed 0.6 inside the 5-point line at 500, the
+thinnest). The others at 500: odds 70, base 27–44, drivers 66: 11.4 / 5.4 /
+6.7; odds 65, base 28–46, drivers 68: 12.6 / 5.6 / 8.7; odds 65, base 28–46, drivers 66: 12.4 / 5.1 / 8.2.
+
+**The throw is $80 again, and P5's bars are raised.** With the lever the throw is worth about $9 a docks day to the
+mattress player once learned (the days after the lesson; the plain player banks about $65): at $80, ten days with the
+lesson counted, +11.1% and back on day 3 at 500 seasons, +8.9% and day 4 at 3,000; at $70 +11.5% / +10.2%, day 3 /
+3; at $50 +13.1% / +11.9%, day 1 / 2. The bed gains less (+3.4% at $80, 3,000, back on day 6). So the owner's first
+idea holds at $80 (8% or more over ten days, back within 4 to 6 days), and P5's bars are 6% and day 6, two points and
+two days inside the smaller reading.
+
+**Big Lou is a big man, and the throw is what opens his truck (bigman-1, 2026-11-18).** Styles-1 gave every person a
+style and taught the throw on this very pier, but nobody who fought you was a big man, and Big Lou had been made a quick
+one only because the scripted docks player lifted off him blind (a big man put P1 at 19% under the market). Now he is
+the big man (`style: 'bigman'`), Nadia Petrakis stays a plain brawler (a new player still has a truck to lift from),
+and the scripted docks player plays it as the card lets anyone: the lift's card says who is driving, how they fight
+(Big Lou: "big, slow, hits like a truck"; on the page "fails: a big man, ~1 in 10"), the odds with what you fight with
+and with each other thing you own, and offers the other driver (the card's ↑ ↓: "Who: Big Lou · Nadia Petrakis", each
+with her own fight). Nothing was missing from the view. `policies.mjs`:
+
+- **The careful player passes a fight it mostly loses** (`FIGHT_MIN` 30): a job whose going wrong is a fight the card
+  says it wins less than 30 in 100 with what it fights with is passed by; of the drivers the card offers it takes the one
+  it beats most often; never a fight that, lost (the hour and energy −2), would leave no energy for the ride home (a
+  night on the docks is 80% robbed; before this part the throw player lifted Big Lou at energy 2, and banked 1.5% less
+  than the plain one over ten days, 1.8% more after it: the lesson at $80, 500 seasons); and it counts a fight it can win in what a job is worth (gone
+  wrong and won, it still pays). Bare-handed at the docks (energy 5) the card says Big Lou about 6 in 100, Nadia about
+  42: it lifts from Nadia, passes Big Lou. On the rule's first form (500 seasons, % under the market, mattress / cutter /
+  bed): 20: 14.6 / 5.2 / 10.6; 30: 12.1 / 7.7 / 10.6; 40: the same as 30 (bare-handed the lift is taken fresh, where
+  Nadia is 36 to 43 in 100).
+- **The docks player who learns the throw** (`docksThrow`): the same, learns the throw from Mr. Haines once it carries
+  the price and the fare home (day 1.6 on average), and before each fight it can see coming fights with what the card
+  says wins most: with the throw Big Lou is about 5 in 10 and Nadia 6, so it lifts from both trucks.
+
+No docks number moved: P1 holds with every kit two points or more inside the band at both sizes (table above).
+
+**The throw is worth about $5 a docks day, so it costs $50, not $80** (the first part; superseded the same day by
+the second part, above: $80 again). Measured (the mattress, home at $120, ten days,
+the lesson counted against its day): at $80 the throw player banked +0.3% over the plain one at 3,000 seasons, the
+lesson back only on day 10; the bed −0.8%, never back. Once learned it banks about $5 a day more (7.5% of the
+mattress's day): a docks day holds one lift (any lift gone wrong heats the docks +2, the careful player's limit, and a
+lift that works takes it home at $120), so a better fight wins about a third of a fight more a day; and the docks'
+jumpers take as much as the lifts bring (0.28 bad jumps a day, $33 a day taken). Tried, 500 to 3,000 seasons: lift odds
+25 to 40 with the pay raised to match (more of each lift is the fight: the throw's edge per lift grows, but the plain
+mattress fell to 15 to 17% under the market, and the gain a day did not grow); the drivers at 66; the throw's scale 2.0
+and 2.2 (worse: the scripted player then meets a jump with the throw, the wrong tool against two); lesson prices $40,
+$45, $50, $60. At $50, 3,000 seasons: the mattress +3.1% over ten days, back on day 6 (500 seasons: +4.4%, day 5); the
+bed +1.2%, day 8; the box cutter −2% (the cutter already beats Nadia and is better jumped). Mark P5 (below) is set on the
+mattress from these. **The brief's 8% over ten days is out of reach** with the docks' own numbers: it would need about
+$13 a day more, three of today's throw. Note: against Nadia the haymaker (Cousin Earl, $80, on the way through the
+park) wins as often as the throw (68 against 64 fresh), and against Big Lou nearly (54 against 61): the line of advice
+after a lift lost at Big Lou can name either.
+
+**With the fights joined the shift is $30–39 again (2026-11-18, later the same day).** Styles-1 gave the drivers styles
+(a knife and a quick one) and made getting jumped a fight; both moved the docks two to three points toward the market
+for the cutter and the bed, and with the shift at $30–42 the bed read 4.2% under at 3,000 seasons and 2.6% at 500, under
+the band's floor. The shift back at its first pay puts every kit at least two points inside the band at both sizes
+(table above). The band stays 3 to 15%. The paragraph below is the day's first retune, before the fights, kept for the
+measurements in it.
+
+**Retuned at 3,000 seasons (2026-11-18), and P1's band widened to 3 to 15%.** The first full marks run on the joined places (3,000 seeded seasons, not 500) put the mattress player 14.9% under the market, outside the 5 to 12% P1 was built on: the 500 seasons it was tuned on read about three points kinder to the docks than 3,000 do (mattress 3.1, cutter 1.8, bed 3.3). Five settings were measured at 3,000 (the mattress, the cutter, the bed, each % under): **shift $30–42 alone 13.4 / 7.9 / 7.3, the one kept**; shift $33–42 alone 11.5 / 6.5 / 4.8; shift $30–42 with lift $99–168 11.8 / 6.4 / 5.7 (inside 5 to 12 at 3,000, but 8.7 / 4.4 / 2.7 at 500: out at the bottom); with lift $102–171 11.0 / 5.5 / 4.7; with lift $108–180 9.0 / 3.5 / 2.6. Neither number favours the mattress: the mattress and the bed stay about six points apart whatever is paid (the unarmed player loses more to the docks' jumpers and to the driver), and with three more points between 500 and 3,000 seasons no setting sits inside a band seven wide at both sizes. So the band is 3 to 15% (still less than the market for every kit, still more days banking nothing), and the setting kept has 1.6 to spare at the top at 3,000 and 0.8 at the bottom at 500. The figures further down this section (best against best, per energy) were measured on the first numbers and were not measured again.
+
+The first target (5 to 12% less; now 3 to 15%, see above; the same player, each kit; more days banking nothing; honest work less than work and the
+lift) holds at home at $90 and at $120. **Best against best** it holds for the mattress (docks $68.7 at $90 against the
+market's $77.4, −11%) and the cutter ($83.4 against $90.9, −8%), **not for the bed**: the docks player with the bed is
+best making short trips (home at $60), $119.8 against the market's best $119.9: as good, not better. Every lever tried
+on that (a dearer shift, a dearer fare, tougher drivers) took the mattress under −12% first (the mattress has two
+hours a trip; the bed's extra hours all go to the shift). Per energy: the shift pays about $34, the market's
+stall $26; the box $64 less what the fights cost.
+
+**On the page.** The ride is the stage's own subway (park's ELM ST to LOW TIDE, the city's harbor line); the Travel
+list and the bar name it ("To the docks"); the Map shows LOW TIDE and the ride to it from the park's stairs. The people
+stand where their work is (`scenes.js`: the foremen at the cargo ring's quay side, the drivers by their cabs on its
+land side, each with a small day in the city's own clips: the tally on a phone, a box shifted, a smoke, a drowse by the
+cab), in looks the stage has (the foremen in the dock vest and beanie, the drivers in a delivery top). The shift is
+acted as the walk's crates are (`acted.js` `shift`: up to the foreman, a word, a box lifted, carried down to the pier, a
+nod); the lift is the box lifted off the driver's cab and carried off (`semi`: he finds it gone and watches), or, gone
+wrong, the driver turning on you and shoving you off (`semiFight`), then the fight itself (duel-1). Auto-play:
+`--policy docks` (`demo/tools/run-stage.mjs`).
+
+## Glasswall Plaza (batch-1)
+
+Added with the docks. **The plaza is where the police are the danger**: 22 m from Precinct 9, few who would jump you,
+and a patrol that walks the plaza all day. Its entry is `places.plaza` in `src/run/config.mjs` and one new row in
+`tiers`, `watched`; no rule changed.
+
+**The tier** `watched`: pay × 1.5, jumping × 0.25 (a quarter of the market's), nobody stronger, patrolled, a stop × 2
+(at heat 3 a stop is 40% an hour, the market's 20%), cools 2 a night, a night rough 50% robbed. Strangers 2, bins 2.
+One ride from the trailer park (1ST ST station on the stage), `late` like the docks' ride.
+
+| Job | Odds | Pay | If it fails |
+|---|---|---|---|
+| Hand out flyers (the safe one, for Vic Amato, who sells condos off a folding table) | sure | $15–20 | |
+| Lift a wallet off an office worker | 55% | $45–75 | heat +1 |
+| Snatch a phone on the plaza (heat +1 when it works) | 45% | $60–90 | heat +2 |
+
+The office crowd are unnamed, as the design sheet has them: a man in a lanyard, a woman on two phones, a man with a
+coffee. **Nobody on the plaza fights you**: a job gone wrong here brings the police (heat), not fists; that is the
+place's difference from the docks.
+
+**Measured** (500 seeds, the mattress): the careful player (the market's homeAt player on the plaza: heat 2 at most,
+home at heat 3) at its best (home at $300: so few jumpers that carrying costs little) banks **$72.5 against the market's
+best $77.4, −6.3%** (target: within 10%, and under it); stopped 0.06 times a day. The heat-blind player (`plazaBlind`)
+banks **$23.6, 32% of the careful one** (target: under half), stopped 0.67 times a day: ignoring heat is mark 4 made into
+a place. The review's tuning stands: at pay × 2 the plaza beat the market by 20–37%; at × 1.5 with jumping × 0.5 it fell
+to $59.7. With the cutter the plaza is $75.9 against the market's $90.9 (the cutter protects against jumpers, who hardly
+matter here: the market keeps the cutter player); with the bed $113.9 against $119.9.
+
+**Felt before it bites** (the review's 3.7: below heat 3 the police never stop you, so a careful player hardly meets
+them). The heat meter is on the bar and the place card, as everywhere; the place says "Glasswall Plaza is quiet; the
+police patrol it."; the bar's meter puts the police first wherever a stop is the likelier risk ("RISK 41% · police
+could stop you"), with POLICE beside it whenever they are about. **What exists for showing police**: before this batch,
+police were seen only in the arrest (Officer Hale, an extra who walks in for the hour of a stop), nowhere before it, at
+the market or anywhere; the stage could already walk a patrol (a person whose routine is `patrol` on a stand with a
+`beat`: `director.js` lifeStep, the city's `patrol_walk`), unused by the run. The plaza now has its own patrol:
+**Officer Dana Pell**, a person of the stage only (`scenes.js` PATROL), walking the plaza's beat all day; a stop on the
+plaza is hers (the arrest, as at the market, with her in it).
+
+**On the page.** The ride is the stage's own (the city's tide and neon lines); the bar names it ("To the plaza"); the
+Map shows 1ST ST and the ride. Vic Amato at his table by the north bench, the office crowd on the plaza's edges with
+their phones and coffee (`scenes.js` DAYS); the flyers are handed to somebody passing (`acted.js` `flyers`), the wallet
+lift is the market's (`lift`), the phone snatched out of a hand and run with (`phone`), or, gone wrong, held onto, a
+shove, and the call to the police (`phoneFail`). Auto-play: `--policy plaza`, `--policy plazablind`.
+
+## Two cards on the walk (batch-1)
+
+Fit Street's stop deals two more cards, each at its real shopfront on the block's Fit Street side (the city's own
+FRESH CUTZ walk-up with the barber pole and DROP with its sneaker wall: `city/from-trunk/style/city/heroes/
+fitstreet.js`), with a person of the stage's own at its door (`scenes.js` STOP_FOLK: the barber, the clerk at DROP).
+
+| Card | Odds | Pay | If it fails |
+|---|---|---|---|
+| Get a cut at FRESH CUTZ, a new face for the police | sure | nothing: **your own heat −1** | |
+| Lift a pair off the sneaker wall at DROP | 50% | $40–60 (base $20–30 × 2) | heat +1 (it was +2 until 2026-11-18) |
+
+**The barber** is a way to cool heat, so it is capped like one (the review's 3.5): an hour and an energy, once a day,
+and (`minHeat: 1`) there only when you have heat of your own to cool. **It is a shop on the walk (`beside: true`,
+2026-11-18):** no part of the hand's draw, it stands beside the hand whenever it can be used and never takes one of the
+hand's three places from a card that pays (`rules.mjs` dealHand). On the page it is under Shop (B), "cut · heat −1",
+not one of the three cards (1 2 3): `dock.js`.
+Measured at 3,000 seasons with the fights of styles-1 in, the walker who plays the stops against the one who passes
+them (home at $90): dealt into the hand **+4.7%** (under mark R2's bar of 5%, though 500 seasons had read +5.2%);
+beside the hand **+5.9%**; and with the sneaker wall's miss at heat +1, as it stands, **+7.9%** (before styles-1: +4.5%,
++5.9%, +7.7%; the stop before either new card existed, +7.3%). It lowers your own heat
+(and the street's, which is 0 almost always). Its line says "heat −1" (`step.mjs` used to write a card's heat as
+"heat +-1"). Measured: with the barber dealt at any heat it took a place in the hand for nothing at heat 0 and the
+walker who plays the stops fell from +7% to +4.7% over passing them (mark R2's bar is 5%); dealt only with heat, +5.2%.
+No scripted player plays it (it pays nothing an energy), so the marks cannot see what it is worth; the review's stand-in
+(own heat cooling 2 a night) moved no mark.
+
+**The sneaker wall** pays $24.9 an energy over 3,000 plays (500: $23.3) against the market's stall $26.0: under the
+ceiling of mark R2 (no card above the stall), as the review set it. Nobody of the game is robbed: no trust, nobody
+tells; the heat +1 on you carries into tomorrow's market. (A miss was heat +2 as first built: the same average pay as
+carrying the crates, on a coin's toss, with twice the lookout's heat on a miss, was a worse deal than the honest card
+beside it, and cost the walker who plays the stops 1.9 points. At +1 it is a fair gamble.)
+
+**On the page.** At the stop the hand shows them as any card (1 2 3). The barber's: up to him at his door, a word, paid,
+he sweeps up after (there is no clip of a cut: no new animation is made), and a look about; the sneaker wall's: to
+DROP's door, a pair off the wall and away up the street while the clerk is on her phone, or, gone wrong, the clerk
+pointing and shouting and you running for it.
+
+### Marks of the new places (batch-1)
+
+The scripted players knew only the park and the market, so no mark could see a new place. Now `policies.mjs` takes
+the market's homeAt player to any place one ride from the park (`where: 'docks'` or `'plaza'`: the same rules of play),
+and has `docks`, `plaza` (careful: heat 2 at most, home at heat 3), `docksBlind`, `plazaBlind` (heat-blind) and
+`docksHonest`, `plazaHonest` (the safe job only); since bigman-1 also `docksThrow`. Five marks (P5 since bigman-1), `measurePlaces` / `judgePlaces` in `marks.mjs`, printed
+last by `node scripts/run-marks.mjs` (`--places` alone, about 90 s at 500 seeds):
+
+- **P1. The docks are not a better market.** The same player (home at $120) banks 3% to 15% less a day on the docks (first 5% to 12%; widened 2026-11-18, see "Low Tide Docks"),
+  each kit, and banks nothing on more days. 500 seeds: mattress $67 against $77 (11.9% less; nothing banked 29% of days
+  against 23%), cutter $83 against $90 (7.4%; 22% against 17%), bed $106 against $113 (6.2%; 38% against 32%). Pass
+  (the mattress near its edge).
+- **P2. Honest money, less of it.** The shift alone banks less than the shift and the lift: $53 against $67, $66 against
+  $83, $84 against $106. Pass.
+- **P3. The plaza is for the careful.** The careful player's best on the plaza is under the market's best by 10% at most,
+  on the mattress: $73 (home at $300, stopped 0.06 a day) against $77 (home at $90), −6.3%. Pass.
+- **P4. On the plaza the police are the danger.** Heat-blind there banks under half the careful best: $24 (stopped 0.67 a
+  day), 32%. Pass.
+- **P5. The throw opens the docks** (bigman-1, 2026-11-18). The careful docks player who learns the throw from Mr.
+  Haines (`docksThrow`, the lesson counted against its day) against the one who does not (`docks`), the mattress, home at
+  $120, ten days: banks at least 4% more a day, and has the lesson back (what it banked in all, from day 1, at least the
+  plain one's from then on) by day 7, two points and two days inside the 3,000-season reading. The lift at 60% for more
+  fights (see "Low Tide Docks", the third part); the bars were 1% and day 8 (the throw $50), then 6% and day 6 (the
+  lift at 75%). 3,000 seeds: $69 against $65, +5.9%, back on day 5; 500: $71 against $66, +8.5%, day 3. Pass.
+
+**As they stand (bigman-1, third part, 2026-11-18, the places' marks alone):** 3,000 seeds (950 s), P1 mattress $65
+against $74 (12.4% less; nothing banked 26% of days against 25%), cutter $82 against $89 (7.3%; 18% against 17%), bed
+$103 against $113 (8.4%; 35% against 32%); P2 $51 / $66 / $83 shift only against $65 / $82 / $103; P3 −3.5%; P4 31%;
+P5 above. 500 seeds (174 s): P1 12.3 / 6.1 / 8.8% less (nothing banked 26 / 18 / 35% against 25 / 17 / 33%); P2 $50 /
+$67 / $84 against $65 / $83 / $102; P3 −4.4%; P4 32%. P1 and P2 play the careful docks player who passes a fight it
+mostly loses.
+
+**What batch-1 moved in the older marks** (`node scripts/run-marks.mjs --seeds 500`, before at b245eee, 1015 s, and
+after at 8a759d8, 1112 s, the same seeds): 25 of 28 pass before, 29 of 32 after; every mark that passed before passes
+after, and the same three fail (12, 13, 15, as before batch-1). Every number of marks 1 to 8, 10 to 16, R4 and H1 to H8
+is the same to the dollar (no older player goes to a new place; the food cap of 2 is never reached with one food a
+place). Mark 9 now also checks the new places' bins: the docks $6.6 an energy against the shift's $34.6, the plaza $2.6
+against the flyers' $17.4. **The walk's two new cards** moved three: R2 (playing the stops against passing them, home at
+$90) +7% → +5% (the bar is 5%: 0.79 cards a day → 0.59, a hand of 3 now drawn from up to seven cards, the barber never
+played by a scripted player and the sneaker wall only at heat 0); R1 (the best walker against the best rider) 7% → 5%
+apart; R3 (the board) +33% → +39%. Only new numbers were tuned for it: the barber is dealt only with heat to cool
+(`minHeat: 1`), which took R2 from +4.7% to +5.2%. It passes narrowly: the owner's call whether the stop's hand (3, an
+older tuned number, not touched) should grow with its cards.
+
+## People remember (memory-1)
+
+Added 2026-11-18 after the owner: "people forget easily we should fix", and "being a saint can't be the only path, you
+are a criminal so being a criminal should still matter". Before it each person had one number, trust, drifting back to
+neutral every morning: a full grudge was gone in two days, a friend by the weekend; and a shark who worked its own street
+banked about 40% less than a careful criminal, because the street cased its trailer. The design is run69's "People and
+situations" sheet, its "Fear, from marks" (its rare moments and walk cards are a later job). Numbers in
+`src/run/config.mjs` (`memory`, each job's `mark` and `feared`, each person's `pronoun`). The daily mood and trust, their
+drift and every number of theirs are as they were.
+
+**A mark.** A big act leaves a mark on a person for a week (`memory.days`, 7: the day it is made and the six after; gone
+on the morning of the eighth), whatever the mood and trust do. One mark a person, the latest that counts: a fight always
+makes a new one; anything else only when they hold none. What each kind does is data (`memory.kinds`), so later jobs
+add theirs (named to the police, saved, a friend for a week) by an entry and the act that makes it:
+
+| Kind | Made by | What it does |
+|---|---|---|
+| `beat` | you beat them in a fight: a debt or a lift gone wrong, the regular who swings at your door, the visit below | fear, hate, comes due |
+| `robbed` | you took it off them to their face: a debt collected, a till grabbed, a stick-up (the job's `mark: { win: 'robbed' }`) | fear, but they still talk (`tells`: against you and about, they call in what you do), hate, comes due |
+| `beaten` | they beat you in a fight | they will not give way to you for the week: no fear of you from them, whatever you take off them |
+| `shut` | you shut the door on a regular (the grudge) | hate: no sales to them for the week (the grudge's two days, now seven) |
+
+**Fear.** Somebody you beat or robbed to their face gives way for the week. A job with `feared: 'sure'` done to them is
+sure and no fight (the debt: paid without a fight, tired or not); a lift is still a fight when it goes wrong (caught, even
+the scared fight back: with lifts conceded, the docks paid within 3% of the market and mark P1 fell out, measured); they
+never swing at your door; they never tell (left out of the witness
+roll; robbed ones still talk, `tells`); they are never the one casing your crib (the next in line is, or a stranger). They hate you all the same: no
+sales to them and no work from them (`hates`: a job whose mood on a win is friendly is never dealt with them), and they
+still count against you at home. Each eases the pressure at home by `memory.fear.pressure` (**−1**, a new number: "the
+lane keeps off your door"). **Lose a fight at a place** and every fear held by that place's people ends at once ("Benny
+Two-Coats isn't scared of you any more: they saw you beaten"); your door is your own street's.
+
+**It comes due.** When a fear mark runs out, that person is at your door that morning, the eighth day, for another go: a
+one-on-one (duel-1's fight) with them rested and ready, their toughness + `memory.due.tougher` (**10**: Benny 74, about 4
+in 10 bare-handed and fresh), unless you pay them `memory.due.price` (**$20**, from banked) to call it square. Warned the
+evening before, from `memory.due.warnHour` (**18:00**), or in the night if the day ends first: "Benny Two-Coats says he
+is coming by tomorrow: another go at your door, unless you pay him $20 to call it square." Won: beaten again, another week
+of fear, and another visit on its eighth day. Lost: the door's band as the regular's (their clean win energy −4, the
+scuffle −2), they hold a `beaten` mark, and every fear on your own street ends. Stepping out or sleeping past them is the
+fight. Robbing them again while they fear you does not move the day (a debt paid out of fear is not a new act); only a
+fight does.
+
+**One visit a morning.** The regular who wants something and anybody coming due share your door (`state.visits`): one at
+the door a morning, the earliest due first (at a tie, whoever was due before this morning's roll), the others wait a day
+and say so ("Shaky Dee came by your door too, but Benny Two-Coats was there first: back tomorrow wanting more."); a
+regular who waited comes the next morning wanting what he wanted, with no new roll; after a night on the street they wait.
+An attempt on your crib while you are out is not a visit and is unchanged.
+
+**Seen.** A job, a fight at the door and the door shut carry `mark` (who, kind, day, until, left, fear, due, did, words,
+text). New events: `markEnd` (who, kind, why `broken` or `ran out`, comesDue), `coming` (who, visit, on, waited). The door's
+`door` carries `due: true` for a visit come due, as do its `gave` (paid off) and `fight`; a job paid out of fear carries
+`fear: true`, one gone wrong with no fight `gaveWay: true`, the grudge `scared` when fear stopped the swing. The view adds
+`marks` (each live one: who, place, kind, day, left, until, fear, due, warned, did, words, text: "you beat him on day 2 ·
+gives way for 6 more days", "she beat you on day 3 · won't give way to you for 7 more days"), each person's `mark`,
+`coming` (who is coming to your door, and when), each option's `fear` ("fears you: pays up", "fears you: won't fight
+back") and its targets' `fears`, and `door.due` with the fight's odds. The terminal prints "They remember: …" and each
+event's "Remembered: …".
+
+**On the page.** The You panel's People tab: under each person with a mark, a line in the run's words ("◆ you beat him on
+day 1 · gives way for 6 more days"; ▲ one who beat you, ● a grudge), above the places who is coming to your door, and
+below them what a mark does. A card done to somebody who fears you says "fears you: pays up" (the debt), else "fears you". The
+notice slip says who is coming tomorrow ("Coming tomorrow") and whose fear ended ("Not scared any more"), and the night's
+report says both. The visit is the regular's door (the player out on his porch, the visitor at the foot of the step)
+without the craving: he says his piece and waits; the dock has "Pay Benny Two-Coats off · $20" and "Fight Benny
+Two-Coats" (its odds, "rested and ready"), and the bar's button says it; paid, the regular's hand-over; fought, duel-1's
+fight at the door ("fists · tough, rested and ready (+10)"), then the result card ("A fight: you won", "Benny Two-Coats:
+fears you 7d"). No new camera, clip or animation. `node demo/tools/run-memory.mjs --port <p> --out <dir>` plays it with
+real keys and mouse presses and ends `memory-ok` or `memory-fail`.
+
+**Saves.** State version 9 adds `marks` and `visits`. `loadRun` reads a version-8 save as nobody marked and nobody coming
+(the one version it reads besides its own; older ones are still refused), and the rules read an older state handed to
+them the same way.
+
+**The scripted players** (`src/run/policies.mjs`). `shark` (runtest=shark): the burner leaning on its own street and
+using fear: the trailer park's crimes first, a sure debt from whoever gives way first, no crime there that could start a
+fight while anybody there fears it, a regular at the door given what they ask; a visit come due fought when the card says
+55 in 100 or better, else paid off. `sharkQuiet`: the same, never a crime at home that would take the pressure there to
+the warning. Every older policy meets marks, fear and visits without knowing them (the burner fights every visit: it
+shuts the door; the rest pay when they can).
+
+### The ways to play, before and after
+
+The design's five (run69's scripts, copied to the session's `run79/scripts/styles.mjs`): 500 ten-day seasons each, seeds
+1 to 500 before (at ce83540) and after (at 3a9c944), both places, home at $120. $ a day; cased: warnings in ten days.
+
+| Way | Mattress | Box cutter | Bed |
+|---|---|---|---|
+| Careful criminal (`neighbour`) | $87.5 → $87.5 | $104.4 → $104.4 | $138.5 → $138.5 |
+| Thief (`mixed`, no job to a face) | $83.3 → $83.3 | $93.0 → $92.9 | $130.1 → $130.0 |
+| Shark at the market (`burner`) | $84.9 → $85.0 (cased 0.25 → 0.20) | $99.2 → $98.1 | $126.8 → $127.1 |
+| Shark on its own street: the old player (`burner`, `parkFirst`) | $52.4 → $55.6 (cased 2.79 → 2.67) | $61.1 → $64.9 | $86.6 → $92.9 |
+| **Shark on its own street, using fear (`shark`)** | $52.4 → **$72.1** (cased 2.79 → **1.24**; with memory off $50.3) | $61.1 → **$81.4** (2.82 → 1.17) | $86.6 → **$115.7** (3.19 → 1.14) |
+| Earner (`quiet`) | $60.8 → $60.8 | $73.6 → $73.6 | $92.4 → $92.4 |
+| (beside: `sharkQuiet`, under the warning) | $82.9, never cased (memory off $80.9) | $91.0 ($89.6) | $133.7 ($128.8) |
+
+The shark on its own street rises $20 to $29 a day and is cased less than half as often (attempts took $104 → $60 of its
+bank in ten days on the mattress, $369 → $148 with the bed; 1.3 visits come due in ten days, 1.2 paid off on the
+mattress). The careful criminal, the thief and the earner move by a dime or less; the shark at the market by +$0.1,
+−$1.1, +$0.3. The careful criminal stays the best in every kit, by $2.5, $6.3 and $4.8 over the next (was $2.6, $5.2,
+$8.4: with the box cutter $1.1 more, the market shark's −$1.1).
+
+**Tuning, in order.** (1) `memory.fear.pressure`, with the shark leaning fully on its street: 0 left it at $68.8 and
+cased 1.88 times in ten days; −1 $72.6 and 1.53 (300 seeds), −2 $73.5 and 1.26, −3 $74.3 and 1.08; −1 taken, because the
+trailer park's crime player (mark H2: at least 8% of what it earns taken by attempts) came to 9.2% with it. (2) A mark of
+somebody robbed to their face first silenced them as a beaten one does: the market shark rose $1.4, $3.1, $3.1 (the
+stallholders it robbed stopped calling in its tills), and marks 6, R2 and P1 fell out (the market's careful player was
+never stopped for its tills any more and banked $3 a day more); the visit's numbers could not move it (tougher 15 or 20:
+$0.2). Robbed, they now give way but still talk (`memory.kinds.robbed.tells`). (3) A lift caught from somebody who fears
+you was the failure without a fight; then conceded as a fight won (paid): with that the docks paid within 3% of the market
+(P1 fell out, the other way). A lift is now a fight, fear or not; only the debt (`feared: 'sure'`) is paid without one.
+The visit's `tougher` 10 and `price` $20 are the design's and were not tuned.
+
+### What memory-1 moved in the marks
+
+`node scripts/run-marks.mjs --seeds 500`, the same seeds, before at ce83540 (1,113 s) and after at 3a9c944 (1,245 s):
+29 of 32 pass before, **31 of 32 after**. Every mark that passed before passes after; 12 and 13 now pass, 15 still fails.
+Marks 1, 3 to 5, 7, 8, 10, R1 to R4, P1 to P4 read the same to the dollar (no fight, no debt and no visit in their six
+days moves them, or the players never meet a mark). What moved:
+
+- **Mark 2**: the trailer park's best $55 → $59 (its debts paid out of fear after the first), so the market's margin
+  +42% and +66% → +32% and +55% (bars 15% and 30%).
+- **Mark 6**: the park-only player owns all three in a median of 5 → 4 days (the measured player is unchanged: 4).
+- **Mark 9**: the park with the bins $41 → $47, against the park's $55 → $59.
+- **Mark 11**: worst tenth of days leaning on Dee −$38.6, not −$3.2 → −$38.7 and −$1.0 (means $49 and $56 → $53 and
+  $60; refusing every time $49 → $54: the door shut is a week's grudge now, so fewer sales and less trouble at home).
+- **Mark 12 now passes, by a hair**: both places $86 → $87 against the market's $77 (+11% → +12%), the park at 63% →
+  68% of it; with the cutter $100 against $91 both times, shown +10% (under the bar before, at it after: the park's
+  fear-paid debts after a trip).
+- **Mark 13 now passes, by a hair**: the good neighbour and the burner $87 and $86 → $87 and $87; with the bed $139
+  and $126 both times, shown 10% apart (over the bar before, under it after); with all three $188 against $172 → $174.
+- **H2**: what attempts took of what was earned: the trailer park's crime player 12.4% → 11.6%, home-first 14.4% →
+  13.0%, with the bed 23.7% → 23.2% (bar 8% to 25%). **H3**: the deadbolt +$10.0 → +$11.0 a day, the floor safe
+  +$26.3 → +$27.0. **H5**: with the bed $83.5 against $16.2 → $87.9 against $17.7. **H7**: ignoring $83.5, racing
+  $92.7, best defender $109.8 → $87.9, $98.0, $114.9. **H8**: never $83.5, every warning $94.0, only when worth it $95.2 →
+  $87.9, $101.1, $101.7. All pass, as before.
+
+## Fights in the run: styles and getting jumped (styles-1)
+
+Added 2026-11-18, the owner's direction: "different opponents with different styles", "buy different punches for street
+fights", "more strategy play vs grinding", and getting jumped at the market: "would love to see me get beaten up. And
+that's why buying things helps, money has a purpose." One decision up front, what you bring; then the fight plays itself.
+The fight's parts are fight-3's (`src/fight/data.mjs` `RIVALS`, `PUNCHES`, `rivalFoe`, the arena's `jumped`); this is
+the run reading them. Numbers in `src/run/config.mjs`: each person's `style`, `duel.you` (the punch styles' scale),
+`duel.sent`, `duel.advice`, `styles` (the lessons) and `jumped`.
+
+**Opponents have styles.** Every person of the run has a `style` (a key of `RIVALS`; none: the plain brawler), and
+`rules.mjs duelOf` builds the one you fight through `rivalFoe(style, { hp: their toughness })`: their toughness is the
+run's as before (the role's, give or take 5); how they fight is the style's. The plain brawler is the old opponent, the
+same fight tick for tick (a test). The card says it before you choose: "fails: a big man, ~1 in 10", and the
+bar's row while it is picked "a fight with Big Lou (big, slow, hits like a truck): you win about 1 in 10 with bare
+hands. With the throw: 5 in 10 …"; the fight's bar over the picture says it too.
+
+| Who | Style | Why |
+|---|---|---|
+| Benny Two-Coats | plain brawler | decided |
+| a man at the bus stop | plain brawler | an ordinary man |
+| a woman at the bus stop | quick one | she turns and is gone: a lift caught by somebody quick |
+| Shaky Dee | quick one | jittery, slight (43) and fast |
+| Big Lou (driver) | big man | the docks' big man: the throw, taught on the same pier, is his answer (bigman-1; a quick one before, for mark P1: "Low Tide Docks") |
+| Nadia Petrakis (driver) | plain brawler | the truck a new player can still lift from |
+| Mrs. Alvarez, Gloria (neighbours) | plain brawler | they never fight you (the odd job is safe); data for later |
+| Mr. Pruitt (neighbour) | grabber | a big neighbour; never fights you yet |
+| the market: Lola, Pockets, a woman in the crowd | quick one | quick hands for a living |
+| Tiny | big man | the name is the joke |
+| Teo (connect) | knife | |
+| Mr. Okafor (stallholder), Mr. Haines (foreman) | grabber | hold on to what is theirs; Haines teaches the throw |
+| the rest (shopkeepers, stallholders, the plaza's) | plain brawler | |
+| somebody sent (below) | rolled from the run's seed and who sent him, among all five | a stranger |
+
+Cousin Earl has none: he never fights you (not in this job).
+
+**Punch styles you learn.** Quick hands, the haymaker and the throw are each taught at one place, by one person of it
+(`styles`), learned once for money from what you carry, no hour, and kept (`state.styles`). The city's real gym (KID
+GLOVES BOXING, block −2,−4 on Market Ave and Jay St) stands on no street the run walks (the walk by Fit Street is block
+−3,0; the market's lot −2,1, 160 m north), so each is taught by a person at a place that exists:
+
+| Style | Taught by | Where | Price | What it does |
+|---|---|---|---|---|
+| quick hands (`jab`) | Pockets | the Jay St night market, in the crowd | $70 | fast light blows: a quick one never gets set; too light for a big man |
+| the haymaker | Cousin Earl | the trailer park, at his truck | $80 | one big slow swing that knocks them back: hit a grabber before he gets hold of you; too slow for a quick one |
+| the throw | Mr. Haines | Low Tide Docks, by the pier | $80 ($50 for a day in bigman-1: "Low Tide Docks") | puts them on the ground, and the ground doesn't care how big they are; a slippery one twists out of it |
+
+The move is "Learn quick hands from Pockets ($70)", under Shop (B) where it is taught, after every older move (no key
+changed). The Library (L) has a fourth kind, Fight: every way to fight (the three styles and the box cutter), what it
+does, who teaches it where (or "sold at your crib"), and Learn when it is taught where you stand. The You panel's Fight
+tab lists them too. A lesson counts against the day it is bought in the scripted players' take (`policies.mjs`, as the
+guard's wages do; `books.lessons`).
+
+**Fight with.** One standing choice (`state.fightWith`) among what you own: bare hands, a style you know, the box
+cutter; unset, or no longer yours, it is the box cutter if you own it, else bare hands (as before). It is set with no
+hour, any time you are not in a fight (`{ do: 'fightWith', with }`, listed only when you own two things or more, and
+after every older move): the You panel's Fight tab (a button each), E (the next thing you own), and at home a button on
+the bar's row ("fight with: bare hands E"). It is fought with one-on-one and when you are jumped. Every card's fight odds
+use it, and each says the same fight with each other thing you own (`fight.byArm`: "With the throw: 5 in 10 (E changes
+what you fight with)"); the risk line says "with bare hands", and its small print the jump's odds with each.
+
+**Getting jumped is a fight you watch.** Two at once, a heavy and a runner (`jumped.foes`: fists and a shiv, the arena's
+two), placed round you where you stand (`around`), on the one-on-one's terms (the run's `duel.hit`, the brawl for all
+three, a cap of 20 s: at the cap you win with more health than both of them together). You bring what you fight with,
+fresh or tired (`jumped.you`: 92, or 79 tired: jumped, there is no time to be rested, so only tired counts, as with the
+dice). Each jumper is `perStrength` tougher for each point of the tier's strength (the docks' +10: the heavy 47, the
+runner 23). The fight decides it, and what each ending costs is the dice's: **lost**, the bad one (all you carry, the
+clinic); **a scrape**, the scuffle (half): won with your health at 17% or less, or lost with them at 15% or less of
+theirs (you hurt them: they grab half and run); **won**, nothing. Its odds on the bar are a sample of 3,000 of the same
+fight (`jumped.sample`, kept by the inputs). Sleeping rough is still the dice (robbed asleep is no fight). A test that
+rigs a contest roll still gets the dice (`state.rig`).
+
+Calibrated against the dice (the jumpers' numbers are all new; no older number changed): the share of jumps that end as
+a bad one and as a scuffle, 12,000 fights a cell with random seeds, then the bar's own sample:
+
+```
+tier      kit             dice bad/scuffle   fight bad/scuffle   the bar's 3,000
+rough     hands fresh     35 / 20            34.4 / 18.9         36.3 / 18.4
+rough     hands tired     45 / 20            44.9 / 20.5         46.7 / 19.7
+rough     cutter fresh    20 / 20            20.3 / 17.0         19.8 / 17.1
+rough     cutter tired    30 / 20            28.0 / 21.3         27.6 / 21.2
+mean      hands fresh     45 / 20            44.2 / 19.4         44.3 / 19.9
+mean      hands tired     55 / 20            54.7 / 20.8         56.1 / 19.6
+mean      cutter fresh    30 / 20            28.1 / 18.8         28.4 / 18.5
+mean      cutter tired    40 / 20            38.5 / 21.2         37.6 / 21.5
+```
+
+The street and the plaza (strength 0) are the rough tier's. Worst 3.0 points (the box cutter's scuffle fresh, 17.0
+against 20: at the edge). And the styles jumped (rough, fresh / tired, bad and scuffle): quick hands 24 / 21 and 36 /
+25, the haymaker 34 / 14 and 40 / 17, the throw 47 / 17 and 56 / 17: against two at once the throw is the wrong tool (one held, the other hits you).
+How it was tuned: a won fight alone as "nothing" and a narrow win as the scuffle left the box cutter's scuffle fresh at
+15 and its tired gap at 6 points (the dice's 10), whatever the numbers; counting a close loss as a scrape too fitted all
+eight. The tuning ran on arithmetic seed series (`a × k + b`), which turned out to read 1 to 2 points under the truth
+(measured against random seeds, 20,000 fights); the table above is on random seeds.
+
+**On the page.** The two who jump you are the market's own robbers (Mick and Lyle Dunn); they run up to you, the fight
+is played where you stand (`demo/run/duel.js`, now for several: the ground round you, both bars, the frame check), you go
+down or they do; beaten, they go off with it and you get up; seen off, they stay down while you stand over them. Space or
+Skip goes to the same result. The result card's chip: "jumped: they beat you", "a scrape, half gone", "you saw them off".
+
+**Somebody sent.** In "people remember", a visit come due from somebody not of your home street, or who keeps a shop or
+a stall (`duel.sent.roles`), is not them at your door: "Mr. Okafor sent somebody round for another go: grabs and won't
+let go." The same rule and the same numbers (their toughness + `memory.due.tougher`, the same $20 to call it square); a
+plain tough whose style is rolled from the run's seed and who sent him. The mark goes on who sent him. People of your own
+street come themselves, as built. On the page one of the stage's toughs stands at your door for him (Mick Dunn).
+
+**After a loss, one line.** A fight lost (a job's, the door's, a visit's, a jump's) puts one line on the result card
+(`rules.mjs fightAdvice`): the same fight (its inputs, a sample of 200 of its own) with each thing of the run that could
+change it, one at a time (each other way to fight, known or taught somewhere; the box cutter; rested), the best one if it
+wins at least `duel.advice.margin` (10) points more: "Quick hands wins this about 8 in 10 · Pockets teaches it at the
+Jay St night market, $70"; "The box cutter sees them off about 6 in 10 · $90 at your crib"; "Rested you win this about 5
+in 10 · full energy (6)"; else "Nothing you can get does much better here". Never a gun. Not part of a step (it plays a
+few hundred fights): the page and `scripts/run-play.mjs` ask it.
+
+**The scripted players.** `styled` (homeFirst, the trailer park's crimes first then the market) learns quick hands at
+the market and, before every fight it can see coming (a card that fights, the door, an hour it can be jumped), fights
+with what the card says wins most; `styledAll` learns every style where it is taught. Measured (300 seeds, home at
+$120, the lesson counted against its day): over six days `styled` banks 17% less than homeFirst on the mattress
+($52.6 against $63.0), 20% less with the cutter; over ten days 3% and 7% less ($55.1 against $57.0, $61.6 against $66.4):
+quick hands at $70 does not pay for itself inside ten days for this player, and no scripted player who learns banks
+above today's best for its kit (the dealer: $88.6 mattress, $110.0 cutter over ten days).
+
+**The duel table** (`node scripts/duel-table.mjs`) prints its nine targets as before, on the plain brawler, figure for
+figure; then every way to fight against an ordinary one (55) of each style, fresh / tired, every person who fights you
+with their own style, and four targets more:
+
+```
+you fight with         brawler       big man     quick one         knife       grabber   mean
+bare hands             50 / 33        10 / 4       64 / 48       53 / 36        14 / 6   38
+box cutter             64 / 50       38 / 17       82 / 64       74 / 59       68 / 52   65
+quick hands            61 / 42         6 / 2       89 / 75       59 / 41        12 / 6   46
+the haymaker           69 / 56       57 / 36       56 / 44       54 / 39       68 / 56   61
+the throw              71 / 55       62 / 39       42 / 28       54 / 40       65 / 46   59
+
+who                       tough  style            bare hands  box cutter quick hands    haymaker       throw
+Shaky Dee                    43  quick one                78          88          94          56          58
+a man at the bus stop        56  brawler                  49          63          60          69          71
+a woman at the bus stop      55  quick one                64          82          89          56          42
+Benny Two-Coats              64  brawler                  40          57          51          67          62
+Big Lou                      57  big man                   9          36           6          54          61
+Nadia Petrakis               63  brawler                  41          58          52          68          64
+```
+
+Against each style something you can own wins 15 points or more over bare hands (the throw 71 against 50 and 62 against
+10, quick hands 89 against 64, the box cutter 75 against 53 and 68 against 14); no one way is best against all five; the
+box cutter wins the most on average (65; the haymaker 61, the throw 59, quick hands 46). **Not met:** nothing you can own
+under 10% or over 90% fresh: quick hands against a big man win 6% (and bare hands 10%). The punch styles fight at bare
+hands' scale (1.8, the study's) but quick hands at 1.6 (at 1.8 they won 92% against a quick one) and the haymaker at 1.7
+(at 1.8 it won as much on average as the box cutter, for less). Quick hands cannot be under 90 against a quick one and
+over 10 against a big man at any one scale (1.6: 89 and 5; 1.7: 91 and 10): the big man's soak takes all of a light
+blow, as fight-3 meant ("useless against a big man"). Looked at again in bigman-1 (4,000 fights a cell, fresh, against
+an ordinary one of 55): 1.60 to 1.64 read 88 and 6, 1.66 and 1.68 89 and 7, 1.70 90 and 9; the big man's odds jump
+between 1.68 and 1.70 just as the quick one's reach 90. No scale meets both; the target's floor is the owner's call
+(bare hands against a big man read 9.8%, under it too). Big Lou in the table above, a big man now: the throw 61, the
+haymaker 54, the box cutter 36, bare hands 9, quick hands 6 (the drivers at 62; at 66, since bigman-1's second part, the
+rows above: Big Lou 61, the throw 57, the haymaker 47; Nadia 67, the haymaker 64, the throw 60; back at 62 since the third part).
+
+**Saves.** State version 10 adds `styles` and `fightWith`; `loadRun` reads a version-9 save (and an 8, through 9) as
+none learned and unset. `books.lessons` is new in the books.
+
+`node demo/tools/run-styles.mjs --port <p> --out <dir>` plays it in the page with real keys and mouse presses (quick
+hands learned from Pockets, the Library's Fight kind, the throw learned on the docks and fought with from the You panel (bigman-1; quick hands before) and a card's odds
+changing, the lift gone wrong at Big Lou, jumped at the market once seen off and once beaten, the line of advice,
+somebody sent at the door, paid off) and ends `styles-ok` or `styles-fail`.
+
+### What styles-1 moved in the marks
+
+`node scripts/run-marks.mjs --seeds 500`, the same seeds, before at bca2cbc (1,313 s) and after at 78d22b5 (1,530 s): 31 of
+32 pass before, **29 of 32 after**. 15 fails as before. **Two marks moved out, each by less than a point**: 12, both
+places with the box cutter $100 against the market's $91, +9.9% (the bar 10%; before it was the same $100 against $91,
+just over); R2, playing the stops +4.9% (home at $120, $79 against $76; before +5% at $90, the bar 5%). Both sit on
+their bars and moved with the noise of getting jumped as a fight (the same shares, other draws). Tuned for them, new
+numbers only: the jumpers' fresh health 90, 91, 92 (92 taken: P1 11.8% against 12.0% at 91) and the drivers' styles; at
+none of them did 12 or R2 come back, and no older number was touched. What moved, before then after:
+
+- **Getting jumped**: in play the bad ones per jump are the dice's within a point and a half (the market's careful
+  player: the bar's own sample 41.1% against the dice's 39.7% on the same jumps, measured), but each bad one is a
+  morning in the clinic, so a few more of them carry on into the next day: the market's best on the mattress $77 → $75,
+  with the cutter $91 → $91, with the bed $120 → $118 (home at $60 now, $90 before).
+- **Mark 2**: +32% and +55% → +22% and +49% (the park $59 → $61: the bus-stop woman and Shaky Dee are quick ones now,
+  easier to see off bare-handed; bars 15% and 30%).
+- **P1**: mattress 11.9% → 11.8% less, cutter 7.4% → 5.3%, bed 6.2% → 5.1% (bar 5 to 12%). The drivers set it: Big Lou
+  a big man put the docks 19% under the market on the mattress, a knife and a quick one left the cutter 3.6% under;
+  measured at 500 seeds each.
+- **Mark 11** (Dee at the door): worst tenth −$38.7 leaning against −$1.0 not → −$36.9 and +$1.6.
+- **H2, H5**: the trailer park's crime player loses 11.6% → 10.5% to attempts (8 to 25%); banks $54.2 → $56.6.
+- The rest within a few dollars, every mark that passed still passing but 12 and R2.
+
+**The two at 3,000 seasons, on the joined branch (2026-11-18).** Mark 12 passes there: the mattress +15.3% ($85.85
+against the market's best $74.49) and the cutter +11.6% ($100.46 against $89.99, home at $160). Its +9.9% at 500 seasons
+was the short run's noise: 12 is judged at 3,000, and a 500-season run can read it a point and a half either way. R2 is
+a true miss at 3,000 (+4.7%, home at $90), and was put right on the walk's own two cards, not on the fights ("Two cards
+on the walk": the barber beside the hand and the sneaker wall's miss at heat +1, **+7.9%**).
+
+
+## The Sixes and a home that scales: the first slice (sixes-1)
+
+Added 2026-11-18 after the owner: "sixes first" · "when you get an apartment in later game we need more stuff to defend,
+guard dog isn't enough, we need more things to buy that have purpose. A deadbolt isn't enough. So we need to scale" · "I
+just really like how in rimworld you see the raids happening, and i want it to feel like what you own is actually helping
+you" · "being a saint can't be the only path, you are a criminal so being a criminal should still matter". The design is
+run75's sheet "The Sixes, and a home that scales"; this is its section 7, the first slice, all in the trailer, with the
+lead's changes (the crew a step up, Earl hurt one day, a jump by the Sixes as a fight, refusing with an upside). Numbers
+in `src/run/config.mjs`: `crew`, `guard.way` / `ways` / `doorHurtDays` / `fight`, `dog`, `sixes`, the things `doorbar`,
+`dog`, `camera`, `dogsign`, the `kick` and `crewShare` of `deadbolt` and `floorsafe`, `memory.kinds.seenOff`.
+
+The design's six things hold: trouble comes from what you do, never from what you own; anything that takes from your
+home is warned the day before (two days with the camera), takes a share and never all, and a choice can stop it;
+pressure comes in waves; every running risk has a meter (HOME, and now SIXES); what happens elsewhere sends a notice;
+there is no safe bank.
+
+**A crew, HOME's second line.** From pressure `crew.at` (**7**) the morning's warning is of a crew, not a sneak: whoever
+would have cased it "and a friend", two heavies, coming after dark the next night. Home that night (the bed or the
+mattress at the crib), it is **the door fight you watch**: the fight of several of getting jumped (`src/fight/duel.mjs`,
+`foes`), you with what you fight with at the health a night's sleep gives (`rules.mjs crewOf`), Cousin Earl beside you if
+he is on (the duel's new `ally`, the fight study's Earl told his way: `earlsWay`), the door bar's head start
+(`firstHurt`); the same bar, the same Skip on the page. Won: they run, energy −1 off the morning. Lost: in, energy −4,
+and they make you open it: 30% of what is banked (the safe does not help when you are there to open it), and half the
+goods left at home (`crew.stockPct`). Out for the night (the jail, the clinic, the street): Earl on the step first (the
+contest at `crew.strength` 60 less his 10), then the door, a kick, **90%** (the chain and locks **75%**); in, 30% (the
+floor safe **20%**). The sneak (HOME 3 to 6, by day while you are out) is today's burglar, unchanged but for the dog and
+the sign.
+
+**Six pieces, each one job** (`things`, `against`, `job`; sold where they are, listed after every older move so no older
+key moves):
+
+| Piece | Where, from whom | Price | Its one job | Against |
+|---|---|---|---|---|
+| Chain and locks (`deadbolt`) | the trailer park, Mr. Pruitt's yard sale | $25 | a sneak gets in 50%, not 75%; a crew's kick while you are out 75%, not 90% | sneak, crew (out) |
+| Floor safe | the flea market, Mr. Okafor's stall | $100 | a sneak takes 8%, not 30%; a crew while you are out 20% | sneak, crew (out) |
+| Door bar | Low Tide Docks, Mr. Haines by the pier | $40 | home, the first of a crew through the door is **20** health down | crew (home) |
+| Guard dog | the trailer park, Gloria at her kitchen window | $40 + $2 a day | while you are out, a sneak who hears it gives up 50%; fed $2 every morning from banked, two days unfed it sulks and guards nothing; shut in the back for a crew | sneak |
+| CCTV camera | the flea market, Mr. Okafor's stall | $120 | whoever cases it is seen a day sooner: two days to answer; attempts come no more often (the quiet days count from the attempt) | both, if you answer |
+| Beware of the dog sign | the trailer park, Mr. Pruitt's yard sale | $5 | 10 points off each morning's chance a sneak cases you; a crew laughs at it | sneak |
+
+Each is seen in the trailer once bought (`demo/stage/set/starter.js` THINGS, `set/crib.js`): the dog's bed and bowls on
+the floor by the front with the dog sitting by it (the older game's chain dog, `demo/stage/props/dog.js`), the camera and
+the sign on the back wall, the door bar across the room's side of the door leaves (with the chain and locks). Their
+keepers keep no library shelf (`library.mjs`: a keeper of only `late` pieces).
+
+**Tell Earl how to fight.** One standing choice, `state.earlWay`, among `guard.ways` (**front, hunt, block**:
+`WAYS_OFFERED`; unset, `guard.way` **front**), set with no hour any time he is on your step (`{ do: 'earlWay', way }`,
+after every older move). His fight at your door: health **50**, the tire iron at **1.0** (`guard.fight`). The door fight's
+card (the crew warning, the HOME slip, K) says the odds with each way and with what else changes it (each thing you own
+to fight with, the door bar, Earl hired), and the slip's buttons tell him. Down in a door fight he is off **one** day (the
+day after) and his paid stretch goes on (`guard.doorHurtDays`); beaten alone on the step while you are out, as before
+(three days, the stretch lost).
+
+**The Sixes' meter** (`sixes`, `state.sixes`), 0 to 10 beside HOME on your numbers, with its slip (what holds it up,
+what raises it, what brings it down, the steps built). What you do on their ground (`sixes.ground`: the flea market)
+moves it, never what you own: a sale there **+1** once a day; a till or a stick-up **+1** (the design's +2 until the second pass: mark 13, below); refusing the tax **+2**;
+beating the two by the steps **+2**. A day with nothing done there **−1** the next morning; paying the tax **−1**, and
+that day's selling no longer counts. Three steps are built:
+
+- **3, a word.** The first time it reaches 3 (again after it has fallen under 3), Dutch comes up to you at the market:
+  "Nice stall work. Shame if it turned into till work." Nothing is taken; a scene and a notice, and the slip says what
+  comes at 5.
+- **5, the tax.** On a day you sold or grabbed there, Dutch is waiting on the market's kerb, on your way to the subway, when you leave (the ride or
+  the walk out is stopped; you choose again): a fifth of what you made there today, at least **$10**. Two cards: pay
+  (from what you carry) or refuse. Nothing else is open until it is answered.
+- **7, two of them on the kerb.** Warned the morning before (a notice: "they'll be looking for you at the market
+  tomorrow"). That day, leaving the market, two of the Sixes are waiting on the kerb: the jumped fight, their two, their
+  own look on the page (the stage's `rival`). **Won: you keep what you carry, the two fear you for a week**
+  (`memory.kinds.seenOff`: nobody waits for you while it lasts) and the meter goes up 2. Lost: what a jump takes (all you
+  carry and the clinic; a scrape, half), and the meter drops to **6**: they made their point. Stay away that day and the
+  two go home.
+- **Held at 8.** Nothing above 8 is built in this slice (the raid at 9, the siege at 10), so the meter stops at
+  `sixes.cap` **8** and the slip says so.
+
+Dutch is one of the market's people (`npc:sixes:dutch`, a knife), and the two by the steps (`npc:sixes:heavy`,
+`npc:sixes:runner`) are of the market too; no job is done to them (their role `sixes` is no job's), and on the stage the
+two are extras like the Dunn brothers.
+
+**Seen.** New events: `casing` gains `kind` ('sneak' | 'crew'), `lead`, `sign`; `raid` with `kind: 'crew'` carries the
+fight (`duel`, `crew: true`, its `earl`: way, down), `energyLost`, `goodsTaken`, `shareBy`; `dogFed`; `earlWay`;
+`sixes` (`what`: 'word', 'tax', 'paid', 'refused', 'ease', 'jumpWarned', 'jumpOff'); `jumped` with `sixes: true` (who,
+marks, the meter after). A job on their ground carries `sixes` (the meter's move). The view adds `sixes` (the meter's
+slip, the tax waiting with its keys, the two waiting), `earl` (his ways, each with the door fight's odds), `home.crew`
+(from when, the door fight's odds and what changes them, out: the kick and the share), `home.dog`; each piece's `job`
+and `against`.
+
+**Saves.** State version **11** adds `sixes`, `earlWay`, `home.dog`, `books.dog` and `books.sixes`. `loadRun` reads a
+version-10 save as the Sixes never having heard of you, Earl told nothing, no dog (and a 9 or an 8 through 10).
+
+**The scripted players** (`src/run/policies.mjs`): `layLow` (the home-first player who, warned of an attempt, does no
+crime at home until it has come, and tells Earl the way the door card says wins most: `pickWay`); `taxPayer` and
+`taxRefuser` (the market's crime player, `mixed`, home at $120, paying Dutch or refusing). Every older player pays the
+tax when it carries the price, else refuses (`tax` unset). The pieces are a kit (owned from the start), as H3's.
+Auto-play: `runtest=slice` (with `&kit=deadbolt,floorsafe,doorbar,dog,camera,dogsign`), `taxpay`, `taxrefuse`; its
+numbers under `sixes`.
+
+**Tuning, in order.** (1) The crew: the design's two study heavies on the study's yard gave 72 / 87 / 100 (bare hands, the
+bar, the box cutter); on the run's own terms (the jumped fight's brawl, a blow lands 45%) two heavies at **45** health
+hitting **1.15** read 51 / 72 / 80 at 2,000 fights (hp 44 hits 1.3 gave 44 / 63 / 74; hp 46 hits 1.12, 54 / 74 / 83).
+(2) The door bar: 15 health gave 64 with bare hands, **20** gives 72. (3) Earl: the study's 65 health at the run's 1.6
+made every door fight with him 97 to 99% whatever his way; **50** and **1.0** give 92 / 95 / 94 with him down 76 / 51 /
+56% (front, hunt, block): his way is mostly how hard he is hit. (4) The meter, the tax and the jump's numbers are the
+design's, not tuned: S3 met them as they are.
+
+### Marks of the first slice
+
+`node scripts/run-marks.mjs --sixes` (ten-day seasons, as the home marks; the door fight's own sample, one fight a seed).
+
+- **S1. Against a crew, today's two are not enough and the slice is.** The pressured player (home-first, the bed): what
+  crews take in ten days, today's two cut it by less than 15%, the slice by 30% or more, and all attempts take a third
+  less with the slice than with today's two.
+- **S2. No single piece covers every visitor.** Each piece alone, for the same player: none cuts what both the sneaks and
+  the crews take by a quarter or more.
+- **S3. The tax is a real choice.** The market's crime player paying and refusing bank within 10% of each other in each
+  kit (mattress, box cutter, bed), by different roads: the payer pays the tax, the refuser meets two of the Sixes by the
+  steps.
+- **S4. The crew is a step up.** Rested and alone at your door: about 50 in 100 with bare hands, 70 with the door bar, 80
+  with the box cutter, each within 5.
+
+Measured 2026-11-18 (`--sixes`), 500 seasons (368 s) then 3,000 (2,180 s); the door fight's sample is as many fights:
+
+| Mark | 500 | 3,000 |
+|---|---|---|
+| S1 crews' take, nothing / today's two / the slice (ten days, bed) | $194 / $179 (−8%) / $107 (−45%); all attempts $329 / $205 / $119 (−42% on today's two) | $200 / $184 (−8%) / $104 (−48%); all $329 / $208 / $116 (−44%) |
+| S1 a day, nothing / two / slice / slice and laying low | $90 / $103 / $110 / $114 | $89 / $101 / $109 / $112 |
+| S2 each piece alone, sneaks' take / crews' take | deadbolt −30% / −2%; safe −73% / −5%; bar 0 / −23%; dog −44% / +2%; camera +7% / −15%; sign −13% / +5% | deadbolt −31% / −3%; safe −73% / −5%; bar +1% / −27%; dog −50% / +2%; camera +6% / −17%; sign −12% / +3% |
+| S3 pays / refuses (mattress, cutter, bed) | $77 / $76, $89 / $92, $119 / $119 (0.7%, 3.5%, 0.0%) | $77 / $77, $89 / $93, $119 / $119 (0.5%, 4.2%, 0.0%) |
+| S4 bare hands / door bar / box cutter | 49 / 71 / 82 | 51 / 72 / 80 |
+
+All four pass at both sizes. Beside S4: on the mattress (80% health) bare hands 34; with Earl beside you, bare hands,
+out in front 92 (Earl down 76%), hunting 95 (50%), one at a time 94 (55%). The tax payer pays $63 to $114 in ten days;
+the refuser meets two of the Sixes by the steps 0.74 to 1.19 times in ten days and sees them off 58 to 69% of the time
+(with the box cutter refusing banks 4% more: being a criminal still pays).
+
+**What the slice moved in the home marks** (`--home`, 500 seasons, before at 3b1200d in run91's full run, then after):
+H1, H4, H5, H6 pass as before. **H2** still passes, higher: the trailer park's player 10.5% → 16.8%, home-first 13.3%
+→ 21.6%, with the bed 22.7% → 20.4% (the bar 8 to 25%): a crew takes more than a sneak from a player who is home and
+loses the door fight; the trailer park's player banks $56.6 → $51.3 a day, home-first on the mattress $56.5 → $48.3, with
+the bed $89.5 → $90.2. **H3 fails, because of the slice, as the design says it would**: for the pressured player with
+the bed the floor safe now pays back in 9.3 days (was 3.8; +$10.8 a day, was +$26.7), the deadbolt in 5.6 (was 2.4): he sits at pressure 9 to 10,
+so most of what comes for him is a crew, at night, while he is home, and against a crew at home the deadbolt and the
+safe do nothing (beaten, they make you open it). That is the slice's own point ("today's two pieces barely touch a
+crew", S1); the target was not moved. **H7** passes with a smaller race (racing $93.3 against ignoring $90.2, was $98.5 against $89.5: crews
+send no notice to race home on). **H8** passes, narrowly: only when worth it $100.6 against every warning $100.3.
+At 3,000 seasons (3,271 s) the same: 7 of 8, H3 failing (the floor safe 9.7 days, +$10.4 a day; the deadbolt 5.6
+days), H2 16.5% / 20.5% / 20.5%, H7 ignoring $88.8, racing $91.5, best $99.2, H8 $99.1 against $99.5 (narrow).
+
+
+**What the slice moved in the older marks** (`node scripts/run-marks.mjs --seeds 500`, 2,610 s, against run91's run of
+3b1200d, the same seeds): 31 of 33 passed before, **32 of 37 after** (S1 to S4 pass). Every market player who sells or
+grabs there now meets Dutch (the older players pay when they carry the price), and every pressured player at home meets
+crews: the market's best on the mattress $75 → $71, with the cutter $91 → $84, with the bed $112 → $106. What that did:
+
+- **Mark 12 now passes** (both places +13% and +11%, was +13% and +10%).
+- **P1 fails**: the docks player is no longer under the market with the box cutter (−1.2%, the bar 3 to 15%; mattress 6.6%,
+  bed 5.5% still in): the market got dearer and the docks did not. **P3 fails**: the plaza's careful best $71 against the
+  market's $71 (+1.2%; the bar: under it). Both are the tax on the market, not a change at the docks or the plaza.
+- **Mark 13 fails**: with the pocket and the cutter the good neighbour banks 11% more than the burner (the bar 10%):
+  the burner's crimes at home bring crews now.
+- **Mark 15 still fails**, as before. **Mark 11** passes with a deeper tail (−$36.9 → −$67.0 leaning on Dee: his custom
+  brings crews). H2, H3, H7, H8: above.
+
+No older number was moved for them. The choices are the owner's: make the tax lighter for a player who only sells there
+(the design's own numbers are kept here), or move P1 and P3's market reference, or the docks' and the plaza's pay.
+
+### The second pass (sixes-1, after the join)
+
+The coordinator's calls on the marks the slice moved, and four things on the page.
+
+**P1 to P5 compare a place with a place, with the Sixes at rest.** The Sixes tax only the market, so with them on every
+other place reads better against it: that is the Sixes working (S6), not the docks or the plaza being wrong. The trial
+holds the meter at 0 (`config sixes.rest`, a trial's switch only: `marks.mjs atRest`); the players are the same and no
+place was retuned. Each P target says so. At 500 / 3,000 seasons: P1 the docks 12.3 / 12.4% less on the mattress, 6.1 /
+7.3% with the cutter, 8.8 / 8.4% with the bed (the join's own baseline: 12.4 / 7.3 / 8.4 at 3,000); P3 the plaza −4.4 /
+−3.5% under the market; P2, P4, P5 pass (P5 +8.5 / +5.9%, back on day 3 / 5). 5 of 5 at both sizes.
+
+**S5, the tax bites, it does not gut.** The market's best player (homeAt, the best of $60 / $90 / $120 / $160, six-day
+seasons as marks 1 to 7) with the Sixes on against the same with them at rest. At a fifth and a grab at +2 (the first
+pass) the bite was 5.6 / 7.9 / 4.0% (mattress, cutter, bed; 500): inside 3 to 8, but the cutter at its edge, and mark 13
+out (below). With a grab at +1 it is **2.9 / 3.7 / 2.4%** (500) and **3.1 / 4.4 / 2.1%** (3,000). The owner's 3 to 8 cannot hold at a
+fifth with mark 13 in: to put every kit 2 points inside it the tax would have to be about 40% (at 25% the bite is 3.9 /
+5.2 / 2.7, at 30% 4.5 / 6.5 / 3.3; 500 seasons). So the tax stays a fifth and **the band is the 3,000 readings, 2 points each
+side: 0.1% to 6.4%** (`BITE_MARK`). What it costs: $3 to $5 a day of the market player's take, paid on about one market day
+in two.
+
+**S6, the Sixes make other ground worth working.** The split player (`POLICIES.split`, the market and another place by
+turns, a day each; the docks' or the plaza's) against the market only, both with the Sixes on. Measured: **the plaza by
+turns comes out level with the taxed market, not above it**: +0.1 / −4.3 / −0.9% (mattress, cutter, bed; the docks by
+turns −10 / −7 / −15%; 500), −0.1 / −1.5 / −0.9% at 3,000. The upside said out loud is "as good as", not "better". The bar proposed: **no more than 7% under** (`SPLIT_MARK`), the readings 2 or more
+inside it.
+
+**H3 by the visitor each piece is for.** The chain and locks, the floor safe, the dog and its sign are judged against
+sneaks: the same pressured player (the bed), out when they come, with crews held off (crew.at past the meter's top); the
+door bar against crews, the game as it is (he is home at night when they come). **The dog is judged against sneaks, not
+crews**: its one job is a sneak while you are out, and for a crew it is shut in the back (against crews it pays back in
+11 days, all of it from the sneaks he still meets). At 500 / 3,000: the deadbolt 2.4 / 2.3 days, the floor safe 3.8 /
+3.9, the dog 2.7 / 2.7, the sign 2.4 / 2.2 (bar **8 days**, kept); the door bar against crews **7.2** / 6.4 days
+(bar proposed **10 days**: at 8 it would sit inside the 2-point margin); Cousin Earl +$10.0 / +$10.3 a day over his hire;
+none worth buying for the quiet player (the dog −$2.0 a day: its food). The old reading (the floor safe against every
+visitor: 9.2 days at 500, 9.7 at 3,000) is in "Marks of the first slice" above, as history.
+
+**Mark 13** (the good neighbour against the burner, within 10%) read at 3,000 seasons: **10.4%** with the pocket and the
+cutter (a fail). It is not the crews: crew.at 8, the crew's share 20% and its stock 0 each left it to the cent (500). It is
+the Sixes: with them at rest it is 7%. The burner grabs tills and does stick-ups at the market, so he meets the tax and the
+two on the kerb far more than the neighbour. The least painful new number: **a grab at their market +1, not +2**
+(`sixes.raise.grab`): 13 is **8%** at 500 and at 3,000 (+pocket+cutter $113 against $105; every kit 1 to 8%). A lighter tax
+(15%) did not do it (10%). S1 to S4 hold (they do not read the grab), S3 holds (0.5 / 3.0 / 0.1% apart). The older trust
+numbers and mark 13's bar are untouched.
+
+**S4's mattress row.** On the mattress (80% health) the door fight reads **30 / 55 / 63** (bare hands, the door bar, the
+box cutter; 500) and 34 / 57 / 64 at 3,000, beside the rested 49 / 71 / 82 and 51 / 72 / 80. The door bar leaves the mattress player
+above 45%: not retuned.
+
+**The camera** was no rule bug. In ten-day seasons a camera with no laying low cut what crews took 17% because the
+attempt it warns of lands a day later and the last of them fall past day 10; over twenty-day seasons it cuts nothing
+($369 against $369 a ten days, 1.91 against 1.80 crews; 500). Its one job now says so: "It keeps nobody away and they
+come as often: it is worth it only if you answer the warning." S2's camera reading is that ten-day window.
+
+**On the page.** (1) Dutch's word: the hour's scene first, then the notice (`S.noticeAfter`, index.js). (2) The tax stop
+and the two who wait for you are on the **market's kerb**, its way out to the subway (`kerb`, the place table's own spot:
+places.json market ways.kerb), you walking there and staying there for the answer; the words say "on the kerb, on your way
+to the subway". The market's own stairs are FIT ST's, 72 m off on Fit Street's block (places.json market ways.subway): a
+scene there would be another block's, so the kerb stands for them. (3) The night's door fight is still shown the next
+morning in daylight (the stage's time of day is the page's `tod`, set once on load: no night without new machinery); the
+card says "Last night (day N), at your door" and the raid's line "Last night … came for your crib". (4) The texts: no step
+above 8 is named anywhere (the config's unused `later` list is gone), "by the steps" is "on the kerb".
+
+**The stage's `furniture` fault** (intermittent: a1 at Fit Street in run-places2, npc:buyer:market:4 at the flea market's
+crate in the dealer's stage check). The common thread: an "open" spot given out on ground the city's collision world does
+not hold yet. Arriving by the subway, the far place's columns load after its spots are given, so the test for something
+low there (`lowNear`, `lowAt`) saw nothing, and the crate or the planter appeared under somebody already standing. Two
+places in `demo/stage` now treat ground not loaded yet as not free: `director.js openGround` skips a spot whose ground (and
+0.9 m round it) is not known; `index.js` stands' `blocked` answers 'unknown' there, and `stands.js spare` gives such ground
+only when no known free ground is in reach. The dealer's stage check ran five times in a row clean (furniture 0 each).
+
+**The furniture fault, third pass (it came back after join-2 d893d94, at the same spot).** It was not the spot. Logged
+in the page: the buyer's stand was the market's `table:1` at (-45.5, 51.65), made on full-tier ground with nothing low
+there, in every hour of every run, clean or failing. In the failing run her walk to it ended with its route's end at
+(-45.5, 51.65) and no step aside on her (`wx`, `wz` 0), yet her body stood at (-45.78, 51.93): 0.4 m on past the mark
+along her heading, the walk's **run-out** (`R.out`, actors.js: a walk is never stopped dead; in a frame it loses at
+most half a metre a second). A long frame as she came up to the mark, at speed 4, ran her on into crate·1's column, and
+the run-out is kept on the body for as long as it stands there: the whole drink scene. One run in several, because it
+takes a long frame at that moment. The coordinator's lead was the other way a walker arrives beside its mark: a step
+aside still on it (a lean held off somebody, sideways speed 0, so the "finish the step aside first" test, which looked
+at the speed, let it arrive). Caught in the first run with the new count: `offLine npc:buyer:market:3 arrived 0.72 m
+off its mark at -45.64, 38.73 (sideways 0.00, -0.72; its speed 0.00; aside 0.00, -0.72; lean true; settled 0.00 s; off
+the lanes)`. Now, in actors.js's walk: a run-out stops where the next of it would be in something solid or low; at the
+mark, a run-out and any step aside still on the walker are walked back on to the line before it arrives (`ending`:
+weave gives no new step aside then), up to 4 s; a step back towards the line is never held by the solid/low test (it
+was the one way a walker in a crate's edge could not get out). The audit's new `offLine` counts arrivals more than 5 cm
+off the mark; run-stage prints it and fails on it. The lane case of the step-aside test (`!R.part?.G`) is left as it
+was: the fault was never a step aside on a lane, and a low test there changes every sidewalk walker's weave. Proof:
+the dealer's stage check 12 times in a row, run-ok, furniture 0, heads 0, offLine 0. Left open, not this change's:
+`run-stage --policy park --seed 3 --days 3 --speed 4` fails on `heads a1|npc:mark:projects:2` (a mark `headRoom` steps
+to half a metre from the player); it fails the same on d893d94 without this change.
+
+**The full marks at 500 seasons** (3,429 s) with the second pass: **37 of 39 pass**. 12 fails, with the box cutter: both
+places +9% against the bar's 10% (mattress +12%); the grab at +1 makes the taxed market a little better, and 12 has read
+a point and a half either way at 500 before (it passed at 3,000 at +11.6%: "What styles-1 moved in the marks"). 15 fails
+as before. Every other mark passes, P1, P3, 13 and H3 again, and S1 to S6.
+
+**Out of this slice** (not built): the raid on your home at 9 and the siege at 10; the camps, the corners, turning Dutch,
+the parley; guns at home and the gun rack; the apartment and every piece for it; a stash at home; the police with a
+warrant; the panic button, the floodlight, the decoy, the dye pack, the fogger, the false wall and the big safe. The
+paying of what you owe on the day of the jump (the design's third answer) is not built either: stay away, or go and win.
+
+
+## The raid on your home (raid-1)
+
+Added 2026-11-18 after the owner: "raids should play out like this too, like live action style and just resolves for
+agents and it depends on what you have in/on your base ... maybe you get one decision up front and you pick your loadout
+from inventory" · "i want it to feel like what you own is actually helping you" · "we need more things to buy that have
+purpose ... So we need to scale" · "more crime related traps" · "differnt guns should do different things too" · "i dont
+like safe bank, you should have to protect your assets at home" · "being a saint can't be the only path". And, while it
+was built, "crafting is coming", and the owner's ruling on it: HOW OFTEN a raid comes follows what you DO (the rule the
+game already has: trouble from what you do, never from what you own); HOW MANY come and WHAT THEY TAKE follow what you
+HOLD at home, ONE sum over everything kept there, a table a later holding is added to. A crew that wins can knock a
+station or a big piece out for a day or two (seen smashed, mended later), never take it; money, goods and stock can be
+taken. Rules only; the page is a later job. The code: `src/run/raid.mjs` (the
+rules), `src/fight/raid.mjs` (the fight), new blocks at the end of `step.mjs` and `view.mjs`, the marks' block at the end
+of `marks.mjs`. Numbers in `src/run/config.mjs`: `sixes.raid`, `sixes.cap`, `sixes.push`, `sixesRaid`, `worth`, the
+guns and the five pieces in `things` (`late: 'raid'`).
+
+**What brings it.** The Sixes' meter, as before: what you do on their ground, never what you own. It now goes to **9**
+(`sixes.cap`; the siege at 10 is not built). At their raid step the morning brings word: "the Sixes are coming for your
+crib tomorrow night". The step is **9**, whatever your home is worth (how often follows what you do; while it was built a
+home worth $1,400 or more was raided a step sooner, at 8: the owner ruled it out, and the 3,000-season readings below were
+taken with it, the 500-season ones after it without). The meter gets there by defiance: refusing the tax (+2) and beating the two on the kerb (+2),
+or grabbing tills there day after day. A player who pays, or who never works their market, is never raided (mark D1).
+Not while a truce stands, not while one is due, not within `rest` (3) mornings of the last.
+
+**What your home is worth (the WORTH meter).** `raid.mjs homeWorth`: one sum over `config.worth.entries`, each a kind
+of holding and where the rules find it (`of`): cash banked, the goods kept at the crib at cost, and every thing a raid
+can carry off or wreck (its `worth`, else its price: in this slice the guns). A workstation, ingredients, product or a
+modified gun is one more row (and one line in `HOLDINGS` naming where it lives): the raid's logic does not change.
+Hidden or not, it all counts: what they case is what they think is there. It decides how big a crew comes
+(`worth.steps`: under $600 the small one, from $600 the bigger, from $1,400 the biggest) and what is at stake; never
+whether or when they come. Shown as a third meter beside HOME and SIXES, **WORTH $1,240** with its slip: each row and its dollars, the crew
+it would bring now and the next step ("At $1,400 the Sixes would send their biggest crew"), the things at risk and what
+is hidden (the view's `worth`).
+
+**Who comes.** Set the morning of the word: the size by worth, the crew by the run's dice among four (`sixesRaid.crews`),
+told on the word's card ("4 of them: 3 heavies, a runner... heavies, all of them at once, straight at the door"), so the
+loadout can answer it:
+
+| Crew | Who, small / bigger / biggest | Where they come from | The gun that answers it |
+|---|---|---|---|
+| a rush at your door | 2 / 3 / 4 heavies (45 health, fists) | all at once, 6 to 8 m off, straight at the door | the Doorman |
+| the quick ones | 3 / 4 / 5 runners (22 health, blades, fast) | strung out from every side, 7 to 15 m | the Chopper |
+| shooters at the back | 1 / 1 / 2 heavies and 1 / 2 / 2 shooters (38 health, a junk pistol) | the heavies at the door, the shooters hang back by the fence | the Six-shot or the Chopper |
+| big men | 1 / 2 / 3 big men (70 health, heavy jackets: 12 off every blow and shot) | walking across the lot, 14 to 20 m | the Long-eye |
+
+**The one decision up front: the loadout.** From the word to the night you choose, with no hour, what is in your hands
+(`state.holdWith`: a gun you own with rounds, or what you fight with; unset, the first gun you own with rounds, else what
+you fight with), and the card says what each wins (`raid.mjs raidOdds`: each thing you could hold, Earl told each way or
+hired, each piece you do not own); who stands with you (Cousin Earl, hired at the crib as ever, told his way); and whether
+you are home: where you sleep that night (the crib: home; sleeping rough, the jail, the clinic: out). Then it plays itself.
+
+**Home that night: the raid fight.** The crew's door fight made bigger (`src/fight/raid.mjs`, on `duel.mjs`'s fight of
+several: why below): you at your door with what you hold, at the health a night's sleep gives (80% on the mattress, full
+on the bed), Earl beside you if he is on, and each thing you own doing its own job, in the fight's own numbers:
+
+- **the gun in your hands** fires by itself (its numbers are the fight's: `data.mjs WEAPONS`, untouched), its rounds all
+  you own of them; run dry, you fight on with what you fight with;
+- **the door bar**: the first one through is 20 down; **the pepper fogger**: they come in blind 3 s (slowed, no blow, no
+  shot); **the stab vest**: every hit on you 30% less; **the guard dog** (fed) takes one on: the last of them, the one who
+  hangs back if any, is 20 down before he is in it; **Cousin Earl** fights beside you, his way told.
+
+Held: nothing taken; energy −1 off the morning (**held but hurt**, won with 30% of your health or less: −3); you go
+through the pockets of each of them you put down ($10 to $25 each, banked); and **they leave you be for 7 days** (no tax,
+nobody on the kerb, no raid: `sixes.truce`), the meter down to 4. **Knocked out and cleaned out**: you wake in the clinic
+(its morning); they make you open up: 50% of what is banked (the floor safe does not help; the cereal box does, and the
+decoy safe halves it), half the goods
+at the crib (the false wall keeps them), the gun in your hands and its rounds, and each thing at risk by its own roll;
+the meter down to 3 (their point made). **Not home**: Earl on the step first (the crew's contest), then the door (the
+crew's kick: 90%, the chain and locks 75%); in, 30% of what is banked (the floor safe 20%), half the goods, each thing at
+risk; the meter to 5. The door held: nothing taken, the meter stays, and they come again after the quiet mornings.
+
+**Why the duel's fight of several, not the stop's waves.** The crew's door fight (S4: 50 / 70 / 80) is on the run's
+terms: a blow lands 45% of the time, blows scaled by what you fight with, the brawl; fists, the box cutter and the punch
+styles are calibrated there. The stop's waves (`createFight` with a level) land 93% of blows unscaled and would have made
+a second, different scale for fights at your door. What the raid needed of the stop (a gun, its magazine and reload,
+running dry, Earl's ways, the Doorman's cone, a shooter who keeps back) the sim already had; it is switched on in the
+duel by fields that are absent from every older fight, so `node src/fight/table.mjs --seeds 200` and `node
+scripts/duel-table.mjs` print exactly what they printed at 7ac5df7 (diffed). The additions to `src/fight/`: `duel.guns`
+(a gun in your hands; a shooter of theirs, who keeps back as the stop's shooters do), `you.rounds`, `you.dry`,
+`you.holdFire`, `you.cut`, `duel.blind`; in `brawl.mjs` a gun's reach is a fist's (it had none: the brawl could not stand
+off a gun); `src/fight/raid.mjs` (your move: hold your door while any of them who hit with their hands is up, then go at
+the shooters; with fists, the brawl).
+
+**The guns** (`things`, each with `gun`: the fight's weapon; `ammo`: a box; `loud`; `holdFire`; `raid: { take: 50 }`):
+every job is a table field, so a later bench can change a gun's job by changing its fields.
+
+| Gun | Sold by, where | Price | Rounds | Its job | Loud |
+|---|---|---|---|---|---|
+| the Six-shot | Teo, the Jay St night market's back row | $150 | 12 for $12 | for anything: never bad, the best against nothing | +1 |
+| the Doorman | Cousin Earl, at his truck in the trailer park | $220 | 6 shells for $15 | waits until they are on you (3.5 m), then each shell takes every one in front of it; no use against those who hang back | +1 |
+| the Chopper | Big Lou, Low Tide Docks | $230 | 30 for $24 | fifteen at a pull: the quick ones from every side; hungry (about 17 rounds a night) | +2 |
+| the Long-eye | Nadia Petrakis, Low Tide Docks | $200 | 5 for $15 | one hard shot after another as they cross the lot, through any jacket; poor once one is on you | +2 |
+
+A gun is never in a one-on-one (the owner's call): it is held at your door when the Sixes come, nowhere else. Firing it
+puts its `loud` on your own heat and on the trailer park's after the night's cooling ("it's loud so it draws cops"). Out
+of rounds it is your fists. Beaten while holding it, it goes with them.
+
+**Five more pieces, each one job** (`late: 'raid'`, listed after every older move: no older key moves; the art exists:
+each is a drawn piece of the home kit that had no job):
+
+| Piece | Sold by, where | Price | Its one job |
+|---|---|---|---|
+| a pepper fogger (`kit:pepper-fogger`) | Mr. Okafor, the market | $50 | home, they come through the door blind for 3 s |
+| a stab vest (`kit:stab-vest`) | Mrs. Kowalski, the market's clothes rail | $40 | home, every hit on you 30% less |
+| a cereal-box stash (`kit:stash-cereal`) | Gloria, the trailer park | $20 | the first $150 you bank is never found, by a sneak, a crew or the Sixes, even when they make you open up |
+| a false wall (`kit:false-wall`) | Rosa, Low Tide Docks | $25 | the goods at the crib and two of the things at risk (the dearest) are never found, by a crew or the Sixes |
+| a decoy safe (`kit:decoy-safe`) | Mr. Pruitt, the yard sale | $60 | home and beaten by the Sixes, you open the decoy: they take half what they would have |
+
+(A police scanner, halving the heat of gunfire, was the fifth at first: a night of firing is one or two heat a season and
+halving it paid nothing measurable, −$1.1 a day at 500 seasons. The decoy safe took its place. The fogger was 2 s and $70,
+the vest $80, the false wall $150, the Chopper $300 and the Long-eye $260 at first: tuned on marks D2 and D4, below. The
+false wall does not pay for itself in this slice and is not judged by D4: what it hides today, a few sales of stock and
+the guns you are not holding, is little (the pressured home-first player with the bed loses 5.4 sales of stock in
+fourteen days without it, 4.2 with it: +$0.1 a day; the armed player with all four guns +$0.8). It is the hiding place
+for what crafting will bring home: product, ingredients, a modified gun.)
+
+**Things in a raid, by one rule.** Three ways: a thing's `raid: { take: pct }` (carried off that often by whoever gets
+in; its `worth`, else its price, counts in WORTH), `raid: { out: days, pct }` (knocked out that often for that many days:
+`state.home.out`, its last day out; it does nothing until mended, `rules.mjs isOut`, and is never taken: stations and big
+pieces), or no `raid` (neither). In this slice the guns are taken; the door bar (a day) and the camera (two days) are
+knocked out, each half the time they get in. A hiding place's `hides: { cash, goods, things }`:
+dollars never found, the goods never taken, that many things at risk never found (the dearest first; never the one in
+your hands). Only what can be taken can be hidden. Only the cereal box and the false wall hide; a workstation (knocked out) or a batch
+of product (taken) is a table entry. The first slice's pieces are unchanged; the crew and the sneak also never find the
+cereal box's cash, and the crew never takes what is behind the false wall.
+
+**The Sixes push** (`sixes.push`). The longer you keep working their market, the bigger their cut: a fifth the first day
+they stop you for it, **10 points more each day in a row** they stop you, at most **half**; a day they do not starts it
+again. Dutch says so ("Two fifths: 3 days running you've worked my market"). The slip shows the run of days and
+tomorrow's cut. Paying stays a road (it costs more the longer you stay), refusing is the other (it brings the raid), and
+working other ground is the way out of both.
+
+**Seen** (the page, later; the rules' notes to it): the word (`sixes` event `what: 'raidWarned'`: the night, the crew and
+how many of each, the worth they saw, `scene: { notice: true, sixesRaid: true }`); the view's `raid` (the raid due, what
+you hold and its odds, each thing you could hold with its key, your guns and rounds and where each is sold, the pieces,
+the truce, the raids so far) and `worth` (the meter); the moves `{ do: 'get', item }` for the guns and pieces where they
+are sold, `{ do: 'ammo', item }` for a box, `{ do: 'holdWith', with }` (kind 'set', no hour); the night (`raid` event with
+`kind: 'sixes'`: `home`, `how` door / guard / away, `outcome` held / hurt / beaten / taken, the fight `duel` with its
+inputs and seed to play it again, `spent`, `taken`, `goodsTaken`, `thingsTaken`, `thingsOut` (each with its days and last day out), `lostGun`, `hidden`,
+`spoils`, `heat`, `truce`; the scene `fight:fail` / `fight:clean` with `sixesRaid: true`, or a break-in); the tax's `pct`
+and `streak`.
+
+**Saves.** State version **12** adds `ammo` (gun → rounds), `holdWith`, in `sixes` the push (`streak`, `streakDay`), the
+raid due (`raid`), the raids so far (`raids`), the truce (`truce`) and the last raid's night (`raidLast`), and
+`books.ammo`. `loadRun` reads a version-11 save (and 10, 9, 8 through it) as no rounds, nothing held, nothing begun.
+
+**The scripted players** (`policies.mjs`): `armed` (the market's crime player who refuses the tax, holds whatever the
+raid card says wins most, buys rounds where they are sold when under a box), `handsOnly` (refuses, meets it with what it
+fights with and its pieces, hires Earl the day a raid is due), `moved` (works Glasswall Plaza while the Sixes are at 5 or
+more, their market otherwise), and the payer (`taxPayer`). The kits: guns with three boxes of rounds; the hands-only
+player's door bar, fogger, vest and cereal box.
+
+**The odds the card shows** (`raid.mjs raidChance`, a sample of `sixesRaid.sample` (200) fights at the same inputs, kept
+by the inputs; `raidOdds` the comparisons). The view carries only what you hold now; the comparisons are a call the page
+makes when the card opens. Both are for the background path the other sampled odds are moving to.
+
+### Marks of the raid (raid-1)
+
+`node scripts/run-marks.mjs --raid` (fourteen-day seasons: the raid comes to a refuser about once in one; every player
+the market's crime player, home at $120, with the box cutter; pieces and guns are kits, owned from the start with three
+boxes of rounds, their price in the payback, not in the day). The bars were set from the 3,000-season readings with
+margin: the payback bar was 14 days and is **16** (the Chopper read 12.0 / 12.7 days and the fogger 11.6 / 13.4 at 500 /
+3,000: within 2 of 14). The 3,000 readings were taken while a home worth $1,400 or more was raided a step sooner (8); the
+owner ruled that out (how often follows what you do) and the 500 readings after it are the same to within a dollar
+(rarely did that step decide anything).
+
+| Mark | 500 (final rules) | 3,000 (the step sooner still in) |
+|---|---|---|
+| D1 the raid comes for the defiant, not the quiet: a refuser 0.5+ raids in 14 days, the payer under 0.25, the mover, the stall, the quiet none | refuser 1.36 (held 0.14 of 1.15 at home, $495 taken), payer 0.10, the rest 0 | 1.33 (0.15 of 1.14, $480), 0.09, 0 |
+| D2 each gun pays back within 16 days for the armed refuser (against the same with no gun, $53.4 / $54.8 a day) | Six-shot 8.7 days, Doorman 9.1, Chopper 12.0, Long-eye 10.3 | 8.7, 9.5, 12.7, 11.7 |
+| D3 no gun the answer to everything: of four crews (middle size, the mattress, nothing else) 3+ guns are each the best against one, every gun within 5 of the best against one | rush: Doorman 93; quick ones: Chopper 90; shooters: Chopper 97 (Six-shot 93); big men: Long-eye 93 | the same within 2 |
+| D4 each piece pays back within 16 days as the hands-only player's first buy (bare: $62.5 / $63.7) | fogger 11.6, vest 10.7, cereal box 5.6, decoy safe 6.2; the false wall not judged (39 days) | 13.4, 10.7, 5.8, 6.3; (81) |
+| D5 what you own helps (a rush of three, the box cutter, the mattress): each piece +3 or more, all +30 or more | nothing 16; bar +14, fogger +10, vest +26, dog +10, Earl +49; all 98 | 16; +16, +9, +26, +9, +48; 98 |
+| D6 several ways to play within 25% a day: payer, armed (his best gun), hands-only (four pieces), moved away | $83.7, $80.8 (Doorman), $73.8, $88.3: 16.5% | $84.6, $81.0, $75.1, $89.5: 16.1% |
+
+Beside them: the refuser who does nothing about it $53.4 a day (−36% on the payer: refusing without answering the raid is
+the poor road; S3, restated below); the hands-only player with no piece $62.5. The armed players hold their raids 53 to
+65% of the time (each gun lost 0.26 to 0.42 times a season), fire 5 to 17 rounds a season and take +0.9 to +1.8 heat.
+
+**What the raid moved in the older marks** (`node scripts/run-marks.mjs --seeds 500`, the full set, 6,667 s; against
+the second pass's 37 of 39, the same three failing before this slice's fix to the tally, H4, below): **42 of 45 pass**
+(D1 to D6 pass). 12 fails at 500 as it did in the second pass (both places with the box cutter +9%, the bar 10%; it
+passes at 3,000), 15 fails as before. **H4** read one pair of attempts on the same day: a home-pressure attempt and the
+Sixes' raid on one night, counted in one tally; the Sixes' raids are tallied apart now (`playSeason`), and `--home` at
+500 reads 8 of 8 (H4: 14,649 attempts in 10,000 runs, the closest two 3 days apart; 1,352 s). **S3 is restated**: refusing now brings the raid, so the refuser who never answers it banks under
+the payer, 31.0 / 30.8 / 17.9% (mattress, cutter, bed; it was 0.5 / 3.0 / 0.1%): the bar was "within 10%", it is now
+"under the payer, by no more than 40%" (`S3_UNDER`), and the refuser who defends is D6's. **S5 and S6 with the push**:
+S5 3.2 / 4.8 / 2.5% (was 2.9 / 3.7 / 2.4), S6 +0.4 / −3.2 / −0.9% (was +0.1 / −4.3 / −0.9): the market's best player,
+home at $60 to $160 in six-day seasons, is stopped by Dutch on one market day in two and rarely two days running, so the
+push hardly reaches him; it is the player who keeps at their market who pays it, and the player who moves away (D6) banks
+5% more than the payer. P1 to P5, H1 to H3 and H5 to H8, R1 to R4, S1, S2, S4 and 1 to 11, 13, 14, 16 pass, within a
+dollar or two of the second pass.
+
+### On the page (raid-page)
+
+Added 2026-11-19: the raid seen and played, the rules untouched (nothing in `src/` decides anything new: the raid's odds
+moved to the background path, `src/run/odds.mjs` counting a raid's fight by the very loop `raidChance` played, the same
+seeds, and "3 heavys" is "3 heavies"). The page's parts are `demo/run/raid.js`; the wiring is `demo/run/index.js`.
+
+- **The word.** The morning the Sixes send word, a notice: "The Sixes come tomorrow night", how many and of what
+  ("3 of them: 3 heavies"), how they come, what that crew is weak to in plain words (`raid.js WEAK`: the rush the
+  Doorman, the quick ones the Chopper, the shooters the Six-shot or the Chopper, the big men the Long-eye) and the worth
+  they saw; its button **Your door (Y)**. A press on it opens the card of the one decision. While a raid is due a
+  chip on your numbers says when ("The Sixes come tonight: 3 of them") and opens the card.
+- **The WORTH meter**, beside HOME and SIXES on your numbers, once the Sixes care about you or a raid is due:
+  **Worth $1,232**, under it the crew it brings or "they come tonight". A press opens its slip: each row and its
+  dollars, who it brings at each step (under $600, from $600, from $1,400, the step it is at now marked), the things
+  they can carry off (hidden ones said hidden), and what the cereal box and the false wall keep.
+- **The card of the one decision** (Y, the notice's button, the chip). (raidfight-5: titles first. The owner's rule for
+  screens, "can just be the title, then once you click it, it brings up the info", and a friend who played: the
+  interface "still lacks clarity".) **Up front, only what decides the night:** who comes and how many, how they come,
+  and what that crew is weak to; **in your hands**, a button for each thing you could hold (your hands, a blade, each
+  gun you own with rounds) with its rounds and its odds "N in 10", the one held marked (a press holds it: the rules'
+  `holdWith`, or `fightWith` with no gun); **home or out**, a line each with its odds (home: you hold them, sleep at your
+  crib; out: your door holds, sleep anywhere else); **who stands with you**: Earl told his way (a button each, with its
+  odds), or alone with what Earl beside you would make it and Hire Earl. **Everything else is kept, folded under a
+  short title** that a press opens (or Tab to it and Enter), and that is shut again each time the card is opened:
+  **If they beat you** (at home: every loss in dollars and chances, the clinic, the share of what is banked after the
+  cereal box and the decoy safe, the goods at the crib, the gun in your hands, each thing at risk at its own chance,
+  each door piece's chance of being smashed; out and they get in: what they take, and Earl on the step first), **If you
+  hold them** (their pockets and the truce), **What would help, and where to get it** (each piece for the night you do
+  not own, its odds, price and seller; guns you own with no rounds and where a box is sold; guns not yours, their
+  price and seller; what Earl costs, or why he cannot be hired). One way of saying a chance on the whole card: "N in 10"
+  (a thing at risk was "25 in 100": now "3 in 10"; the rules' figures are the same, only said one way). Every figure is
+  `raid.mjs raidOdds`, sampled by the page's odds workers; "…" until it arrives; the card is only up while you choose
+  (never over a scene). Esc or × folds it.
+- **The night.** Asleep at your crib on the night, the scene comes first, then the night's report. Under the black
+  you are put out on your porch at the hour you went to bed (the stage's night light; while the raid plays, the night
+  look the owner chose, raidfight-5: the porch lamp over your door and the stage's clock set back to 19:00 for a dusk
+  light over the whole yard, put back however the scene ends; your numbers keep the run's own hour) and the raid is played at your
+  door by the fight page's scene (`demo/run/raidfight.js`, `docs/animation/raid-fight.md`): the rules' own raid (the
+  event's `duel`, `src/fight/raid.mjs startRaid`, `raidMove`) stepped tick for tick and drawn, the crew's bodies its
+  own (made and taken off under the black), every loadout (each gun, bare hands, a blade; Cousin Earl beside you or
+  not) and every crew; a raid seen to end otherwise than the rules said is a fault in its record. Space, Enter or its
+  Skip end it at once, to the same result. While it plays your numbers, the journal and the bottom row still say the
+  evening (the reveal waits for the scene). It ends under the black, and over it
+  - **the night's card**: held or beaten, and each thing it cost or won, a line each (the fight and the rounds
+    fired, Earl, their pockets and banked now, the truce and its last day, the energy, the clinic, the dollars taken and
+    banked now, the goods, the gun in your hands with its rounds, each thing taken, each piece smashed and the day it
+    works again, what they never found, the heat of the shots, the meter). Then each where it lives: the money and the
+    goods at home on your numbers; beaten, the cut to the clinic under the report (the rules have you out of it and
+    home by the morning); the gun gone from the card's hands and back on its list of guns to buy, with its seller; a
+    smashed piece off its place in the trailer (the door bar off the door, the camera off the wall) and "smashed: no
+    use until day N" on the HOME slip; held, **a notice of the week's truce and its last day**, and "truce till day N"
+    on the Sixes' meter. Out for the night, the notice says at once how it went and the same card is seen when you next
+    come home.
+- **The shops.** The four guns and the five pieces are the rules' `get` moves where each is sold: Shop (B) there, each
+  on the shelf with its picture from the run's library (`kit:six-shot`, `kit:double-barrel`, `kit:chopper`,
+  `kit:long-rifle`, `kit:pepper-fogger`, `kit:stab-vest`, `kit:stash-cereal`, `kit:false-wall`, `kit:decoy-safe`: all
+  drawn already), a gun "held at your door"; a box of rounds for a gun you own (`ammo`) in the same list where its
+  seller stands. Bought, each is placed in the trailer (the tray). The Library (L) and Ahead (U) list each with its
+  seller and place.
+- **Dutch's cut** on every job card at their market while they tax you: "Dutch's cut 40% · a day away: 20%" (the first
+  day "Dutch's cut 20% · +10 each day running"), the whole of it in its tooltip.
+- **Saves.** A version-11 save (the code before the raid) loads as version 12 by the rules' own reading
+  (`loadRun`): no rounds, nothing held, nothing begun; `test/fixtures/run-save-v11.json` is one, made by the code of
+  cf99e40^, and the check loads it in the page.
+
+**The raid scene, wired in** (it was a seam for the gun fight until the fight page's raid landed, raid-fight 056d230,
+merged): `index.js raidNight` makes nothing of its own; it calls, once per night at home,
+
+    const raidFight = createRaidFight({ stage, root });                 // once, beside the fights'
+    await raidFight.play({ raid: e.duel, you: YOU, ally: e.duel.earl ? GUARD : null, pad: YOU, dark: true });
+
+under the black it has put up, and lifts the black itself after the card (and the clinic's cut). Space and Enter go to
+`raidFight.skip()` while `raidFight.active`. The plain beat and the duel-based staging that stood in for it before are
+gone: the scene plays every loadout and every crew (`raid.js staging` answers 'scene', or 'none' when you were out).
+
+**The check:** `node demo/serve.mjs --port 5505 --quiet`, then `HK2_DEBUG_PORT=5770 node demo/tools/run-raid.mjs
+--port 5505 --out <dir>` (`--only rush,…`, `--headless`). It finds with the engine the evening before the word and a
+night the raid is due for each of the four crews, loads each in the page and plays it with real keys and a real mouse:
+a gun bought from its seller and its rounds, a piece bought and seen placed, the Library and Ahead saying where each is
+had; the word's notice (who, how many, weak to) and the card opened from its button with its odds; a press on WORTH and its slip;
+on each night every thing you could hold pressed and its odds arriving (first with the workers held: "…" drawn, nothing
+waits), the card's folds shut at first and what they hold not shown, then each opened with a real mouse press and read
+(raidfight-5), to bed, the raid at your door (bare hands, the Six-shot, the Long-eye with Earl), its card and each consequence
+where it lives; Dutch's cut on a job
+card; a version-11 save loaded. It fails on a page error, a card that never gets its odds, a frame over 100 ms while
+the card is open, a raid seen to end otherwise than the rules said (the scene's `mismatch`) or with a frame fault,
+control not back within 5 s of the scene's end, a state not the headless one, a consequence not on screen. Pictures: `docs/shots/raid/`.
+
+### The apartment (proposed, not built)
+
+A second home, on paper: what the owner approved as "the apartment as a second home with two ways in". Numbers
+proposed, nothing built.
+
+- **Where.** The city's own apartment block on the market's side of the line (a block of `src/map.mjs` to be picked with
+  the owner: the page shows it), one subway ride from the trailer park and from the market. A second `home: true` place
+  with its own street (`inside`): the rules already read a home from the config, so the work is a second home, not new
+  rules for the first.
+- **What unlocks it.** WORTH at $1,400 or more on three mornings (you have outgrown the trailer: the owner's "run out of
+  space"), and nobody of the building against you (its super is a person with trust, as Earl is).
+- **What it costs.** $400 to get in (a month up front and a deposit, from banked) and $25 a day rent, from banked every
+  morning (two days unpaid and you are out, the deposit kept). The trailer stays yours: rent is the price of a second
+  door.
+- **What it gives over the trailer.** Space: the full library's bigger pieces fit (the lock-up, the big safe, the gilded
+  frame are NOFIT in the trailer today); a home pressure of its own, starting at 0 (a new street, new neighbours); the
+  market's side of the line, an hour nearer the docks and the plaza. A bed comes with it.
+- **Two ways in: the front door and the fire escape.** A raid on the apartment comes from both: the crew is split in two
+  groups (the fight's `around` already places each of them; a second door is a second group at another angle). What it does
+  to the guns: the Doorman covers one way only; the Long-eye has the long hall; the Chopper and the Six-shot have to turn.
+  What it does to the pieces: the door bar and the fogger work on one way each (one of each per door, so two to cover
+  both); the vest, the dog and Earl go where you are; Earl told "one at a time" holds the second way. A sneak while you are
+  out tries the easier way: the chain and locks on both, or the fire escape is his.
+- **New pieces it would want** (each one job, crime-flavoured, drawn already): a scissor gate (`kit:gate-scissor`) on the
+  fire escape, the second way's door bar; a motion floodlight (`kit:motion-flood`) on the fire escape, they come in lit
+  (your guns' far shots true); a big safe (`kit:safe-big`, too big for the trailer): its share while you are home and
+  beaten too (the only safe that does not open when they make you); a safe behind a painting (`kit:safe-painting`): a
+  hiding place for one thing at risk and $300; a decoy safe (`kit:decoy-safe`): whoever gets in takes the decoy and leaves
+  (one roll: the share halved).
+- **What moves with you.** Banked cash (you carry it over: the subway's danger on the way, or it moves in the night for
+  $20, a man with a van); goods; guns and their rounds; the punch styles; Earl's stretch (he will watch one door, not two:
+  his step is the trailer's unless hired for the apartment). Pieces bolted in (the floor safe, the door bar, the camera, the
+  false wall) stay where they are: a second set for the second home. WORTH is each home's own: the Sixes raid the richer.
+
+
 ## Adding a place
 
 A place is one entry under `places` in `src/run/config.mjs`; no rule names a place (`test/run-places.test.mjs` adds the
@@ -1002,14 +2533,15 @@ docks this way, plays a three-place city on them and checks that `rules.mjs`, `s
 
 1. `label`, `where` ("on the docks": how sentences say you are there), `block` and `spot` (a block of `src/map.mjs`,
    for the stage).
-2. `tier`: `quiet`, `rough` or `mean` (or a new row in `tiers`). The tier sets the level of everything: pay (× 1, 2,
+2. `tier`: `quiet`, `rough`, `mean` or (batch-1) `watched`, the plaza's (or a new row in `tiers`). The tier sets the level of everything: pay (× 1, 2,
    3: jobs, robbing, the bins), jumping (× 0, 1, 1.5 on the chances, +0/+0/+10 strength), whether the police patrol it
    or come only when it is hot, how much a robbery heats it, how fast it cools, and the chance of being robbed asleep.
 3. `jobs`: one `safe: true` (always dealt, goes round its people) and the rest; each with `label`, `named` ("{who}"),
    `role`, `with`, `odds`, `base` pay (before the tier), `winHeat`/`failHeat`/`failEnergy`, `needs` (an item), `mood`
    and `trust` on win and fail (how it moves its person's trust: "Trust"), and `scene` (how it plays: a kind or an action
    the stage has).
-4. `people`: { id, name, role } for every role a job needs, and `regular: true` for an easy sale who keeps count.
+4. `people`: { id, name, role } for every role a job needs, and `regular: true` for an easy sale who keeps count;
+   since styles-1 a `style` (a key of `src/fight/data.mjs` RIVALS: how they fight you one-on-one; none, the plain brawler).
 5. `supply`: any of `strangers` (robbing somebody passing is there), `bins` (the bins are there), `custom` (a regular's),
    each { max, refill }. `binsSeen` if someone there minds you in the bins.
 6. `shop`: [] or errands { item, label, kind: 'food', price, does, perDay, gives, keeper (a person's id), spot }.
@@ -1017,7 +2549,9 @@ docks this way, plays a three-place city on them and checks that `rules.mjs`, `s
    top-level `goods` with `at` this place, a selling job's `goods: { good: base pay }`, and any `things` with `at` this
    place ("Goods, the connect and errands").
 7. `links`: { otherPlace: { via: 'subway' } } (a link may give its own `fare`, `hours`, `energy`), and the same link
-   back in the other place's entry. `door: 'crib'` only for the place your crib opens onto (then you go inside there
+   back in the other place's entry. Since batch-1: link a new place to the place your crib opens onto (two rides is a
+   dead place on 6 energy, measured), and mark that link `late: true` so its ride is listed after every older move and
+   no older key changes. `door: 'crib'` only for the place your crib opens onto (then you go inside there
    and do not sleep rough); `onlySafe` for the worked-dry line; `locked: 'why'` to show it shut.
 8. Add it to `subwayStops` if the map should show it on the line.
 9. Since routes-1, a way on foot to it, if there is one: an entry under `routes` ({ label, between: [one, other],
@@ -1059,7 +2593,38 @@ on, the routes and their stops, the view and the terminal all read the entry.
 
 The old rules (`src/*.mjs`, the ten seats and their classes) are untouched and still run.
 
+## The named cast on stage (named-1)
+
+The city's own pool of its named people (`city/from-trunk/world/named/`, pinned at trunk `d5a6e64`: each person's own
+face, hair, clothes, the thing they carry and their `scale`, 0.85 to 1.3) dresses the game's named people by name. Nothing
+of the rules changed: who is who is the stage's (`demo/run/scenes.js` `NAMED`, by the people's ids).
+
+- **By name**: a named person wears their own pieces only, nothing of their role's (`demo/stage/index.js` begin; the fight
+  page's Cousin Earl and Big Moss, the raid's Cousin Earl). Everyone else keeps their role's look. `?named=0` shows the
+  game as it was (the stand-ins, all at size 1), for before and after.
+- **At their size**: the size goes into each walker's instance as the city writes it every frame (`actors.js`
+  `sizeBatch`: the matrix times the size about the feet, near, mid and far, the shadow with it); the gait strides by
+  the distance over the size (no slide); the head, the name tag, the bubble, a clip's prop at the size; a seated body
+  lifted or lowered onto its seat, a leaning one stood off its wall.
+- **Two bodies at their sizes**: the director's gap for two is the mean of their sizes; the hand-overs were written for
+  sizes (`hands/perform.js` reads `actors.scaleOf`); the run's fights are staged at each body's size (`fight/puppet/`
+  `choreo.js` reach, heads and distances, `body.js` and `feet.js` the pose over the planted feet, `fighter.js` its points);
+  the gunner's points (the raid, the fight page) at the size.
+- **What goes about with them**: `demo/stage/props/along.js`, the one place a named person's own thing is put beside them
+  each frame (the cart man's cart: pushed ahead in both fists on a walk of his own, parked beside him otherwise).
+- **Looks baked before play**: at the stage's begin (and the fight page's mount for Big Moss and Earl: `actors.prebake`).
+- Tools: `demo/tools/cast-lineup.mjs` (the lineup at the game's camera), `cart-shots.mjs`, `cast-frames.mjs` (their first
+  frames on screen), `fight-sizes.mjs` (the run's fights staged at 0.9 to 1.25, headless), `fight-film.mjs lift:…` (Big
+  Lou's fight), `hand-film.mjs --who --qs`. Pictures: `docs/shots/cast/`.
+
 ## Names
+
+**Called by the buildings they are (batch-1, text only).** The flea market is the city's own Jay St night market (the
+stage's `market` block is that lot): the player reads "the Jay St night market" (`places.market.label`, the map's
+"Jay St night market"). Mr. Pruitt's yard sale is the swap meet (the stalls in the yards of Sunny Acres): "swap meet"
+where the page names the spot. The debt job's park manager works out of the park's office and has a name, Darlene: "Collect
+a debt from Benny Two-Coats for Darlene at the office". Ids, keys, spots (`market`, `yard-sale`, `collect`) and saves
+are as they were; the earlier sections of this page keep the words they were written with.
 
 Nothing here is named after Rust's items. "Mattress" stands in for "sleeping bag", which is one of Rust's own item
 names; slime's call whether that matters for an everyday word. The people have everyday names, none from Rust. The

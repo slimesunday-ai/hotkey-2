@@ -1,6 +1,6 @@
 // Home objects · collector culture: the sneaker wall, sneaker boxes, graded slabs, vinyl toys in a case, a streetwear rack and the
 // penthouse grails case. Sneakers and toys are invented silhouettes, colour-blocked, with no marks of any kind.
-import { def, K, pick, cyl, line, glow, LIT, shade, mix, rng, hash, txt, M3, sneaker } from './lib.js';
+import { def, K, pick, cyl, line, glow, LIT, shade, mix, rng, hash, txt, M3, sneaker, frect, fdisc, fline, ftxt, hbox, fsurf, fcolour, billTex } from './lib.js';
 
 const KICKS = [[K.white, K.red, K.white], [K.ink, K.pink, K.white], [K.cobalt, K.yellow, 0xc98a4b], [0x5fd35a, K.ink, K.white], [K.orange, K.cobalt, K.white],
   [K.white, K.teal, 0xc98a4b], [K.red, K.ink, K.ink], [K.purple, K.lime, K.white], [K.yellow, K.ink, K.white], [K.bone, K.orange, 0xc98a4b], [K.ink, K.gold, K.ink], [K.sky, K.white, K.white]];
@@ -60,25 +60,36 @@ export const toyCase = def({ id: 'toy-case', name: 'Vinyl toy case', cat: 'colle
 
 export const streetwearRack = def({ id: 'streetwear-rack', name: 'Streetwear rack', cat: 'collectibles', place: 'floor', foot: [6, 2], h: 1.6,
   tiers: ['apartment', 'house', 'penthouse'], tags: ['streetwear', 'hoodies', 'hypebeast'], variants: 2, vnames: ['chrome', 'black pipe'], far: true,
+  grain: 0.025, shaped: 'a clothes rail: each tee and hoodie on its hanger, with shoulders, sleeves, a hood, prints',
   build(V, { variant = 0, seed = 1 } = {}) {
-    const m = variant ? K.iron : K.chrome, l = variant ? 0 : 2, r = rng(seed * 43 + 9);
-    for (const x of [1, 28]) { V.box(x, 0, 0, x + 1, 1, 10, m, l); V.box(x, 1, 4, x + 1, 31, 5, m, l); } V.box(1, 30, 4, 29, 31, 5, m, l);   // feet, uprights, rail
-    let x = 3; while (x + 4 < 28) { const kind = (r() * 4) | 0, c = pick([K.red, K.ink, K.cobalt, K.bone, K.orange, K.grass, K.pink, 0x5a6a3a, K.purple, K.yellow], (r() * 10) | 0), len = [11, 13, 14, 13][kind], w = kind === 2 ? 4 : 3;
-      V.set(x + 1, 29, 4, m, l); V.box(x, 28, 2, x + w, 29, 8, m, l);                                               // the hanger
-      for (let y = 28 - len; y < 28; y++) { const edge = y > 25 ? 1 : 0; V.box(x, y, 1 + edge, x + w, y + 1, 9 - edge, kind === 2 && (y % 3 === 0) ? shade(c, .8) : c); }   // tee · hoodie · puffer · varsity
-      if (kind === 1) V.box(x, 22, 0, x + w, 27, 2, c);                                                              // the hood
-      if (kind === 3) V.box(x, 28 - len, 1, x + w, 28 - len + 2, 9, K.cream);                                         // a varsity's rib hem
-      if (kind === 0 && r() < .5) V.box(x, 20, 1, x + w, 22, 9, K.white);                                            // a striped tee
-      if (r() < .4) V.set(x + w - 1, 27 - len + 6, 9, K.white);                                                      // a price tag
-      x += w + 1 + ((r() * 2) | 0); }
-  } });
+    // THIRD PASS · at the half grain: a pipe rail on its feet, and six pieces each on a hanger, facing you: tees (shoulders, short
+    // sleeves, a print), hoodies (long sleeves, the hood behind, a pouch, strings), a varsity jacket (the letter, light sleeves)
+    const pipe = variant ? 0x26262c : K.chrome, l = variant ? 0 : 2, r = rng(seed * 41 + 3);
+    for (const x of [2, 57]) { V.box(x, 0, 9, x + 1, 60, 11, pipe, l); V.box(x - 1, 0, 2, x + 2, 1, 18, pipe, l); }   // uprights, feet
+    V.box(2, 59, 9, 58, 60, 11, pipe, l);                                                                               // the rail
+    const C = [K.red, K.ink, K.cobalt, K.bone, K.orange, K.grass, K.pink, 0x5a6a3a, K.purple, K.yellow];
+    for (let k = 0; k < 6; k++) { const cx = 7 + k * 9.2, kind = (r() * 3) | 0, c = pick(C, (r() * 10) | 0), len = kind === 0 ? 20 : 24, top = 53;
+      V.box(cx, 56, 10, cx + 1, 59, 11, K.steelL, 2); for (let u = -4; u < 4; u++) V.set(cx + u + .5, 55 - Math.abs(u + .5) * .3, 10, K.steelL, 2);   // the hook, the hanger's shoulders
+      if (kind === 1) for (let u = -3; u < 3; u++) for (let v = 0; v < 4; v++) V.set(cx + u + .5, top + 1 + v - Math.abs(u) * .4, 8, shade(c, .85));   // the hood, behind
+      for (let v = 0; v < len; v++) for (let u = -7; u <= 7; u++) { const au = Math.abs(u + .5), slope = v < 2 ? (2 - v) * 1.2 : 0;
+        const body = au <= 4.6 - slope, sleeve = !body && au <= (kind === 0 ? 7.2 : 6.6) - slope && au > 4 && v < (kind === 0 ? 5 : len - 2) && !(au > 5.8 && v < 1);
+        if (!body && !sleeve) continue; if (body && v < 1.5 && au < 1.6) continue;                                      // the neck
+        let col = sleeve && kind === 2 ? K.white : c;
+        if (body && kind === 0 && Math.hypot(u + .5, v - 7) < 2.4) col = pick([K.white, K.yellow, K.cyan], k);         // a print
+        if (body && kind === 1 && v > len - 8 && v < len - 4 && au < 3) col = shade(c, .82);                          // the pouch
+        if (body && kind === 2 && v > 5 && v < 10 && u > 0 && u < 4) col = K.white;                                    // the letter
+        if (v >= len - 1 || (sleeve && v >= (kind === 0 ? 4 : len - 3))) col = shade(col, .8);                        // the hem, the cuffs
+        V.set(cx + u + .5, top - v, 10, col); V.set(cx + u + .5, top - v, 11, col); }
+      if (kind === 1) for (const du of [-1, 1]) for (let v = 1; v < 5; v++) V.set(cx + du + .5, top - v, 12, K.white); } }   // the strings
+});
 
 export const grailsCase = def({ id: 'grails-case', name: 'Grails case', cat: 'collectibles', place: 'floor', foot: [3, 3], h: 1.4,
   tiers: ['penthouse', 'house'], tags: ['grails', 'museum', 'collector'], variants: 3, vnames: ['gold sneaker', 'sealed TOASTR', 'iced chain'], far: true,
   build(V, { variant = 0 } = {}) {
     V.box(1, 0, 1, 14, 17, 14, K.white); V.box(1, 0, 1, 14, 1, 14, K.ink); V.box(5, 11, 14, 10, 13, 15, K.gold, 2);            // plinth, plaque
     for (const x of [1, 13]) for (const z of [1, 13]) V.box(x, 17, z, x + 1, 28, z + 1, K.gold, 2);                                  // vitrine edges
-    V.box(1, 27, 1, 14, 28, 14, K.gold, 2); V.box(2, 26, 2, 13, 27, 13, K.cream, glow());                                          // lid, its light
+    for (const z of [1, 13]) V.box(1, 27, z, 14, 28, z + 1, K.gold, 2); for (const x of [1, 13]) V.box(x, 27, 1, x + 1, 28, 14, K.gold, 2);   // the lid's rim: the lid is clear (third pass)
+    V.box(2, 26, 2, 13, 27, 3, K.cream, glow());                                                                                            // its light, under the back rail                                          // lid, its light
     for (let k = 0; k < 9; k++) { V.set(2 + k, 18 + k, 13, K.glint, 1); V.set(3 + k, 18 + k, 13, K.glint, 1); }                                                             // the glass catching light
     if (variant === 0) { V.box(4, 17, 5, 11, 18, 10, K.ink); sneaker(V, 4, 18, 6, K.gold, K.gold, K.gold, false, 3); for (let x = 4; x < 12; x++) for (let y = 18; y < 22; y++) for (let z = 6; z < 9; z++) { const i = x + z * V.nx + y * V.sxz; if (V.d[i]) V.set(x, y, z, V.pal[V.d[i]], 2); } }
     if (variant === 1) { V.box(4, 17, 4, 11, 24, 10, K.red); V.box(4, 17, 10, 11, 24, 11, K.cream); V.box(5, 19, 10, 10, 22, 11, K.chrome, 2); V.box(6, 22, 10, 9, 23, 11, K.yellow); V.box(4, 24, 4, 11, 25, 11, K.glass, 1); }   // a sealed box

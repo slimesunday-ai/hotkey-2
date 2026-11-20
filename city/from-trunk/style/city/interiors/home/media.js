@@ -1,6 +1,6 @@
 // Home objects · electronics, gaming, music. Every screen, LED and fan ring is on the lit layer (STYLE §3). The consoles are invented
 // shapes and names (TOASTR, YOLK, ZIGG): no real console design, logo or trademark.
-import { def, K, pick, cyl, cylZ, line, glow, LIT, shade, mix, rng, hash, txt, M3 } from './lib.js';
+import { def, K, pick, cyl, cylZ, line, glow, LIT, shade, mix, rng, hash, txt, M3, frect, fdisc, fline, ftxt, hbox, fsurf, fcolour, billTex } from './lib.js';
 
 // ── shared parts
 // a screen (lit) filling x0..x1 × y0..y1 at depth z; kinds: bars · cartoon · fight · news · game · terminal · sports · video
@@ -91,10 +91,23 @@ export const pcBeige = def({ id: 'computer-beige', name: 'Beige PC', cat: 'elect
     const c = pick([K.beige, 0xcdb67c], variant), d = shade(c, .82);
     V.box(7, 0, 3, 14, 1, 8, d); V.box(4, 1, 0, 17, 11, 9, c); V.box(5, 2, 0, 16, 10, 1, d);                  // stand, the deep monitor
     V.box(4, 1, 8, 17, 11, 9, shade(c, .92)); screen(V, 5, 3, 15, 10, 9, 'terminal', seed); V.box(14, 9, 9, 16, 11, 10, K.yellow);   // screen, a sticky note
-    V.box(3, 0, 10, 17, 1, 14, c); for (let x = 4; x < 16; x++) for (let z = 10; z < 13; z++) if ((x + z) & 1) V.set(x, 1, z, d);   // keyboard
+    V.box(3, 0, 10, 17, 1, 14, c);                                                                            // keyboard (its keys: the fine pass)
     V.box(19, 0, 11, 21, 1, 13, c); line(V, 19, 0, 11, 17, 0, 9, K.ink);                                      // mouse, cord
     V.box(18, 0, 0, 25, 11, 10, c); V.box(19, 8, 10, 24, 9, 11, K.ink); V.box(19, 6, 10, 24, 7, 11, d); V.set(20, 3, 10, K.lime, LIT); V.box(22, 2, 10, 24, 4, 11, d);   // tower: floppy slot, bay, turbo LED, power
     V.box(1, 0, 11, 3, 1, 13, K.cobalt); V.set(2, 1, 11, K.steelL);                                           // a floppy
+  },
+  // fine pass: the terminal's lines of green text and its cursor, the keys, the sticky note's scrawl, the floppy's shutter and label,
+  // the tower's drive light and vents
+  fine(P, { variant = 0, seed = 1 }) {
+    const c = pick([K.beige, 0xcdb67c], variant), d = shade(c, .82);
+    P.rect('+z', 20, 12, 60, 40, (qa, qb) => { const u = qa - 20, v = 27 - (qb - 12); if (v % 3 !== 1) return 0x0e1a10; const row = (v / 3) | 0, len = 6 + ((hash(row, seed, 4) * 28) | 0);
+      if (row === 8) return u > 1 && u < 4 ? 0x6cff4a : u === 5 ? 0x6cff4a : 0x0e1a10; return u > 0 && u < len && (u + row) % 9 !== 0 ? 0x6cff4a : 0x0e1a10; });
+    P.rect('+y', 12, 40, 68, 56, (qa, qb) => { const i = qa - 12, j = qb - 40; if (i < 2 || i > 53 || j < 1 || j > 14) return d; if (j % 3 === 0) return d;
+      if (j >= 13) return i >= 16 && i < 38 ? 0xf2ead2 : d; return (i - 2 + (j / 3 | 0)) % 4 === 3 ? d : 0xf2ead2; });
+    for (const y of [9.25, 9.75, 10.25]) frect(P, '+z', 14.25, y, 15.75, y + .125 + .125, 0x4a3a10);
+    frect(P, '+y', 1.25, 11, 2.25, 11.75, K.steelL); frect(P, '+y', 1.25, 12, 2.75, 12.75, K.white);
+    for (let k = 0; k < 3; k++) frect(P, '+z', 19, .5 + k * .5, 24, .75 + k * .5, d);
+    frect(P, '+z', 22.5, 8.25, 23.5, 8.5, K.ink);
   } });
 
 export const pcRig = def({ id: 'computer-rig', name: 'Gaming rig', cat: 'electronics', place: 'surface', foot: [6, 3], h: 0.65,
@@ -151,27 +164,48 @@ export const gamingSetup = def({ id: 'gaming-setup', name: 'Gaming setup', cat: 
 export const boombox = def({ id: 'boombox', name: 'Boombox', cat: 'music', place: 'surface', foot: [3, 1], h: 0.45,
   tiers: ['trailer', 'apartment', 'house'], tags: ['90s', 'music', 'block party'], variants: 3, vnames: ['silver', 'black', 'red'],
   build(V, { variant = 0 } = {}) {
+    // THIRD PASS · the box keeps its shape, its speakers flush now: the round cones, the tape window, the keys are painted (fine)
     const c = pick([K.steelL, 0x2a2a31, K.red], variant), l = variant === 0 ? 2 : 1, d = shade(c, .7);
     V.box(0, 0, 0, 15, 7, 4, c, l); V.box(0, 6, 0, 15, 7, 4, d, l);
-    for (const cx of [3.5, 11.5]) { cylZ(V, cx, 3.5, 3, 4, 5, 0x55555f); cylZ(V, cx, 3.5, 2.1, 4, 5, K.ink); V.set(Math.floor(cx), 3, 4, K.chrome, 2); }   // speakers
-    V.box(6, 2, 4, 9, 6, 5, K.ink); V.box(7, 3, 4, 8, 5, 5, K.cream);                                           // tape deck, a cassette
-    for (let x = 5; x < 10; x++) V.set(x, 7, 2, pick([K.white, K.red, K.white, K.yellow, K.white], x));          // piano keys
+    V.box(1, 1, 3, 6, 6, 4, 0x3a3c44); V.box(9, 1, 3, 14, 6, 4, 0x3a3c44); V.box(6, 2, 3, 9, 6, 4, K.ink);                // the speaker wells, the deck
     V.box(2, 7, 1, 3, 9, 3, K.chrome, 2); V.box(12, 7, 1, 13, 9, 3, K.chrome, 2); V.box(2, 8, 1, 13, 9, 3, K.chrome, 2);   // the handle
-    V.box(0, 7, 0, 12, 8, 1, K.chrome, 2);                                                                       // antenna, folded
+    V.box(0, 7, 0, 12, 8, 1, K.chrome, 2);                                                                                // antenna, folded
+    for (let x = 5; x < 10; x++) V.set(x, 7, 2, K.white);                                                                 // the keys' row
+  },
+  fine(P, { variant = 0 } = {}) {
+    // two round speakers (the grille ring, the cone and its rings, the dust cap), a cassette in the deck window, the keys, a meter
+    const c = pick([K.steelL, 0x2a2a31, K.red], variant), ring = variant === 1 ? K.steelL : 0x2a2a31;
+    for (const cx of [3.5, 11.5]) {
+      frect(P, '+z', cx - 2.5, 1, cx + 2.5, 6, c);
+      fdisc(P, '+z', cx, 3.5, 2.5, d => (d > 2.2 ? ring : d > 1.9 ? 0x55555f : d < .55 ? K.chrome : Math.abs(d - 1.2) < .12 || Math.abs(d - 1.6) < .1 ? 0x30323a : 0x1f1f24)); }
+    frect(P, '+z', 6, 2, 9, 6, K.ink); frect(P, '+z', 6.25, 3.25, 8.75, 4.75, 0x2a3350);                               // the deck, its window
+    frect(P, '+z', 6.5, 3.5, 8.5, 4.5, K.cream); fdisc(P, '+z', 7, 4, .32, K.ink); fdisc(P, '+z', 8, 4, .32, K.ink);    // the cassette, its reels
+    for (let k = 0; k < 5; k++) frect(P, '+y', 5 + k + .1, 2, 6 + k - .1, 2.75, [K.red, K.white, K.white, K.white, K.yellow][k]);   // the keys
+    frect(P, '+z', 6.25, 5.25, 8.75, 5.75, K.lime);                                                                      // the meter
   } });
 
 export const turntables = def({ id: 'turntables', name: 'Turntables', cat: 'music', place: 'surface', foot: [6, 2], h: 0.2,
   tiers: ['apartment', 'house', 'penthouse'], tags: ['dj', 'vinyl', 'music'], variants: 2, vnames: ['silver', 'black'],
   build(V, { variant = 0, seed = 1 } = {}) {
+    // THIRD PASS · two decks and the mixer: each platter a disc with the record on it (grooves, label, rim painted round; fine), the
+    // tone arm in half blocks, the pitch slider; the mixer's faders and knobs painted
     const c = pick([K.steelL, 0x2a2a31], variant), l = variant ? 1 : 2;
     for (const x0 of [0, 18]) { V.box(x0, 0, 0, x0 + 12, 2, 10, c, l);
-      cyl(V, x0 + 5.5, 5, 4.3, 2, 3, K.chrome, 2); cyl(V, x0 + 5.5, 5, 3.8, 2, 4, K.ink, 1); cyl(V, x0 + 5.5, 5, 1.3, 3, 4, pick([K.red, K.yellow, K.cyan, K.pink], seed + x0), 0); V.set(x0 + 5, 3, 4, K.chrome, 2);
-      line(V, x0 + 11, 2, 8, x0 + 8, 3, 3, K.chrome, 2); V.box(x0 + 10, 2, 7, x0 + 12, 3, 9, K.ink);           // tonearm
-      V.box(x0 + 10, 2, 1, x0 + 11, 3, 5, K.ink); V.set(x0 + 10, 2, 3, K.white); V.set(x0 + 1, 2, 8, K.ink); }  // pitch slider, start
-    V.box(12, 0, 1, 18, 3, 9, 0x1f1f24);                                                                       // the mixer
-    for (const x of [13, 16]) { V.box(x, 2, 3, x + 1, 3, 7, K.ink); V.set(x, 3, 5, K.white); }                   // up-faders
-    V.box(13, 2, 7, 17, 3, 8, K.ink); V.set(15, 3, 7, K.white); for (let z = 2; z < 6; z++) V.set(14, 2, z, z < 3 ? K.red : K.lime, LIT);   // crossfader, meter
-    for (const x of [13, 16]) V.set(x, 3, 1, pick([K.red, K.cyan], x));
+      cyl(V, x0 + 5.5, 5, 4.4, 2, 3, K.ink, 1);                                                                           // the platter and its record
+      V.box(x0 + 10, 2, 7, x0 + 12, 3, 9, 0x1f1f24); V.box(x0 + 10, 2, 1, x0 + 11, 3, 5, K.ink); V.set(x0 + 1, 2, 8, K.ink); }   // the arm's base, pitch slider, start
+    V.box(12, 0, 1, 18, 3, 9, 0x1f1f24);                                                                                  // the mixer
+  },
+  fine(P, { variant = 0, seed = 1 } = {}) {
+    const c = pick([K.steelL, 0x2a2a31], variant);
+    for (const x0 of [0, 18]) { const lab = pick([K.red, K.yellow, K.cyan, K.pink], seed + x0);
+      fdisc(P, '+y', x0 + 5.5, 5, 4.75, d => (d > 4.35 ? c : d > 3.95 ? K.chrome : d < .28 ? K.chrome : d < 1.25 ? lab : (Math.round(d * 5) % 2 ? 0x1f1f24 : 0x34343c)));   // round: the deck round it, the rim, grooves, label, spindle
+      hbox(P, x0 + 10.5, 3, 7.5, x0 + 11.5, 3.5, 8.5, K.chrome, 2);                                                       // the arm's pivot
+      hbox(P, x0 + 10.5, 3, 3.5, x0 + 11, 3.5, 7.5, K.chrome, 2); hbox(P, x0 + 8, 3, 3.5, x0 + 10.5, 3.5, 4, K.chrome, 2);   // the arm, back to front, then in over the record
+      hbox(P, x0 + 7, 3, 3.5, x0 + 8, 3.5, 4, K.ink, 0);                                                                  // its head
+      frect(P, '+y', x0 + 10.25, 1.5, x0 + 10.75, 2, K.white); }                                                          // the slider's knob
+    for (const x of [13.5, 16.5]) { frect(P, '+y', x - .1, 3, x + .1, 7, K.ink); frect(P, '+y', x - .35, 4.5, x + .35, 5, K.white); }   // up-faders
+    frect(P, '+y', 13, 7.5, 17, 7.75, K.ink); frect(P, '+y', 14.75, 7.25, 15.25, 8, K.white);                              // the crossfader
+    for (const [x, z, k] of [[13.5, 1.75, K.red], [16.5, 1.75, K.cyan], [15, 2.5, K.lime]]) fdisc(P, '+y', x, z, .35, k);   // knobs, the meter
   } });
 
 export const speaker = def({ id: 'speaker', name: 'Speaker', cat: 'music', place: 'floor', foot: [2, 2], h: 1.0,

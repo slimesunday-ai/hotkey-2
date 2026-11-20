@@ -7,7 +7,7 @@
 //   map.closeOne() (Esc: a card first) · map.focusYou(s) · map.view · map.setView(v) · map.opening() · map.stats()
 //     where()  → { x, z, label, indoors } where the player is now (the stage's own position of them), or null
 //     clock()  → the run's time in game minutes
-//     stops()  → [{ id, name, flag, x, z, here, locked, heat, hot, police }]   line() → { ride, walks, locked, stations }
+//     stops()  → [{ id, name, flag, x, z, here, locked, heat, hot, police }]   line() → { ride | rides, walks, locked, stations }
 //              (heat, hot, police: the place's, rules-2; drawn on its flag. rose: heat that just landed, trust-1)
 //     card(id) → { name, body: [nodes] }: what a stop pays, its danger, who is left there today
 //
@@ -25,12 +25,14 @@
 // imported then); closed, the kit releases its canvases and timers, and our layer stops with it.
 
 import { h } from '../hud/dom.js';
+import { icon } from './icons.js';
+// (tree-1: the stops' labels laid out so none lies on another or off the sheet, each tied to its stop: maplabels.js)
+import { placeLabels } from './maplabels.js';
 
 const UI = new URL('../../city/from-trunk/style/city/ui/', import.meta.url).href;
 const ME = 'you';
-/** The stops' flags sit left of their point (the kit's YOU flag is up and to the right of the player's); the market's a
- *  little lower and the corner's a little higher, as the corner is just up the street from the market. */
-const FLAG_DY = { park: 0, market: 12, corner: -12 };
+/** The kit's rulers along the sheet's top and left edge (ui/map/paper.js RW): no label lies on them. */
+const RULER = 18;
 
 export function createRunMap({ where, clock, stops, line, card }) {
   const host = h('div', { class: 'rn-map' });
@@ -47,6 +49,8 @@ export function createRunMap({ where, clock, stops, line, card }) {
   let downAt = null;
   let youClick = false;
   const flags = new Map();
+  // (where each label was last laid, so it stays there while that still works: maplabels.js `keep`)
+  const laid = new Map();
   const ticks = new Set();
   const cardEl = h('aside', { class: 'rn-stopcard', role: 'dialog', hidden: true });
 
@@ -136,18 +140,18 @@ export function createRunMap({ where, clock, stops, line, card }) {
       layer.append(f.el);
       flags.set(s.id, f);
     }
-    const key = `${s.name}|${s.flag}|${s.here}|${s.locked}|${cardId === s.id}|${s.heat}|${s.police}|${s.hot}|${s.rose ?? 0}|${s.mark ?? ''}`;
+    const key = `${s.name}|${s.here}|${s.locked}|${cardId === s.id}|${s.hot}|${s.mark ?? ''}`;
     if (key !== f.key) {
       f.key = key;
-      // (rules-2: the place's heat as a count, red when it is hot, and the police in blue where they are about;
-      // trust-1: the heat that just landed there, `rose`, beside it while what just happened is said)
-      const heat = s.heat === null || s.heat === undefined ? null : h('i', { class: `rn-flag-heat${s.hot ? ' is-hot' : s.heat ? '' : ' is-zero'}` }, `heat ${s.heat}`);
-      const rose = s.rose ? h('i', { class: 'rn-flag-rose' }, `+${s.rose} just now`) : null;
-      const pol = s.police ? h('i', { class: `rn-flag-pol${s.hot ? ' is-hot' : ''}` }, 'police') : null;
-      f.el.replaceChildren(...[h('b', null, s.name), h('span', null, s.flag), heat, rose, pol].filter(Boolean));
+      // (tree-1, the owner: "the text on this part of the map is a bit buggy": a label is the stop's NAME, and at most a
+      // mark: locked, or hot (the police about because of what was done there). What it pays, its risk, its heat and
+      // police are its card's, a click away. Where you are: yellow; the one picked: ink)
+      const mark = s.locked ? h('i', { class: 'rn-flag-lock', 'aria-label': 'locked' }, icon('lock')) : s.hot ? h('i', { class: 'rn-flag-heat is-hot' }, 'hot') : null;
+      f.el.replaceChildren(...[h('b', null, s.name), mark].filter(Boolean));
       f.el.className = `rn-flag${s.here ? ' is-here' : ''}${s.locked ? ' is-locked' : ''}${s.mark ? ` is-${s.mark}` : ''}${cardId === s.id ? ' is-on' : ''}`;
       // (join-1: a stop of the page's own, the try-out: its card says what it is)
-      f.el.title = s.side ? `${s.name}: ${s.flag}` : `${s.name}: what it pays, its danger, its heat and police, who is left today`;
+      f.el.title = s.side ? `${s.name}: ${s.flag}` : `${s.name}${s.here ? ' (you are here)' : ''}: ${s.flag}${s.heat ? ` · heat ${s.heat}` : ''}${s.police ? ' · police about' : ''}. Its card: what it pays, its danger, who is left today`;
+      f.el.setAttribute('aria-label', f.el.title);
     }
     return f;
   }
@@ -232,14 +236,17 @@ export function createRunMap({ where, clock, stops, line, card }) {
       ctx.stroke();
     }
     ctx.setLineDash([]);
-    // the ride: an ink casing, the line's colour inside, station to station
-    path(L.ride);
-    ctx.strokeStyle = ink;
-    ctx.lineWidth = 8;
-    ctx.stroke();
-    ctx.strokeStyle = core;
-    ctx.lineWidth = 4.5;
-    ctx.stroke();
+    // the ride: an ink casing, the line's colour inside, station to station (batch-1: one ride a place from the park's
+    // stairs, `rides`; a single `ride` as before)
+    for (const r of L.rides ?? [L.ride]) {
+      path(r);
+      ctx.strokeStyle = ink;
+      ctx.lineWidth = 8;
+      ctx.stroke();
+      ctx.strokeStyle = core;
+      ctx.lineWidth = 4.5;
+      ctx.stroke();
+    }
     // the stations: a paper disc in an ink ring, the name beside it
     ctx.font = `700 11px ${font}`;
     ctx.textBaseline = 'middle';
@@ -259,41 +266,60 @@ export function createRunMap({ where, clock, stops, line, card }) {
       ctx.fillStyle = ink;
       ctx.fillText(st.name, x + 9, y + 1);
     }
-    // the stops: a square in the paper's ink (the corner a slate diamond, locked), each with its leader to its flag
+    // the stops: a square in the paper's ink (the corner a slate diamond, locked), each with its label laid where it
+    // covers no other label, no stop, no station and not the legend, inside the sheet (maplabels.js), a leader to it
+    // when it sits off its stop
     const seen = new Set();
-    const placed = [];
+    const items = [];
+    const pts = [];
     for (const s of stops()) {
       const [x, y] = P(s.x, s.z);
       const f = flagOf(s);
-      const inside = x > -40 && y > -40 && x < W + 40 && y < H + 40;
-      f.el.hidden = !inside;
+      const on = x > RULER && y > RULER && x < W && y < H;
       seen.add(s.id);
-      if (!inside) continue;
-      // (a stop out west of the run's, the try-out, has its flag on its right: on the left it ran off the sheet)
-      f.el.style.left = `${Math.round(s.right ? x + 14 : x - 14)}px`;
-      f.el.style.transform = s.right ? 'translate(0, -50%)' : '';
-      f.el.style.top = `${Math.round(y + (FLAG_DY[s.id] ?? 0))}px`;
-      placed.push({ s, f, x, y, dy: FLAG_DY[s.id] ?? 0 });
-    }
-    // (ui-3 QUICK FIX: two flags never lie over each other, "THE CORNER locked" on "FLEA MARKET": the lower of two
-    // that meet is moved down below the other, its leader still to its own stop)
-    placed.sort((a, b) => a.y + a.dy - (b.y + b.dy));
-    for (let i = 0; i < placed.length; i++) {
-      for (let j = 0; j < i; j++) {
-        const a = placed[j].f.el.getBoundingClientRect();
-        const b = placed[i].f.el.getBoundingClientRect();
-        if (a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top) continue;
-        placed[i].dy += Math.ceil(a.bottom - b.top) + 4;
-        placed[i].f.el.style.top = `${Math.round(placed[i].y + placed[i].dy)}px`;
+      if (!on) {
+        f.el.hidden = true;
+        continue;
       }
+      f.el.hidden = false;
+      items.push({ id: s.id, x, y, w: Math.ceil(f.el.offsetWidth) + 2, h: Math.ceil(f.el.offsetHeight) + 2, prio: s.here ? 2 : cardId === s.id ? 3 : 0 });
+      pts.push({ s, f, x, y });
     }
-    for (const { s, x, y, dy } of placed) {
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(s.right ? x + 14 : x - 14, y + dy);
-      ctx.strokeStyle = ink;
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
+    const sq = (x, y, r) => ({ left: x - r, top: y - r, right: x + r, bottom: y + r });
+    const obstacles = [...pts.map(p => sq(p.x, p.y, 9)), ...L.stations.map(st => {
+      const [x, y] = P(st.x, st.z);
+      return { left: x - 7, top: y - 8, right: x + 12 + ctx.measureText(st.name).width, bottom: y + 8 };
+    })];
+    const me = where();
+    if (me) {
+      const [x, y] = P(me.x, me.z);
+      obstacles.push({ left: x - 8, top: y - 24, right: x + 50, bottom: y + 8 });
+    }
+    const lg = host.querySelector('.mp-legend');
+    const mpR = layer.getBoundingClientRect();
+    if (lg && lg.offsetParent) {
+      const r = lg.getBoundingClientRect();
+      obstacles.push({ left: r.left - mpR.left - 4, top: r.top - mpR.top - 4, right: r.right - mpR.left + 4, bottom: r.bottom - mpR.top + 4 });
+    }
+    const at = placeLabels({ items, box: { left: RULER + 4, top: RULER + 4, right: W - 6, bottom: H - 6 }, obstacles, keep: new Map([...laid].filter(([, k]) => k)) });
+    laid.clear();
+    for (const { s, f, x, y } of pts) {
+      const L2 = at.get(s.id);
+      laid.set(s.id, L2?.key ?? null);
+      f.el.hidden = !L2;
+      if (L2) {
+        f.el.style.transform = 'none';
+        f.el.style.left = `${L2.left + 1}px`;
+        f.el.style.top = `${L2.top + 1}px`;
+        if (L2.lead) {
+          ctx.beginPath();
+          ctx.moveTo(L2.lead[0], L2.lead[1]);
+          ctx.lineTo(L2.lead[2], L2.lead[3]);
+          ctx.strokeStyle = ink;
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+      }
       ctx.save();
       ctx.translate(x, y);
       if (s.locked) ctx.rotate(Math.PI / 4);
@@ -428,6 +454,11 @@ export function createRunMap({ where, clock, stops, line, card }) {
       const me = where();
       if (me && kit) kit.setView({ cx: me.x, cz: me.z, s });
     },
-    stats: () => ({ open, loaded: !!kit, card: cardId, kit: kit?.stats?.() ?? null, flags: [...flags.keys()].filter(id => !flags.get(id).el.hidden) }),
+    stats: () => ({ open, loaded: !!kit, card: cardId, kit: kit?.stats?.() ?? null, flags: [...flags.keys()].filter(id => !flags.get(id).el.hidden),
+      // (tree-1, for the tools: each stop's point on the sheet, whether it is in sight, and its label's box or why none)
+      stops: kit && open ? stops().map(s => {
+        const [x, y] = kit.screenOf(s.x, s.z);
+        return { id: s.id, x, y, onSheet: x > RULER && y > RULER && x < host.clientWidth && y < host.clientHeight, label: !flags.get(s.id)?.el.hidden };
+      }) : [] }),
   };
 }

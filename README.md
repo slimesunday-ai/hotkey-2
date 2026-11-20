@@ -22,8 +22,10 @@ node demo/serve.mjs
 - B shop, T travel, H home, Z sleep, M map, C you, L the library of everything you can own, G the guide. Space skips
   a scene, Esc closes one thing, I makes the interface smaller.
 - **Try the fight:** step out of your trailer, press T, and take the last line, "TRY-OUT · Behind the dead mall".
-  Pick a loadout with 1 to 5, set how hard with the up and down arrows, Enter to fight. W A S D moves you and your
-  weapon fires by itself. Esc goes back to your run. Nothing there counts.
+  Pick a loadout with 1 to 5, set how hard with the up and down arrows (Jumped, Easy, Real, Hard), Enter to fight.
+  W A S D moves you and your weapon fires by itself. B builds your own: every weapon says its job, the Doorman (a rush,
+  up close) and the Long-eye (the ones who hang back) among them, and with Cousin Earl, how he fights: out in front,
+  goes hunting, one at a time. Esc goes back to your run. Nothing there counts.
 - Your run is saved in the browser. "New run" at the top left starts over.
 
 **The older ten-seat game:** open http://127.0.0.1:5470/demo/ and pick a seat.
@@ -59,7 +61,10 @@ node run.mjs --ai --fake --lineup ai10 --seeds 1   # a free season with fake AI 
 A real AI season costs money and is never run by a builder. It refuses to start without `--max-cost` and `--go`.
 
 **The run** (`RUN.md`, slime's 11-13 direction) is a new way to play beside the old rules, in `src/run/`: one player,
-the trailer park and the flea market, carry it home before the city takes it. Play it in the terminal with
+the trailer park and, one subway ride from it each, the Jay St night market (where you get jumped), Low Tide Docks
+(tougher people, honest money, a box off a semi that turns into a fight) and Glasswall Plaza (where the police are the
+danger), carry it home before the city takes it (batch-1: RUN.md "Low Tide Docks", "Glasswall Plaza"; food and drink
+are capped at two a day, every place's together; Fit Street's walk adds a barber and DROP's sneaker wall). Play it in the terminal with
 `node scripts/run-play.mjs --seed 1` (one key per choice: the number, or i inside, o step out, `4=2` to step out with
 $2 for the fare, t the subway, h head home, s sleep, m morning, q quit; `3@2` does option 3 to its second target, r
 robs somebody passing, b digs the bins, d buys the drink, z sleeps rough, g gives and x refuses the regular at your
@@ -69,15 +74,15 @@ shows, so the trailer park runs dry and points you to the market (RUN.md, "Peopl
 (RUN.md, "The world answers"): each place has its own heat and police, robbing somebody passing heats the place, the
 bins cost energy, a regular comes to your door, you can stay out and sleep rough, the market sells a drink, and each
 place has a supply the day draws down. A place is data: one entry in `src/run/config.mjs` (RUN.md, "Adding a place").
-`node scripts/run-marks.mjs` measures RUN.md's twelve marks on the real engine, free (3,000 seeded six-day seasons per
-cell, about five minutes; `--seeds 500` for a quick look). In the 3D city it is `/demo/?mode=run&seed=3` (`demo/run/`):
+`node scripts/run-marks.mjs` measures RUN.md's marks on the real engine, free (3,000 seeded six-day seasons per
+cell, about ninety minutes now; `--seeds 500` for a quick look, about fifteen; `--places` the new places' four alone). In the 3D city it is `/demo/?mode=run&seed=3` (`demo/run/`):
 one frame over the city (the top line, a dock down the left with you in it, a thin bar along the bottom: the danger of
 one more hour as a line on its top edge, the options one line each with their pay and odds, one slim row of what just
 happened and the ways to move), each hour acted out with the stage's own scenes, 1 2 3 and Enter to choose, H
 home, Space to skip a scene (`&scenes=0` plays it with no acting out). C opens your character (your figure turning,
 your stats, what you are wearing, the people), A every move there is, S everything to buy, M the map (the kit's paper
-map of the island, `city/from-trunk/style/city/ui/map/`, fed from the run by `demo/run/map.js`: you on it, the three
-stops, the line, a click on a stop for what it pays, its danger and who is left): one panel at a time beside the dock,
+map of the island, `city/from-trunk/style/city/ui/map/`, fed from the run by `demo/run/map.js`: you on it, the
+stops, a ride to each from the park's stairs, a click on a stop for what it pays, its danger and who is left): one panel at a time beside the dock,
 Esc closes it, and the numbers still choose on the bar. D folds the dock to a rail, F the bar to its one row (where
 the numbers still pick, every option's pay and odds still on it); both kept in this browser, and the dock starts
 folded. Going into the crib is a walk to its real door, a fade
@@ -87,7 +92,40 @@ plays six days on auto with the stage's audit on and ends `run-ok` or `run-fail`
 park and comes down to your trailer before the first morning (`demo/stage/opening.js`; Space, Enter or a click skips
 it). The crib is a starter pack in the city's own home format, 7 m by 3.5 m (`demo/stage/set/homes/`, checked with
 `node demo/tools/crib-check.mjs`; `&crib=b` for the second arrangement); the real bed shows in it once bought.
-`node demo/tools/run-crib-shots.mjs --out <dir>` takes its pictures.
+`node demo/tools/run-crib-shots.mjs --out <dir>` takes its pictures. `node demo/tools/run-places2.mjs --out <dir>` rides
+to the docks and the plaza and plays their jobs, the walk's two new cards and the food cap with real keys, and ends
+`places2-ok` or `places2-fail`. The bar's meter is the risk of one more hour: "RISK 15% · could be jumped", "RISK 41% ·
+police could stop you", or "SAFE HERE".
+**Fights** (duel-1, RUN.md "Fights"): a debt or a lift that goes wrong in the trailer park, and the regular at your door
+who swings when you shut it, are a fight there and then: a one-on-one of the fight's own simulation
+(`src/fight/duel.mjs`, both brawling by `src/fight/brawl.mjs`), seeded from the run's dice and decided by what you own
+(the box cutter) and your energy; it IS the outcome, headless and on screen alike. Each card says it before you choose
+("fails: a fight, ~4 in 10"; picked, the bar's row says what each of you brings and what it costs), and the stage
+plays it between the two of you where the job's scene left you, with two bars over the picture (`demo/run/duel.js`;
+Space, Enter or Skip jumps to the same result). One config block, `duel`; a job fights by its flag `fight: 'fail'`.
+`node scripts/duel-table.mjs` is its balance table and targets; `node demo/tools/run-duel.mjs --port <p> --out <dir>`
+plays a won and a lost one and the door in the page, skips them by key and by mouse, and ends `duel-ok` or `duel-fail`.
+**Every weapon its job** (fight-3, RUN.md "Every weapon its job"): the fight's simulation has the Doorman and the
+Long-eye, three punch styles (quick hands, the haymaker, the throw), five opponent styles for one-on-ones, Cousin
+Earl's three ways, the small street fights (jumped, the corner, a raid), "built" cut to +10 and ×1.1, and no gun in a
+one-on-one; the try-out page offers the guns, Earl's ways and Jumped. `node src/fight/table.mjs` is the arena's table.
+**Fights in the run: styles and getting jumped** (styles-1, RUN.md): everybody who can fight you one-on-one has a style
+(Benny Two-Coats a plain brawler, Big Lou carries a blade, Nadia Petrakis, Shaky Dee and the woman at the bus stop are
+quick ones), said on the card before you choose; quick hands, the haymaker and the throw are each taught at one place
+(Pockets at the market, Cousin Earl at home, Mr. Haines on the docks), learned once and kept; what you fight with is one
+standing choice of what you own (You, Fight; E; at home), and every card's odds use it. Getting jumped is a fight you
+watch, two at once where you stand, ending as the dice did (a bad one, a scuffle, nothing) to within 3 points; a visit
+from somebody not of your street is somebody they sent; after a fight lost, one line of what would have helped. The
+Library's Fight kind lists the ways to fight and where each is had. `node demo/tools/run-styles.mjs --port <p> --out
+<dir>` plays it in the page and ends `styles-ok` or `styles-fail`.
+
+**People remember** (memory-1, RUN.md "People remember"): a fight won or lost, robbing somebody to their face and the
+door shut on a regular are remembered for a week, whatever the day's mood. Whoever you beat or robbed fears you (a debt
+paid without a fight, no swing at your door, nobody tells, never the one casing your crib; no sales, no
+work), until you lose a fight where they are; on the eighth day they are at your door for another go, warned the evening
+before: pay them off or fight them. One visit a morning at your door. The People tab says who remembers what and for how
+long. One config block, `memory`; the scripted `shark` leans on its own street and uses it.
+`node demo/tools/run-memory.mjs --port <p> --out <dir>` plays it in the page and ends `memory-ok` or `memory-fail`.
 
 ## The demo: watch it, play it, coach it, in the 3D city
 

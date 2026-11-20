@@ -88,8 +88,10 @@ test('the advice names the right thing: keep moving, for a handgun that stood st
   assert.match(A.line, /Backing away while you fire wins \d+ of \d+ like it with what you have\./);
 });
 
-test('the advice names the right thing: the missing vest, for the full build that went down at the hard stop', () => {
-  const build = { weapon: 'chopper', gear: ['strength', 'shoes'], ally: true };
+// (fight-3: with the chopper the bad night's advice is the Long-eye now, the gun whose job that night is: the vest is
+// what a Long-eye with everything else lacks)
+test('the advice names the right thing: the missing vest, for the Long-eye with all the rest that went down at the hard stop', () => {
+  const build = { weapon: 'longeye', gear: ['strength', 'shoes'], ally: true };
   const seed = [1, 2, 3, 4, 5, 6, 7, 8].find(s => runFight({ build, level: 'hard', seed: s, policy: kite }).over.result === 'lost');
   assert.ok(seed, 'one of the first seeds is lost');
   const F = runFight({ build, level: 'hard', seed, policy: kite });

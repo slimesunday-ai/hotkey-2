@@ -1,6 +1,7 @@
 // THE FIGHT PAGE TAKES THE MOUSE: every button of its frame is clicked with a real mouse press (the browser's own
 // pointer events, not a script's click()), and the page must do what the button says. The keys were checked by the
-// other tools; the mouse was not, and it did nothing.
+// other tools; the mouse was not, and it did nothing. (fight-3: the Doorman, the Long-eye, Earl brought and each of his
+// three ways in Build your own, and the fourth level, Jumped, each by a real press; then the keys walk the same list.)
 //
 // The server must be running: node demo/serve.mjs --port 5485
 //   HK2_DEBUG_PORT=5725 node demo/tools/fight-clicks.mjs --port 5485
@@ -68,8 +69,73 @@ try {
   await check('a loadout card (the first)', '.fg-dock .fg-card[data-slot="1"]', `!!document.querySelector('.fg-dock .fg-card[data-slot="1"].is-on')`);
   await check('Results, opened', '.fg-table .fg-table-x', `!!document.querySelector('.fg-table table.fg-results')`);
   await check('Results, folded', '.fg-table .fg-table-x', `!document.querySelector('.fg-table table.fg-results')`);
+  await check('how hard: Jumped', '.fg-dock [data-level="jumped"]', levelOn('jumped'));
   await check('Build your own, opened', '.fg-dock [data-verb="build"]', `!!document.querySelector('.fg-build')`);
+  // (fight-3) THE LONG GUNS AND EARL'S WAYS, in the list
+  const rowOn = (row, attr = 'aria-pressed') => `document.querySelector('.fg-build [data-row="${row}"]')?.getAttribute('${attr}') === 'true'`;
+  await check('build: the Doorman', '.fg-build [data-row="weapon:doorman"]', `${rowOn('weapon:doorman')} && /Doorman/.test(document.querySelector('.fg-dock .u-go')?.textContent ?? '')`);
+  await check('build: the Long-eye', '.fg-build [data-row="weapon:longeye"]', `${rowOn('weapon:longeye')} && !(${rowOn('weapon:doorman')})`);
+  await check('build: Cousin Earl brought (his ways come up)', '.fg-build [data-row="ally:earl"]', `${rowOn('ally:earl')} && document.querySelectorAll('.fg-build .fg-way').length === 3`);
+  for (const [way, word] of [['front', 'out in front'], ['hunt', 'goes hunting'], ['block', 'one at a time']]) {
+    await check(`build: Earl ${word}`, `.fg-build [data-row="way:${way}"]`, `${rowOn(`way:${way}`, 'aria-checked')} && document.querySelectorAll('.fg-build .fg-way.is-on').length === 1 && new RegExp(${JSON.stringify(word)}).test(document.querySelector('.fg-dock .u-go')?.textContent ?? '')`);
+  }
+  await check('build: Earl one at a time again (back to his old way)', '.fg-build [data-row="way:block"]', `!document.querySelector('.fg-build .fg-way.is-on') && !/one at a time/.test(document.querySelector('.fg-dock .u-go')?.textContent ?? '')`);
+  // (the keys walk the same list: ↓ to Earl's first way and Enter takes it)
+  const keyPress = async (code, key, vk) => {
+    for (const type of ['keyDown', 'keyUp']) await page.send('Input.dispatchKeyEvent', { type, code, key, windowsVirtualKeyCode: vk });
+    await page.sleep(160);
+  };
+  const at = () => ev(`document.querySelector('.fg-build .is-at')?.getAttribute('data-row')`);
+  for (let k = 0; k < 20 && (await at()) !== 'way:front'; k++) await keyPress('ArrowDown', 'ArrowDown', 40);
+  await keyPress('Enter', 'Enter', 13);
+  const keyed = await ev(rowOn('way:front', 'aria-checked'));
+  say(`build by keys: ↓ to Earl out in front, Enter: ${keyed ? 'done' : 'NOTHING HAPPENED'}`);
+  if (!keyed) fail('the keys did not take Earl\'s way');
+  // (anim-1) ONE-ON-ONE, TO LOOK AT: every choice of its two rows by a real press (the pick must SHOW: the owner pressed
+  // them and saw nothing change, the panel's repaint not knowing the pick), then Watch it, and Space ends it
+  // (join-2: the raid's rows wear the same chip; they are pressed below by their own measure, not the one-on-one's)
+  const chipRows = await ev(`[...document.querySelectorAll('.fg-build .fg-duel-chip')].map(e => e.getAttribute('data-row'))`);
+  const duelRows = chipRows.filter(r => r.startsWith('duel-'));
+  let raidRows = chipRows.filter(r => r.startsWith('raid-'));
+  if (duelRows.length !== 10) fail(`the one-on-one shows ${duelRows.length} choices, not its five ways and five opponents`);
+  for (const row of [...duelRows].reverse()) {
+    const [kind, id] = row.split(':');
+    const which = kind === 'duel-arm' ? 'arm' : 'foe';
+    await check(`one-on-one: ${row}`, `.fg-build [data-row="${row}"]`, `${rowOn(row, 'aria-checked')} && ${H}.duel.pick.${which} === ${JSON.stringify(id)} && [...document.querySelectorAll('.fg-build .fg-duel-chip.is-on')].filter(e => e.getAttribute('data-row').startsWith(${JSON.stringify(kind + ':')})).length === 1`);
+  }
+  await check('one-on-one: Watch it', '.fg-build [data-row="duel:go"], [data-row="duel:go"]', `${H}.duel.active === true || ${H}.phase === "duel"`);
+  await page.sleep(2500);
+  await keyPress('Space', ' ', 32);
+  await page.waitFor(`${H}.phase === "pick" && !${H}.duel.active`, 60000);
+  say('one-on-one: Space ended it, back to choosing');
+  // (join-2) THE RAID ON YOUR HOME, TO LOOK AT: every choice of its rows by a real press (the pick must SHOW, one lit a
+  // row; Cousin Earl is a switch), then Watch the raid, and Space ends it
+  if (!(await ev(`!!document.querySelector('.fg-build')`))) await click('.fg-dock [data-verb="build"]');
+  // (raidfight-3: the raid's rows are folded under their title until it is pressed: pressed, they show)
+  const raidOpen = `document.querySelector('.fg-build [data-row="raid:open"]')?.getAttribute('aria-expanded') === 'true'`;
+  if (!(await ev(raidOpen))) await check('the raid: its title, pressed, opens its rows', '.fg-build [data-row="raid:open"]', `${raidOpen} && document.querySelectorAll('.fg-build .fg-duel-chip[data-row^="raid-"]').length >= 12`);
+  raidRows = await ev(`[...document.querySelectorAll('.fg-build .fg-duel-chip')].map(e => e.getAttribute('data-row')).filter(r => r.startsWith('raid-'))`);
+  if (raidRows.length < 12) fail(`the raid shows ${raidRows.length} choices, not who comes, how many, what is in your hands, when, and Earl`);
+  for (const row of raidRows) {
+    const kind = row.split(':')[0];
+    if (row === 'raid-earl') {
+      const was = await ev(rowOn(row, 'aria-checked'));
+      await check(`the raid: ${row}`, `.fg-build [data-row="${row}"]`, `(${rowOn(row, 'aria-checked')}) === ${!was}`);
+      continue;
+    }
+    await check(`the raid: ${row}`, `.fg-build [data-row="${row}"]`, `${rowOn(row, 'aria-checked')} && [...document.querySelectorAll('.fg-build .fg-duel-chip.is-on')].filter(e => e.getAttribute('data-row').startsWith(${JSON.stringify(kind + ':')})).length === 1`);
+  }
+  if (raidRows.includes('raid-time:night')) await check('the raid: back to night', '.fg-build [data-row="raid-time:night"]', rowOn('raid-time:night', 'aria-checked'));
+  await check('the raid: Watch the raid', '.fg-build [data-row="raid:go"], [data-row="raid:go"]', `${H}.phase === "raid"`);
+  await page.sleep(7000);
+  await keyPress('Space', ' ', 32);
+  await page.waitFor(`${H}.phase === "pick"`, 90000);
+  say('the raid: Space ended it, back to choosing');
+  if (!(await ev(`!!document.querySelector('.fg-build')`))) await click('.fg-dock [data-verb="build"]');
   await check('Build your own, closed', '.fg-dock [data-verb="build"]', `!document.querySelector('.fg-build')`);
+  // (back to the first loadout for the round below: bare hands on Easy)
+  await click('.fg-dock .fg-card[data-slot="1"]');
+  await click('.fg-dock [data-level="easy"]');
   await check('the where card, folded', '.fg-where .u-where-fold', `document.querySelector('.fg-where .u-where-fold')?.getAttribute('aria-expanded') === 'false'`);
   await check('the where card, opened', '.fg-where .u-where-fold', `document.querySelector('.fg-where .u-where-fold')?.getAttribute('aria-expanded') === 'true'`);
   // HIDDEN (I, twice): the one button left brings the frame back

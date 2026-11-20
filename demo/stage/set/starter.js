@@ -48,6 +48,11 @@ export const THINGS = {
     // (home-1: the floor safe, the kit's own small safe, a 'gear' piece, so through a floor slot of its own; a trailer
     // marks four slots at most, so the empty trophy slot over the counter, which the run never fills, makes way for it)
     floorsafe: { id: 'safe-small', slot: { x: 23, z: 3, rot: 0, foot: [2, 3] }, fits: ['gear'], frees: 'over-the-counter', where: 'on the floor at the end of the counter, by the boxes' },
+    // (sixes-1: the slice's pieces, the kit's own: the dog's bed and bowls on the floor by the front (the dog sits by it:
+    // set/crib.js), the camera and the dog sign on the back wall. The door bar goes on the door: set/crib.js)
+    dog: { id: 'dog-bed', x: 21, z: 10, where: 'on the floor by the front, his bed and bowls' },
+    camera: { id: 'cctv-camera', x: 6, z: 0, wall: 'N', where: 'high on the back wall, looking at the door' },
+    dogsign: { id: 'dog-sign', x: 13, z: 0, wall: 'N', where: 'on the back wall by the poster' },
   },
   b: {
     lavalamp: { id: 'lava-lamp', x: 12, z: 0, top: 'dresser', where: 'on the dresser, by the TV' },
@@ -55,6 +60,9 @@ export const THINGS = {
     beanbag: { id: 'beanbag', x: 13, z: 3, where: 'on the floor beside the recliner' },
     boxfan: { id: 'box-fan', own: true, where: 'by the mattress' },
     floorsafe: { id: 'safe-small', slot: { x: 3, z: 3, rot: 0, foot: [2, 3] }, fits: ['gear'], frees: 'over-the-counter', where: 'on the floor under the end of the counter, by the boxes' },
+    dog: { id: 'dog-bed', x: 21, z: 10, where: 'on the floor by the front, his bed and bowls' },
+    camera: { id: 'cctv-camera', x: 11, z: 0, wall: 'E', where: 'high on the side wall, looking at the door' },
+    dogsign: { id: 'dog-sign', x: 24, z: 0, wall: 'N', where: 'on the back wall by the bed' },
   },
 };
 /** Where the player stands at home (room cells, the walker's node: its middle at the cells' shared corner): on the door's line, 1.25 m in. */
@@ -110,7 +118,7 @@ export async function createStarter({ base = new URL('./', import.meta.url).href
       }
       const under = t.top ? A.items.findIndex(it => it.id === t.top) : -1;
       if (t.top && under < 0) continue;
-      A.items.push({ id: t.id, x: t.x, z: t.z, rot: 0, variant: 0, on: t.top ? { top: under } : 'floor', key: `t:${item}` });
+      A.items.push({ id: t.id, x: t.x, z: t.z, rot: 0, variant: 0, on: t.top ? { top: under } : t.wall ? { wall: t.wall } : 'floor', key: `t:${item}` });
     }
     // (part D: the layout's empty wall slot, the trophy shelf over the counter the run never fills, is not kept: the
     // kit's check would hold that stretch of wall for it, empty, and no picture could hang there)
@@ -152,16 +160,18 @@ export async function createStarter({ base = new URL('./', import.meta.url).href
       tray: own.filter(k => !THINGS[variant]?.[k]).map(k => [k, trayId(k)]).filter(([, id]) => id).sort((a, b) => (a[0] < b[0] ? -1 : 1)),
       // (the deadbolt: the kit's door chain and locks, on the door's leaves: set/crib.js)
       door: !!o.things?.deadbolt,
+      // (sixes-1: the door bar, across the inside of the door: set/crib.js)
+      bar: !!o.things?.doorbar,
     };
   };
   /** The kit piece a home thing is, if it goes in the room (the deadbolt's locks go on the door instead). */
   const trayId = k => {
     const piece = pieceOf(RUN_CONFIG, k);
-    if (!piece?.startsWith('kit:') || piece === 'kit:door-locks') return null;
+    if (!piece?.startsWith('kit:') || piece === 'kit:door-locks' || piece === 'kit:door-bar') return null;
     if (RUN_CONFIG.things[k] && RUN_CONFIG.things[k].kind !== 'home') return null;
     return piece.slice(4);
   };
-  const thingsSig = has => `${Object.keys(has.things ?? {}).sort().map(k => `+${k}`).join('')}${(has.tray ?? []).map(([k]) => `+${k}`).join('')}${has.door ? '+door' : ''}`;
+  const thingsSig = has => `${Object.keys(has.things ?? {}).sort().map(k => `+${k}`).join('')}${(has.tray ?? []).map(([k]) => `+${k}`).join('')}${has.door ? '+door' : ''}${has.bar ? '+bar' : ''}`;
 
   return {
     variant,

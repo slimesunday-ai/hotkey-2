@@ -1,5 +1,5 @@
 // THE FIGHT IN WORDS: what the page's cards say, as text, for an AI player (or a log). The losing line is advice.mjs's.
-import { LEVELS, WEAPONS, POCKET, buildName } from './data.mjs';
+import { WEAPONS, POCKET, buildName, levelOf } from './data.mjs';
 import { outcome } from './sim.mjs';
 import { advise } from './advice.mjs';
 
@@ -18,7 +18,7 @@ export function pickedWords(O) {
 /** → { result, title, lines: [...], advice, outcome } for a fight that is over. */
 export function report(F, { advice = true } = {}) {
   const O = outcome(F);
-  const L = LEVELS[F.level];
+  const L = levelOf(F.level) ?? { name: F.level };
   const lines = [];
   let title;
   if (O.result === 'won') {
@@ -45,5 +45,5 @@ export function report(F, { advice = true } = {}) {
 /** The fight in one block of text. */
 export function reportText(F) {
   const R = report(F);
-  return [`THE FIGHT, ${LEVELS[F.level].name}, ${R.build}: ${R.title}`, ...R.lines].join('\n');
+  return [`THE FIGHT, ${(levelOf(F.level) ?? { name: F.level }).name}, ${R.build}: ${R.title}`, ...R.lines].join('\n');
 }

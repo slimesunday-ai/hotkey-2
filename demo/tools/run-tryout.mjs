@@ -14,6 +14,7 @@ import path from 'node:path';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { launch } from './chrome.mjs';
 import { COVERED } from './covered.mjs';
+import { LEVEL_KEYS } from '../fight/dock.js';
 
 function opt(name, fallback) {
   const at = process.argv.indexOf(name);
@@ -141,10 +142,9 @@ try {
     if ((await ev(`${H}.sel`)) !== before.sel || (await ev(`${H}.phase`)) !== 'choose') fail(`${name}: a run key acted while the fight was up`);
     // THE ROUND: a loadout (its digit), how hard (the arrows), Enter
     await press(digit, 200);
-    const lv = { easy: -1, real: 0, hard: 1 }[level];
-    await press('ArrowDown', 120);
-    await press('ArrowDown', 120);
-    for (let k = 0; k < lv + 1; k++) await press('ArrowUp', 120);
+    // (down to the first level, then up to the one wanted: fight-3 put Jumped first, below Easy)
+    for (let k = 0; k < LEVEL_KEYS.length - 1; k++) await press('ArrowDown', 120);
+    for (let k = 0; k < LEVEL_KEYS.indexOf(level); k++) await press('ArrowUp', 120);
     // (by the mouse: how hard by its own button; the main button below. A click on the loadout already picked would
     // start the round at once, so the loadout stays on its digit)
     if (mouse) await click(`.fg-dock [data-level="${level}"]`);

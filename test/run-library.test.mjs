@@ -93,7 +93,8 @@ test('owning: a piece off today\'s shelf for its price and no hour; clothes go o
   const all = view(cfg, s).choices;
   const c = all.find(x => x.choice.do === 'get' && x.choice.item === key);
   // (after every older move: their keys are as they were)
-  assert.ok(c.available && c.shelf && +c.key > Math.max(...all.filter(x => !x.shelf).map(x => +x.key)));
+  // (styles-1: the lessons and the fight-with choices come after the shelves, after everything older)
+  assert.ok(c.available && c.shelf && +c.key > Math.max(...all.filter(x => !x.shelf && x.choice.do !== 'learn' && x.choice.do !== 'fightWith' && !(x.choice.do === 'get' && cfg.things[x.choice.item]?.late) && x.choice.do !== 'earlWay' && x.choice.do !== 'tax').map(x => +x.key))); // (sixes-1: and the slice's pieces, how Earl fights and the tax, after them)
   const r = step(cfg, s, c.choice);
   assert.deepEqual([r.state.hour, r.state.carried, r.state.things[key], r.state.worn[t.slot]], [s.hour, 5, true, key]);
   assert.equal(r.events[0].type, 'thing');
@@ -134,15 +135,17 @@ test('cosmetic: owning and wearing library pieces changes no number of the game 
   }
 });
 
-test('save: owning library pieces needs no new field; version 8 as before, a save from before loads and keeps what it owned', () => {
-  assert.equal(RUN_STATE_VERSION, 8);
+test('save: owning library pieces needs no new field; version 8 as before (9 since memory-1), a save from before loads and keeps what it owned', () => {
+  assert.equal(RUN_STATE_VERSION, 12); // (sixes-1: 11; raid-1: 12)
   const key = lib.pieces.find(p => p.kind === 'wear' && !p.named).key;
   const s = { ...at('crib'), things: { visor: true, [key]: true, 'kit:boombox': true }, worn: { head: key } };
   const r = loadRun(saveRun(s));
   assert.ok(r.ok, r.text);
   assert.deepEqual([r.state.things, r.state.worn], [s.things, s.worn]);
   // a version-8 save written before lib-1 (named things only) loads as it was
-  const old = { ...at('market'), things: { visor: true, bowling: true, lavalamp: true }, worn: { head: 'visor', top: 'bowling' } };
+  const old = { ...at('market'), v: 8, things: { visor: true, bowling: true, lavalamp: true }, worn: { head: 'visor', top: 'bowling' } };
+  delete old.marks;
+  delete old.visits;
   const o = loadRun(JSON.stringify({ kind: 'the-run', v: 8, state: old }));
   assert.ok(o.ok, o.text);
   assert.deepEqual([o.state.things, o.state.worn], [old.things, old.worn]);

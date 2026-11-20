@@ -45,12 +45,17 @@ export function createWatch({ city, actors, fade = null, near = null, street = 0
     return blocked(1.75) && blocked(1.0);
   }
   /** Whoever is on the street round the fight now: [{ id, on, x, y, z }]. */
+  // (sixes-1: a walker of the crowd once watched stays watched while the city keeps it, wherever it walks: one walking
+  // out of the `near` ring while still in the picture was counted as gone off, though it was there, drawn, walking on.
+  // run-styles at the docks, 2026-11-18: "crowd:3610 went off" once in three runs)
+  const tracked = new Set();
   function bodies() {
     const out = [];
     for (const A of actors.all()) out.push({ id: A.id, on: !A.w.hide, x: A.x, y: A.y ?? 0, z: A.z });
     for (const w of city.peds?.sim?.walkers ?? []) {
       if (w.hk2 || !w.p) continue;
-      if (near && !near(w.p[0], w.p[2])) continue;
+      if (near && !near(w.p[0], w.p[2]) && !tracked.has(w.id)) continue;
+      tracked.add(w.id);
       out.push({ id: `crowd:${w.id}`, on: !w.hide, x: w.p[0], y: w.p[1], z: w.p[2] });
     }
     return out;

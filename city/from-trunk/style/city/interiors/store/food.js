@@ -2,6 +2,8 @@
 // the glass, dryers tumbling colour, the change machine; a two-deck oven with its glow, the slice case with a pie missing a slice,
 // the lit menu board; booths, chrome stools, the counter and a pie case going round.
 import { obj, K, LIT, GLOW, hh, pick, shadeK, sign, off } from './lib.js';
+// the fine pass below the voxel (../fine.js, FORMAT.md "Fine detail")
+import { frect, fdisc, fline, ftxt } from '../fine.js';
 import { registerAt } from './bodega.js';
 
 // a round window in a machine front (+z face at z): chrome ring, dark glass, what's inside
@@ -83,4 +85,15 @@ const piecase = obj({ id: 'store-pie-case', name: 'Rotating pie case', cat: 'cas
   (P, o) => { const F = [[0xc41e3a, 0xd9893a], [K.yellow, K.white], [K.brown, K.white]], sh = o.v; P.cyl(5, 5, 4.5, 0, 1, K.chrome, 2); P.box(4, 1, 4, 6, 12, 6, K.chrome, 2); P.cyl(5, 5, 4.5, 12, 13, K.chrome, 2); P.cyl(5, 5, 3, 11, 12, 0xfff8e0, LIT());
     [1, 5, 9].forEach((y, k) => { const f = F[(k + sh) % 3]; P.cyl(5, 5, 4, y, y + 1, K.frost, 1); P.cyl(5, 5, 3.5, y + 1, y + 2, 0xd9893a); P.cyl(5, 5, 3, y + 1, y + 2, f[0]); if (!P.far) P.cyl(5, 5, 2, y + 2, y + 3, f[1]); });
     P.glint(1, 3, 3, 9); });
+// fine pass (2026-11-17) on the washer pair: a glint arcing round each door's glass and the rim's shadow, the coin slot and its quarter,
+// the minutes left in the little red window, the dial's ticks, OUT on the note
+washers.fine = (P, { variant = 0, seed = 0 }) => {
+  for (let m = 0; m < 2; m++) { const x0 = m * 15, cx = x0 + 7.5;
+    fdisc(P, '+z', cx, 8.5, 4.3, (d, th) => d > 3.9 ? 0x1a1f3a : (d > 2.6 && d < 3.2 && th > 1.7 && th < 2.9 ? K.white : null));
+    frect(P, '+z', x0 + 1.5, 13.25, x0 + 4.5, 13.5, K.ink); fdisc(P, '+z', x0 + 3, 12.4, .35, K.gold);
+    ftxt(P, '+z', String(18 + m * 7), x0 + 6, 18, K.white);
+    for (let k = 0; k < 6; k++) frect(P, '+z', x0 + 2.25 + (k % 3) * .875, 17.25 + (k >> 1 & 1) * 1.25, x0 + 2.5 + (k % 3) * .875, 17.5 + (k >> 1 & 1) * 1.25, K.white);
+    if (m === (seed + variant) % 2) ftxt(P, '+z', 'OUT', x0 + 11, 13.75, K.ink); }
+};
+
 export default [washers, dryers, fold, change, lcart, oven, slice, menu, booth, stool, dcounter, piecase];

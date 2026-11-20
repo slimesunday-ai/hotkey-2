@@ -1,7 +1,7 @@
 // Home objects · catalogue v2 · collector culture: designer-vinyl figures (invented characters: BRIKK, NOBODY, DICEHEAD, SLUGGO and a
-// blind-box series), a sneaker tower, a graded chase card, a chain bust, a watch box, a fitted-cap wall, art decks, a framed jersey
+// blind-box series), a sneaker tower, a graded chase card, a watch box, a fitted-cap wall, art decks, a framed jersey
 // and a lowrider bike. Every character, brand and graphic is invented; no real toy, shoe, watch, cap or team design.
-import { def, K, pick, cyl, cylZ, line, LIT, shade, rng, hash, txt, M3, M5, face, sneaker } from './lib.js';
+import { def, K, pick, cyl, cylZ, line, LIT, shade, rng, hash, txt, M3, M5, face, sneaker, frect, fdisc, fline, ftxt, hbox, fsurf, fcolour, billTex, ball } from './lib.js';
 import { flex, vinylHead, plinth, cushion } from './bits.js';
 
 export const vinylBrikk = def({ id: 'vinyl-brikk', name: 'BRIKK 1000% figure', cat: 'collectibles', place: 'floor', foot: [3, 3], h: 1.1,
@@ -21,25 +21,42 @@ export const vinylBrikk = def({ id: 'vinyl-brikk', name: 'BRIKK 1000% figure', c
 export const vinylNobody = def({ id: 'vinyl-nobody', name: 'NOBODY figure', cat: 'collectibles', place: 'surface', foot: [2, 2], h: 0.5,
   tiers: ['trailer', 'apartment', 'house', 'penthouse'], tags: ['vinyl toys', 'hoodie', 'designer toy'], variants: 3, vnames: ['black, cyan eyes', 'pink, white eyes', 'olive, lime eyes'],
   game: flex('rare', 10, 'drop'),
+  grain: 0.025, shaped: 'a designer figure: the big hood with its dark face and glowing eyes, the hoodie, the little legs and shoes',
   build(V, { variant = 0 } = {}) {
-    const [c, eye] = pick([[0x26262c, K.cyan], [K.pink, K.white], [0x5a6a3a, K.lime]], variant);
-    V.box(1, 0, 1, 9, 1, 9, K.glass, 1);                                                                                                   // a clear base
-    for (const x of [3, 6]) V.box(x, 1, 4, x + 2, 3, 7, K.ink);                                                                             // legs
-    V.box(2, 3, 3, 8, 6, 8, c); V.box(1, 6, 2, 9, 10, 9, c); V.box(3, 6, 8, 7, 9, 9, K.ink);                                                // body, the hood, its void
-    V.set(4, 7, 8, eye, LIT); V.set(6, 7, 8, eye, LIT);                                                                                    // eyes in the dark
-    V.box(3, 5, 8, 7, 6, 9, K.gold, 2); V.set(5, 4, 8, K.gold, 2);                                                                         // a chain, its pendant
+    // THIRD PASS · a hooded figure: the hood up and huge, the face inside it a void with two glowing eyes; the hoodie with its pouch
+    // pocket and strings, a gold chain; little legs in sneakers; on a clear base
+    const [c, eye] = pick([[0x26262c, K.cyan], [K.pink, K.white], [0x5a6a3a, K.lime]], variant), cd = shade(c, .8);
+    V.box(3, 0, 3, 17, 1, 17, 0xcfe8f5, 1);                                                                          // the clear base
+    for (const x of [6, 11]) { V.box(x, 1, 9, x + 3, 2, 14, K.white); V.box(x, 1, 13, x + 3, 2, 14, K.ink); V.box(x + .5, 2, 10, x + 2.5, 5, 12, K.ink); }   // sneakers, legs
+    ball(V, 10, 8, 10.5, 5.6, 4, 4.6, (x, y) => (y < 5 ? null : c));                                                 // the hoodie's body
+    V.box(7, 5, 14, 13, 7, 15, cd); V.box(8, 6, 15 - 1, 12, 7, 15, shade(c, .7));                                   // the pouch pocket
+    ball(V, 10, 14.5, 10, 6.6, 6, 6.2, c);                                                                           // the hood
+    ball(V, 10, 14, 16.2, 4, 4.2, 2.6, (x, y, z) => (V.has(x, y, z) ? K.ink : null));                              // the void inside it
+    ball(V, 10, 14, 15.4, 4.9, 5.1, 2.2, (x, y, z) => (V.has(x, y, z) && V.pal[V.d[x + z * V.nx + y * V.sxz]] !== K.ink ? cd : null));   // the hood's rim, a shade darker
+    for (const x of [8, 12]) { let z = 19; while (z > 10 && !V.has(x, 14, z)) z--; V.set(x, 14, z, eye, LIT); V.set(x, 15, z, eye, LIT); }   // the eyes in the dark
+    for (const x of [8.5, 11.5]) line(V, x, 9.5, 15, x, 7.5, 15.2, K.white);                                        // the strings
+    for (let k = 0; k < 9; k++) V.set(6.5 + k, 9 - Math.sin(k / 8 * Math.PI) * 1.5, 15, K.gold, 2); V.set(10.5, 7, 15.4, K.gold, 2);   // a chain, its pendant
   } });
 
 export const vinylDicehead = def({ id: 'vinyl-dicehead', name: 'DICEHEAD figure', cat: 'collectibles', place: 'surface', foot: [2, 2], h: 0.55,
   tiers: ['apartment', 'house', 'penthouse'], tags: ['vinyl toys', 'dice', 'designer toy'], variants: 3, vnames: ['white + red, navy suit', 'black + gold, white suit', 'pink + white, lime suit'],
   game: flex('rare', 10, 'drop'),
   build(V, { variant = 0 } = {}) {
+    // THIRD PASS · the head is a real die now: its edges rounded off, the spots painted flush and round (fine), no cubes sticking out
     const [die, pip, suit] = pick([[K.white, K.red, K.navy], [0x1f1f24, K.gold, K.white], [K.pink, K.white, K.lime]], variant);
     V.box(1, 0, 1, 9, 1, 9, K.ink); for (const x of [3, 5]) V.box(x, 1, 4, x + 2, 2, 7, K.ink);                                            // base, shoes
     V.box(3, 2, 3, 7, 4, 7, suit); V.box(4, 2, 7, 6, 4, 8, suit); V.set(5, 3, 7, K.red); V.set(5, 2, 7, K.red);                             // the suit, a red tie
-    V.box(2, 4, 2, 8, 10, 8, die, 1);                                                                                                      // the die head, 6 cubes
-    for (const [x, y] of [[3, 5], [6, 5], [3, 8], [6, 8], [4, 6], [5, 7]]) V.set(x, y, 8, pip, pip === K.gold ? 2 : 0);                      // six on the front
-    V.set(5, 10, 5, pip); V.set(4, 10, 4, pip); for (const [y, z] of [[5, 3], [8, 6], [6, 5]]) V.set(8, y, z, pip);                         // one-ish on top, three on the side
+    V.box(2, 4, 2, 8, 10, 8, die, 1);                                                                                                      // the die head
+    for (const x of [2, 7]) for (const y of [4, 9]) for (let z = 2; z < 8; z++) V.del(x, y, z);                                            // its edges rounded off
+    for (const x of [2, 7]) for (const z of [2, 7]) for (let y = 4; y < 10; y++) V.del(x, y, z);
+    for (const y of [4, 9]) for (const z of [2, 7]) for (let x = 2; x < 8; x++) V.del(x, y, z);
+  },
+  fine(P, { variant = 0 } = {}) {
+    // six on the front, one on top, three on the side: round spots, flush
+    const pip = pick([K.red, K.gold, K.white], variant);
+    for (const x of [3.6, 6.4]) for (const y of [5.4, 7, 8.6]) fdisc(P, '+z', x, y, .55, pip);
+    fdisc(P, '+y', 5, 5, .85, pip);
+    for (const [z, y] of [[3.6, 8.6], [5, 7], [6.4, 5.4]]) fdisc(P, '+x', z, y, .55, pip);
   } });
 
 export const vinylSluggo = def({ id: 'vinyl-sluggo', name: 'SLUGGO figure', cat: 'collectibles', place: 'surface', foot: [2, 2], h: 0.4,
@@ -69,14 +86,28 @@ export const blindboxWall = def({ id: 'blindbox-wall', name: 'Blind-box wall', c
 export const sneakerRack = def({ id: 'sneaker-rack', name: 'Sneaker tower', cat: 'collectibles', place: 'floor', foot: [3, 2], h: 1.8, tops: [1.8],
   tiers: ['apartment', 'house', 'penthouse'], tags: ['sneakers', 'hypebeast', 'tower'], variants: 3, vnames: ['chrome + acrylic', 'black', 'walnut'], far: true,
   game: flex('epic', 25),
+  grain: 0.025, shaped: 'a sneaker tower: every sneaker with its toe, heel, sole, laces and stripe',
+  grain: 0.025, shaped: 'a sneaker tower: every sneaker with its toe, heel, sole, laces and stripe',
   build(V, { variant = 0, seed = 1 } = {}) {
+    // THIRD PASS · at the half grain: four posts and six shelves, and on each shelf a pair in profile, each sneaker a real shape (the
+    // sole and its line, the toe cap, the opening at the ankle, the tongue, the laces, a stripe and the heel tab); a gold pair on top
     const [post, shelf, l, ls] = pick([[K.chrome, K.glass, 2, 1], [0x1f1f24, 0x2a2a31, 0, 0], [K.walnut, K.oak, 0, 0]], variant), r = rng(seed * 23 + 1);
-    const KK = [[K.white, K.red, K.white], [K.ink, K.pink, K.white], [K.cobalt, K.yellow, 0xc98a4b], [0x5fd35a, K.ink, K.white], [K.orange, K.cobalt, K.white], [K.red, K.ink, K.ink], [K.purple, K.lime, K.white], [K.gold, K.gold, K.gold], [K.sky, K.white, K.white], [K.bone, K.orange, 0xc98a4b]];
-    for (const x of [0, 14]) for (const z of [0, 9]) V.box(x, 0, z, x + 1, 36, z + 1, post, l);
-    for (let y = 0; y < 36; y += 6) { V.box(0, y, 0, 15, y + 1, 10, shelf, ls); if (y < 35) { const [a, b, s] = KK[(r() * KK.length) | 0], G = a === K.gold;
-      sneaker(V, 3, y + 1, 2, a, b, s, false, 3); sneaker(V, 4, y + 1, 5, a, b, s, false, 3);
-      if (G) for (let x = 3; x < 12; x++) for (let yy = y + 1; yy < y + 5; yy++) for (let z = 2; z < 8; z++) { const i = x + z * V.nx + yy * V.sxz; if (V.d[i]) V.set(x, yy, z, K.gold, 2); } } }
-    V.box(0, 35, 0, 15, 36, 10, post, l);
+    const KK = [[K.white, K.red], [K.ink, K.pink], [K.cobalt, K.yellow], [K.white, K.grass], [K.red, K.ink], [K.yellow, K.purple], [K.white, K.cobalt], [K.gold, K.gold]];
+    for (const x of [0, 28]) for (const z of [1, 17]) V.box(x, 0, z, x + 2, 72, z + 2, post, l);                       // the posts
+    const shoe = (t, w, h, a, b) => { if (t < 0 || t > 11) return null;
+      const half = t < 1.5 ? 1.4 + t * .35 : t > 9 ? 2 * Math.sqrt(Math.max(0, 1 - ((t - 9) / 2.1) ** 2)) : 1.9; if (Math.abs(w) > half) return null;
+      if (h < .9) return h < .35 ? 0xb9bcc4 : (h > .55 && Math.abs(w) > half - .5 ? b : K.white);                    // outsole, midsole, its line
+      const top = t < 3 ? 4.3 : t < 6 ? 4 - (t - 3) * .08 : 3.75 - (t - 6) * .3; if (h > top) return null;
+      if (t > 2.8 && t < 5.5 && h > 3 && Math.abs(w) < half - .5) return null;                                      // the opening
+      if (t > 7.5 && h < 2.2) return K.white;                                                                        // the toe cap
+      if (t > 4.8 && t < 7.8 && h > top - .6 && Math.abs(w) < 1.1) return Math.round(t * 2) % 2 ? (a === K.white ? K.ink : K.white) : shade(a, .8);   // the laces
+      if (t < 1.2 && h > 1.7) return b;                                                                              // the heel tab
+      const s = h - 1.1 - (t - 1) * .15; if (Math.abs(w) > half - .6 && s > -.1 && s < 1.1 && t > 1 && t < 8) return b;   // the stripe
+      return a; };
+    for (let k = 0; k < 6; k++) { const y = k * 12; V.box(1, y, 1, 29, y + 1, 19, shelf, ls); const [a, b] = k === 5 ? KK[7] : KK[(r() * 7) | 0], G = a === K.gold;
+      for (const [x0, z0] of [[1.5, 8], [15, 12]]) for (let x = 0; x < 14; x++) for (let hy = 0; hy < 7; hy++) for (let z = -3; z <= 3; z++) {   // (shown a size up, as a display does)
+        const c = shoe((x + .5) / 1.25, z / 1.25, (hy + .5) / 1.25, a, b); if (c !== null) V.set(x0 + x, y + 1 + hy, z0 + z, c, G ? 2 : c === K.white ? 0 : 1); } }
+    V.box(1, 71, 1, 29, 72, 19, shelf, ls);                                                                             // the top
   } });
 
 export const cardSlab = def({ id: 'card-slab', name: 'Chase card slab', cat: 'collectibles', place: 'surface', foot: [1, 1], h: 0.35,
@@ -85,22 +116,15 @@ export const cardSlab = def({ id: 'card-slab', name: 'Chase card slab', cat: 'co
   build(V, { variant = 0 } = {}) {
     const lab = pick([K.red, K.gold, 0x1f1f24], variant);
     V.box(0, 0, 1, 5, 1, 5, K.ink); V.box(2, 1, 1, 3, 4, 2, K.ink);                                                                         // the stand, its brace
-    V.box(0, 1, 2, 5, 7, 3, K.glass, 1); V.box(1, 5, 2, 4, 7, 3, lab, variant === 1 ? 2 : 0); V.set(3, 6, 2, variant === 2 ? K.gold : K.white);   // the slab, its grade label
+    V.box(0, 1, 2, 5, 7, 3, K.glass, 1); V.box(1, 5, 2, 4, 7, 3, lab, variant === 1 ? 2 : 0);                                                  // the slab, its grade label (the grade: fine pass)
     for (let x = 1; x < 4; x++) for (let y = 1; y < 5; y++) V.set(x, y, 2, variant === 1 ? K.gold : pick([K.pink, K.yellow, K.cyan, K.lime, K.violet], x + y), variant === 1 ? 2 : LIT);   // the holo card
-  } });
-
-export const chainBust = def({ id: 'chain-bust', name: 'Chain on a bust', cat: 'collectibles', place: 'surface', foot: [2, 2], h: 0.6,
-  tiers: ['apartment', 'house', 'penthouse'], tags: ['chain', 'jewellery', 'flex'], variants: 3, vnames: ['gold cuban, $ piece', 'iced tennis, skull piece', 'rose gold rope, dice piece'],
-  game: flex('epic', 30),
-  build(V, { variant = 0 } = {}) {
-    const m = pick([K.gold, K.chrome, 0xe8a0a0], variant), vel = 0x1f1f24;
-    V.box(1, 0, 1, 9, 2, 9, K.white, 1); V.box(4, 2, 4, 6, 4, 6, K.white, 1);                                                              // a marble foot
-    V.box(1, 4, 3, 9, 8, 8, vel); V.box(4, 8, 4, 7, 12, 7, vel);                                                                            // shoulders, the neck
-    for (let x = 1; x < 9; x++) { const y = 7 - Math.round(Math.sin((x - .5) / 8 * Math.PI) * 2.4); V.box(x, y, 8, x + 1, y + 2, 9, m, 2); if (variant === 1 && x & 1) V.set(x, y + 1, 8, K.cyan, 2); }   // the drape
-    for (const x of [1, 8]) V.box(x, 7, 3, x + 1, 8, 8, m, 2);                                                                              // over the shoulders
-    if (variant === 0) { V.box(3, 1, 8, 7, 5, 9, m, 2); V.box(4, 2, 8, 6, 4, 9, shade(m, .75), 2); V.set(5, 4, 9, m, 2); V.set(4, 2, 9, m, 2); }   // a $ slab
-    if (variant === 1) { V.box(3, 1, 8, 7, 5, 9, K.white, 1); V.set(4, 3, 8, K.ink); V.set(6, 3, 8, K.ink); V.set(4, 1, 8, K.ink); V.set(6, 1, 8, K.ink); V.set(4, 3, 9, K.cyan, 2); }   // a skull
-    if (variant === 2) { V.box(3, 1, 8, 7, 5, 9, K.white, 1); for (const [x, y] of [[3, 4], [6, 1], [4, 2], [5, 3]]) V.set(x, y, 9 - 1, K.red); }   // a die
+  },
+  // fine pass: the grade on its label (10), the card's own picture (a big-head figure in a frame)
+  fine(P, { variant = 0 }) {
+    ftxt(P, '+z', '10', 1.625, 6.75, variant === 2 ? K.gold : variant === 1 ? K.ink : K.white);
+    frect(P, '+z', 1, 1, 4, 5, (qa, qb) => { const u = qa - 4, v = qb - 4; if (u === 0 || u === 11 || v === 0 || v === 15) return variant === 1 ? 0xfff0b0 : K.white;
+      const hd = Math.hypot(u + .5 - 6, v + .5 - 10); if (hd < 2.6) return hd > 2 ? K.ink : (v === 10 && (u === 5 || u === 7) ? K.ink : 0xf2c9a0);
+      if (v > 2 && v < 8 && u > 2 && u < 9) return (u === 3 || u === 8 || v === 7) ? K.ink : K.red; return null; });
   } });
 
 export const watchBox = def({ id: 'watch-box', name: 'Watch box', cat: 'collectibles', place: 'surface', foot: [3, 2], h: 0.3,
@@ -169,4 +193,4 @@ export const lowrider = def({ id: 'lowrider-bike', name: 'Lowrider bike', cat: '
     bar(12, 12, 12, 13, K.chrome, 2); bar(18, 7, 21, 1, K.chrome, 2); V.box(20, 0, 4, 23, 1, 6, K.chrome, 2);                               // seat post, kickstand
   } });
 
-export const COLLECT2 = [vinylBrikk, vinylNobody, vinylDicehead, vinylSluggo, blindboxWall, sneakerRack, cardSlab, chainBust, watchBox, capWall, deckWall, jerseyFrame, lowrider];
+export const COLLECT2 = [vinylBrikk, vinylNobody, vinylDicehead, vinylSluggo, blindboxWall, sneakerRack, cardSlab, watchBox, capWall, deckWall, jerseyFrame, lowrider];

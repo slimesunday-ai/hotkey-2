@@ -16,6 +16,8 @@
 // no prop for them today (the drink and smoke clips carry none: anim/cast/clips/game-port.js), and no new animation
 // was asked for, so they are not put in anyone's hand.
 export const GRAIN = 0.025;
+// (craft-art-1) the things crafting names are drawn in props/craft.js and listed here with these: see the end of MODELS
+import { CRAFT_MODELS, CRAFT_SCHEMES } from './craft.js';
 
 export const SCHEMES = {
   'energy-can': { can: 0xff4a1c, canD: 0xd8360e, band: 0xffd21a, metal: 0xd9dbe0, tab: 0x8e939c },
@@ -63,6 +65,10 @@ const MODELS = {
     return out;
   },
 };
+
+// (craft-art-1) what you buy, cook with, pack and carry for crafting: props/craft.js (its CRAFT lists them by build step)
+Object.assign(MODELS, CRAFT_MODELS);
+Object.assign(SCHEMES, CRAFT_SCHEMES);
 
 export const PROPS = Object.keys(MODELS);
 /** A prop's cells (scheme: SCHEMES' own colours, or some of them replaced). */

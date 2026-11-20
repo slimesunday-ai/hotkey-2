@@ -23,7 +23,9 @@ export const FINE = { faces: 64, voxels: 32 };
 
 export const hk = (hx, hy, hz) => ((hx + 512) << 20) | ((hy + 512) << 10) | (hz + 512);
 export const hd = k => [(k >> 20) - 512, ((k >> 10) & 1023) - 512, (k & 1023) - 512];
-const vk = (x, y, z) => ((x + 256) << 18) | ((y + 256) << 9) | (z + 256);
+export const vk = (x, y, z) => ((x + 256) << 18) | ((y + 256) << 9) | (z + 256);
+// the voxel a G.fp key names (the home kit's mesher, style/city/vox.js meshFine, reads a Vol's paint by it)
+export const vkd = k => [(k >> 18) - 256, ((k >> 9) & 511) - 256, (k & 511) - 256];
 const fl2 = h => Math.floor(h / 2);
 export const cellOf = (hx, hy, hz) => [fl2(hx), fl2(hy), fl2(hz)];
 export const faceIndex = f => typeof f === 'number' ? f : FACES.indexOf(f);

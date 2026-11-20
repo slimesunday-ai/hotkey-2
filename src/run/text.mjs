@@ -31,6 +31,9 @@ export function viewText(v) {
   for (const s of v.selling?.jobs ?? []) if (!s.dealt) out.push(s.text);
   if (v.dry) out.push(v.dry.text);
   if (v.door) out.push(v.door.text);
+  // (memory-1: what people remember of you this week, and who is coming to your door)
+  if (v.marks?.length) out.push(`They remember: ${v.marks.map(m => `${m.who.name}: ${m.text}`).join('; ')}.`);
+  for (const c of v.coming ?? []) out.push(`${c.text}.`);
   if (v.stranded) out.push(v.stranded.text);
   const line = c => `  ${c.key.padStart(2)}) ${c.label}${c.extra ?? ''}${c.available ? '' : `   [${c.why}]`}`;
   if (v.options.length) {
@@ -58,7 +61,7 @@ export function viewText(v) {
 }
 
 // (a trust change rides on the event that caused it, and a call elsewhere carries a notice: each its own line)
-export const eventsText = events => events.flatMap(e => [`  - ${e.text}`, ...(e.trust ? [`    ${e.trust.text}`] : []), ...(e.notice ? [`    Notice: ${e.notice.text}`] : [])]).join('\n');
+export const eventsText = events => events.flatMap(e => [`  - ${e.text}`, ...(e.trust ? [`    ${e.trust.text}`] : []), ...(e.mark ? [`    Remembered: ${e.mark.text}.`] : []), ...(e.notice ? [`    Notice: ${e.notice.text}`] : [])]).join('\n');
 
 /**
  * The choice a key stands for: a number from the list, `N=amount` to step out with cash, `N@T` to do option N to

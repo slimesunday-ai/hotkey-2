@@ -106,10 +106,13 @@ export async function launch({ debugPort = Number(process.env.HK2_DEBUG_PORT) ||
 
     /** Runs an expression in the page (it may be async) and returns its JSON value. Throws after `timeout` ms. */
     async function evaluate(expression, timeout = 120000) {
-      const r = await Promise.race([
-        send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }),
-        sleep(timeout).then(() => { throw new Error(`chrome: timed out running ${expression.slice(0, 80)}`); }),
-      ]);
+      // (anim-1: the timeout's own timer is taken down when the answer comes. Left pending, the last one kept every
+      // tool alive for up to two minutes after it had printed its result: a chain of checks waited that long on each)
+      let timer = null;
+      const late = new Promise((_, no) => {
+        timer = setTimeout(() => no(new Error(`chrome: timed out running ${expression.slice(0, 80)}`)), timeout);
+      });
+      const r = await Promise.race([send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }), late]).finally(() => clearTimeout(timer));
       if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text);
       return r.result.value;
     }
@@ -132,10 +135,11 @@ export async function launch({ debugPort = Number(process.env.HK2_DEBUG_PORT) ||
      */
     async function shot(file, timeout = 20000) {
       const format = /\.jpe?g$/i.test(file) ? { format: 'jpeg', quality: 92 } : { format: 'png' };
-      const r = await Promise.race([
-        send('Page.captureScreenshot', format),
-        sleep(timeout).then(() => { throw new Error('chrome: the screenshot never came back'); }),
-      ]);
+      let timer = null;
+      const late = new Promise((_, no) => {
+        timer = setTimeout(() => no(new Error('chrome: the screenshot never came back')), timeout);
+      });
+      const r = await Promise.race([send('Page.captureScreenshot', format), late]).finally(() => clearTimeout(timer));
       mkdirSync(path.dirname(file), { recursive: true });
       writeFileSync(file, Buffer.from(r.data, 'base64'));
       return file;

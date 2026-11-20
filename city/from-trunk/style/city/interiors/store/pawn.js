@@ -1,6 +1,8 @@
 // STORE OBJECTS · the pawn shop and the card shop (owner: the store-objects agent). Gold under glass, guitars on the slatwall, a stack
 // of TVs all showing something different, a counter behind a cage; graded slabs in cases, binders, a play table, the grading window.
 import { obj, K, LIT, GLOW, hh, pick, shadeK, glassCase, off, sign } from './lib.js';
+// the fine pass below the voxel (../fine.js, FORMAT.md "Fine detail")
+import { frect, fdisc, fline, ftxt, fsurf } from '../fine.js';
 
 const GOLD = ['gold', 'misc'];
 const tag = (P, x, y, z) => { if (!P.far) { P.box(x, y, z, x + 2, y + 1, z + 1, K.white); P.set(x, y + 1, z, K.alu); } };   // a price tag on a string
@@ -79,19 +81,30 @@ const cage = obj({ id: 'store-cage-counter', name: 'Caged counter', cat: 'counte
 // ── pawn shelving: steel racks of everything people hock — a boombox, a drill, a trumpet, a camera, a console, a synth, a microwave
 const pshelf = obj({ id: 'store-pawn-shelf', name: 'Pawned goods rack', cat: 'shelving', foot: [6, 2], h: 1.8, tops: [1.8], tiers: GOLD, tags: ['pawn', 'electronics', 'tools', 'music', 'secondhand'], variants: 2 },
   (P, o) => { const { W, D, H, v } = o, S = 0x6d707a;
+    // THIRD PASS · the goods with their own shapes (not lumps with paint): a boombox with its round speakers and handle, a pistol-grip
+    // drill with its chuck and bit, gold chains on a neck stand, a camera with its lens out, a console and its pad, a synth with
+    // black keys over white, a microwave with its window and handle, a row of disc cases. Price tags on strings (fine: the rest)
     for (const x of [0, W - 1]) for (const z of [0, D - 1]) P.box(x, 0, z, x + 1, H, z + 1, S);
     for (const y of [1, 13, 25, H - 1]) P.box(0, y - 1, 0, W, y, D, 0x8a8f99);
+    const disc = (cx, cy, z, r, f) => { for (let a = -Math.ceil(r); a <= r; a++) for (let b = -Math.ceil(r); b <= r; b++) { const d = Math.hypot(a, b); if (d <= r) P.set(cx + a, cy + b, z, f(d)); } };
     const items = [
-      (x, y) => { P.box(x, y, 2, x + 11, y + 6, 7, K.alu); for (const cx of [x + 2.5, x + 8.5]) P.cyl(cx, 7, 2.2, y + 1, y + 1, K.ink); P.box(x + 1, y + 1, 7, x + 4, y + 4, 8, K.ink); P.box(x + 7, y + 1, 7, x + 10, y + 4, 8, K.ink); P.box(x + 4, y + 4, 7, x + 7, y + 5, 8, K.cyan, GLOW); P.box(x + 2, y + 6, 4, x + 9, y + 7, 5, K.ink); },   // boombox
-      (x, y) => { P.box(x, y + 2, 3, x + 6, y + 6, 7, K.yellow); P.box(x + 1, y, 4, x + 3, y + 3, 6, K.ink); P.box(x + 6, y + 3, 4, x + 8, y + 5, 6, K.char); P.box(x + 8, y + 4, 5, x + 10, y + 5, 6, K.steel, 2); },  // drill
-      (x, y) => { P.box(x, y, 3, x + 7, y + 1, 6, K.goldHi, 2); P.box(x + 6, y, 2, x + 9, y + 4, 7, K.goldHi, 2); P.box(x + 1, y + 1, 4, x + 4, y + 2, 5, K.goldHi, 2); P.box(x + 2, y + 2, 4, x + 3, y + 3, 5, K.gold, 2); },   // trumpet
-      (x, y) => { P.box(x, y, 3, x + 5, y + 4, 7, K.ink); P.box(x + 1, y + 1, 7, x + 4, y + 4, 9, K.char); P.set(x + 2, y + 2, 8, K.glass); P.box(x + 3, y + 4, 4, x + 5, y + 5, 6, K.char); },   // camera
-      (x, y) => { P.box(x, y, 2, x + 8, y + 2, 8, K.purple); P.box(x, y + 1, 7, x + 8, y + 2, 8, K.white); P.box(x + 1, y + 2, 3, x + 4, y + 3, 6, K.char); P.box(x + 5, y + 2, 3, x + 8, y + 3, 6, K.char); },   // a console (invented) + pads
-      (x, y) => { P.box(x, y, 2, x + 12, y + 2, 8, K.ink); for (let k = 0; k < 11; k++) P.box(x + k + .5, y + 2, 5, x + k + 1, y + 3, 8, k % 3 === 1 ? K.ink : K.white); },   // a synth
-      (x, y) => { P.box(x, y, 1, x + 10, y + 7, 8, K.white); P.box(x + 1, y + 1, 8 - 1 + 1, x + 7, y + 6, 9, K.char); P.box(x + 8, y + 1, 8, x + 9, y + 6, 9, K.alu); },   // microwave
-      (x, y) => { for (let k = 0; k < 6; k++) P.box(x + k, y, 3, x + k + 1, y + 7, 8, pick([K.red, K.blue, K.ink, K.yellow, K.green, K.white], k + v)); } ];   // DVDs
+      (x, y) => { P.box(x, y, 3, x + 11, y + 6, 7, K.alu); P.box(x + 1, y + 6, 4, x + 2, y + 8, 6, K.char); P.box(x + 9, y + 6, 4, x + 10, y + 8, 6, K.char); P.box(x + 1, y + 8, 4, x + 10, y + 9, 6, K.char);   // boombox: body, handle
+        for (const cx of [x + 2.5, x + 8.5]) disc(cx, y + 2.5, 7, 2.2, d => (d > 1.6 ? 0x55555f : d < .6 ? K.alu : K.ink)); P.box(x + 4, y + 1, 7, x + 7, y + 4, 8, K.ink); },   // its speakers, the deck
+      (x, y) => { P.box(x, y, 4, x + 4, y + 1, 7, K.char); P.box(x + 1, y + 1, 4.5, x + 3, y + 4, 6.5, K.char); P.box(x, y + 4, 4, x + 6, y + 7, 7, K.yellow); P.box(x + 3, y + 3, 5, x + 4, y + 4, 6, K.red);   // drill: battery, grip, body, trigger
+        P.box(x + 6, y + 4.5, 4.5, x + 8, y + 6.5, 6.5, K.char); P.box(x + 8, y + 5, 5, x + 11, y + 6, 6, K.steel, 2); },   // the chuck, the bit
+      (x, y) => { P.box(x + 2, y, 3, x + 6, y + 1, 7, K.ink); P.box(x + 3, y + 1, 4, x + 5, y + 6, 6, K.ink); P.box(x + 2, y + 5, 3, x + 6, y + 7, 7, K.ink);   // chains: the neck stand
+        for (let k = 0; k <= 6; k++) P.set(x + 1 + k * (6 / 6), y + 6 - Math.sin(k / 6 * Math.PI) * 3, 7, K.goldHi, 2); for (let k = 0; k <= 4; k++) P.set(x + 2 + k, y + 5 - Math.sin(k / 4 * Math.PI) * 2, 7, K.gold, 2);   // two chains hung on it
+        P.box(x + 7, y, 3, x + 10, y + 1, 7, K.ink); P.box(x + 8, y + 1, 4, x + 9, y + 2, 5, K.goldHi, 2); P.box(x + 8, y + 1, 6, x + 9, y + 2, 7, K.goldHi, 2); },   // a ring tray, two rings
+      (x, y) => { P.box(x, y, 3, x + 6, y + 4, 7, K.ink); P.box(x + 1, y + 4, 4, x + 3, y + 5, 6, K.ink); disc(x + 3.5, y + 2, 7, 1.6, d => (d < .6 ? K.glass : K.char)); disc(x + 3.5, y + 2, 8, 1.4, d => (d < .7 ? K.glass : K.char)); P.box(x + 4.5, y + 4, 4, x + 5.5, y + 4.5, 5, K.alu); },   // camera: body, viewfinder, the lens out, a flash
+      (x, y) => { P.box(x, y, 3, x + 8, y + 2, 7, K.purple); P.box(x, y + 1, 7, x + 8, y + 2, 7.5, K.white);         // console
+        P.box(x + 1, y + 2, 4, x + 7, y + 2.5, 6, K.char); P.box(x + 1, y + 2, 4, x + 2.5, y + 3, 7, K.char); P.box(x + 5.5, y + 2, 4, x + 7, y + 3, 7, K.char); },   // its pad, two grips
+      (x, y) => { P.box(x, y, 2, x + 12, y + 2, 8, K.ink); P.box(x, y + 2, 2, x + 12, y + 3, 4, K.ink); P.box(x + .5, y + 2, 4, x + 11.5, y + 2.5, 8, K.white);   // synth: body, panel, white keys
+        for (const k of [0, 1, 3, 4, 5, 7, 8, 10]) P.box(x + .5 + k + .6, y + 2.5, 4, x + .5 + k + 1.2, y + 3, 6, K.ink); },   // the black keys
+      (x, y) => { P.box(x, y, 1, x + 10, y + 7, 8, K.white); P.box(x + 1, y + 1, 8, x + 7, y + 6, 8.5, K.char); P.box(x + 2, y + 2, 8, x + 6, y + 5, 8.5, 0x3a4a55);   // microwave: box, door, window
+        P.box(x + 6.5, y + 1.5, 8, x + 7, y + 5.5, 9, K.alu); P.box(x + 7.5, y + 1, 8, x + 9.5, y + 6, 8.5, K.alu); },   // its handle, the keypad
+      (x, y) => { for (let k = 0; k < 6; k++) P.box(x + k, y, 3, x + k + 1, y + 7, 8, pick([K.red, K.blue, K.ink, K.yellow, K.green, K.white], k + v)); P.box(x + 6, y, 3, x + 9, y + 1, 8, K.ink); } ];   // discs: a row, one lying
     const shelf = [[0, 1], [2, 3, 4], [5, 6]], alt = [[6, 7], [4, 3, 2], [1, 0]], plan = v ? alt : shelf, X = [[2, 16], [2, 12, 20], [2, 16]];
-    [1, 13, 25].forEach((y, s) => plan[s].forEach((it, i) => { items[it](X[s][i], y); tag(P, X[s][i] + 1, y + 6, D - 2); }));
+    [1, 13, 25].forEach((y, s) => plan[s].forEach((it, i) => { items[it](X[s][i], y); tag(P, X[s][i] + 1, y + 7, D - 2); }));
   });
 
 // ═════════════ cards & collectibles
@@ -126,4 +139,18 @@ const grading = obj({ id: 'store-grading-counter', name: 'Grading counter', cat:
     for (let k = 0; k < 4; k++) slab(P, 13 + k * 4, 14, 8, SLABC[k * 2 % 8], K.red);                                    // slabs back from grading
     P.box(30, 14, 3, 32, 22, 4, K.ink); P.box(30, 22, 3, 36, 23, 4, K.ink); P.box(34, 20, 3, 37, 22, 6, K.ink); P.box(35, 19, 4, 36, 20, 5, 0xfff1b0, GLOW);   // desk lamp
     P.box(26, 14, 9, 29, 17, 12, K.char); P.box(26, 17, 9, 29, 18, 12, K.steel, 2); });                                  // a pen cup / scale
+// fine pass (2026-11-17) on the pawned goods rack: each price tag's print (a red price, a line for the item), the boombox's speaker
+// cones and tape window, the synth's black keys, the microwave's keypad and a glint on its window, the camera's lens, the discs' spine titles
+pshelf.fine = (P, { variant = 0, V }) => {
+  // third pass: the price on each tag, the speakers' rings, the lens's glint, the microwave's buttons, the disc spines' titles
+  const shelf = [[0, 1], [2, 3, 4], [5, 6]], alt = [[6, 7], [4, 3, 2], [1, 0]], plan = variant % 2 ? alt : shelf, X = [[2, 16], [2, 12, 20], [2, 16]];
+  [1, 13, 25].forEach((y, s) => plan[s].forEach((it, i) => { const x = X[s][i];
+    frect(P, '+z', x + 1.25, y + 7.25, x + 2.75, y + 7.75, K.red);
+    if (it === 0) for (const cx of [x + 2.5, x + 8.5]) fdisc(P, '+z', cx, y + 2.5, 1.5, d => (Math.abs(d - 1) < .12 ? 0x55555f : null));
+    if (it === 3) fdisc(P, '+z', x + 3.5, y + 2, .5, d => (d < .25 ? K.white : null));
+    if (it === 6) for (let k = 0; k < 4; k++) frect(P, '+z', x + 7.75 + (k % 2) * .75, y + 2 + (k >> 1) * 1.25, x + 8.25 + (k % 2) * .75, y + 2.5 + (k >> 1) * 1.25, K.ink);
+    if (it === 7) for (let k = 0; k < 6; k++) frect(P, '+z', x + k + .375, y + 1.5, x + k + .625, y + 5.5, (qa, qb) => (qb % 3 ? K.white : null));
+  }));
+};
+
 export default [goldcase, guitars, tvs, cage, pshelf, slabcase, binders, playtable, grading];

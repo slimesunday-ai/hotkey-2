@@ -8,7 +8,8 @@
 //   kind:  'street' | 'stop' | 'crib' | 'door' | 'held'
 //   cards: [three slots] each { n: 1|2|3, keys: [rules' choice keys, the one shown first], role, empty: why nothing }
 //          role 'job' (a dealt option) · 'card' (a stop's hand) · 'out' (stepping out) · 'goal' (one of the three things
-//          to own) · 'guard' (Cousin Earl) · 'give' · 'refuse' (a regular at your door) · 'morning' · null (empty)
+//          to own) · 'guard' (Cousin Earl) · 'give' · 'refuse' (a regular at your door) · 'morning' · 'pay' ·
+//          'refuseTax' (sixes-1: Dutch waiting by the steps for the tax) · null (empty)
 //   verbs: [six] each { id, key, label, keys: [rules' choice keys], list: whether it opens a list, why: when none }
 // }
 
@@ -32,7 +33,11 @@ function verbKeys(id, { v }) {
     // what is sold where you stand: the place's shop (food), the connect's pack, its things (to wear, for the trailer,
     // to ride, to defend your door); at the crib, the three things bought from banked money
     // and Cousin Earl's stretch on your step, paid from banked like them
-    return byDo(v, 'shop', 'pack', 'get').map(m => m.key)
+    // (styles-1: and a punch style taught here, from what you carry)
+    // (and a shop on the walk, beside the stop's hand: the barber, whenever you have heat to cool)
+    // (raid-1: and a box of rounds for a gun of yours, where its seller stands)
+    return byDo(v, 'shop', 'pack', 'get', 'learn', 'ammo').map(m => m.key)
+      .concat((v.hand ?? []).filter(c => c.beside).map(c => c.key))
       .concat(v.place === 'crib' ? (v.shop ?? []).filter(s => s.key && !s.owned).map(s => s.key) : [])
       .concat(byDo(v, 'guard').map(m => m.key));
   }
@@ -97,8 +102,17 @@ function cardsOf({ v }) {
     const guard = byDo(v, 'guard')[0];
     return [slot(1, [out?.key], 'out'), slot(2, goals, 'goal', 'all three are yours'), slot(3, [guard?.key], 'guard', 'nobody to hire')];
   }
+  // (sixes-1: Dutch waiting by the subway steps: pay her or refuse, the two in front of you until it is answered)
+  const tax = byDo(v, 'tax');
+  if (tax.length) {
+    const pay = tax.find(m => m.choice.pay);
+    const no = tax.find(m => !m.choice.pay);
+    // (the dealt options wait behind the third, each saying why: she is waiting)
+    return [slot(1, [pay?.key], 'pay'), slot(2, [no?.key], 'refuseTax'), slot(3, (v.options ?? []).map(o => o.key), 'job', 'Dutch is waiting: pay her or refuse')];
+  }
   if (v.route) {
-    const hand = v.hand ?? [];
+    // (the three dealt; a shop on the walk is beside them, under Shop (B), and takes none of the three)
+    const hand = (v.hand ?? []).filter(c => !c.beside);
     return [0, 1, 2].map(i => slot(i + 1, [hand[i]?.key], 'card', i ? 'nothing else dealt here' : 'nothing dealt here: go on (T)'));
   }
   const opts = v.options ?? [];
@@ -108,7 +122,7 @@ function cardsOf({ v }) {
 /** The dock for a view (see the head of the file). */
 export function dockOf({ cfg, v }) {
   const held = v.place === 'jail' || v.place === 'clinic';
-  const kind = held ? 'held' : v.place === 'crib' ? (v.door ? 'door' : 'crib') : v.route ? 'stop' : 'street';
+  const kind = held ? 'held' : v.place === 'crib' ? (v.door ? 'door' : 'crib') : v.route ? 'stop' : byDo(v, 'tax').length ? 'tax' : 'street';
   const verbs = VERBS.map(d => {
     const keys = held ? [] : verbKeys(d.id, { v });
     const choices = keys.map(k => v.choices.find(c => c.key === k)).filter(Boolean);
@@ -143,6 +157,8 @@ export function arrowsTo({ sheet = null, phase, hold = false }) {
   if (phase !== 'choose') return null;
   if (sheet === 'map') return 'map';
   if (sheet === 'library' && !hold) return 'library';
+  // (tree-1: the Ahead panel's arrows walk its trees)
+  if (sheet === 'ahead' && !hold) return 'ahead';
   return 'dock';
 }
 

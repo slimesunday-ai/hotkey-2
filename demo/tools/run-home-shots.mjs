@@ -5,7 +5,7 @@
 // the page is handed the state just before that step (`load`) and made to take it with the real keys and clicks, as
 // run-route-shots.mjs does. Nothing is rigged. The server must be running: node demo/serve.mjs
 //
-//   node demo/tools/run-home-shots.mjs --out <dir> [--port 5631] [--size 1568x740] [--only meter,casing,...]
+//   node demo/tools/run-home-shots.mjs --out <dir> [--port 5631] [--size 1568x740] [--seed 5] [--only meter,casing,...]
 //
 // Saves <size>-<moment>.jpg (the moments, by --only):
 //   meter    home-meter-reasons (the trailer park, the dock open, the meter's slip open: what holds it up, what brings
@@ -36,7 +36,10 @@ const out = path.resolve(opt('--out', 'demo/shots/run-home'));
 const port = opt('--port', 5631);
 const [W, H] = opt('--size', '1568x740').split('x').map(Number);
 const size = `${W}x${H}`;
-const url = `http://127.0.0.1:${port}/demo/?mode=run&seed=8`;
+// (the run's seed: the rules' scripted players at seed 5 meet every moment below within five days. Seed 8 did until
+// duel-1 (26cbaa1, a failed park job a fight) moved the raid's day: no word of it came to the racer or the guard there)
+const SEED = Number(opt('--seed', 5));
+const url = `http://127.0.0.1:${port}/demo/?mode=run&seed=${SEED}`;
 const only = opt('--only', null)?.split(',') ?? null;
 const want = name => !only || only.includes(name);
 mkdirSync(out, { recursive: true });
@@ -166,13 +169,13 @@ try {
     }, 100);
   })()`);
 
-  const guard8 = play('guard', 8);
-  const racer8 = play('racer', 8);
-  const ignore8 = play('ignore', 8, { bed: true });
+  const guardRun = play('guard', SEED);
+  const racerRun = play('racer', SEED);
+  const ignoreRun = play('ignore', SEED, { bed: true });
 
   if (want('meter')) {
     // (the trailer park, the pressure up and the options its crimes: the first such hour of the guard's run)
-    const at = guard8.find(r => r.before.place === 'park' && (view(cfg, r.before).pressure?.value ?? 0) >= 3 && view(cfg, r.before).options.some(o => o.pressure && o.pressure.ifWin > 0));
+    const at = guardRun.find(r => r.before.place === 'park' && (view(cfg, r.before).pressure?.value ?? 0) >= 3 && view(cfg, r.before).options.some(o => o.pressure && o.pressure.ifWin > 0));
     if (!at) throw new Error('no park hour with the pressure up');
     await load(at.before);
     await ev('window.__demo.hud.fold(false)');
@@ -192,7 +195,7 @@ try {
   await audit('meter');
   if (want('casing')) {
     // (the night before somebody is seen casing the crib: sleep, the day's report, the morning at the trailer)
-    const r = firstOf(guard8, e => e.type === 'casing');
+    const r = firstOf(guardRun, e => e.type === 'casing');
     await load(r.before);
     const t0 = Date.now();
     await ev(`window.__demo.hud.pick(${JSON.stringify(keyOf(r.before, r.choice))})`);
@@ -218,7 +221,7 @@ try {
   await audit('casing');
   if (want('notice')) {
     // (the racer: on the day it is due, out to the flea market, and word comes; then home in time)
-    const r = firstOf(racer8, e => e.type === 'alarm');
+    const r = firstOf(racerRun, e => e.type === 'alarm');
     await load(r.before);
     await go('out to the market, the notice', keyOf(r.before, r.choice));
     await shot('home-notice-market', 1200);
@@ -230,14 +233,14 @@ try {
   await audit('notice');
   if (want('guard')) {
     // (the guard's run: Earl put on the step for the day it is due; out; word comes; home in time with him on)
-    const on = firstOf(guard8, e => e.type === 'guard' && e.on);
+    const on = firstOf(guardRun, e => e.type === 'guard' && e.on);
     await load(on.before);
     await go('Earl put on the step', keyOf(on.before, on.choice), { more: [['home-guard-put-on-a', 5], ['home-guard-put-on-b', 8], ['home-guard-put-on-c', 11]] });
     // (out of the door: him on the step)
     const out1 = await ev(`window.__demo.hud.view.moves.find(m => m.choice.do === 'out')?.key`);
     await go('stepping out past Earl', out1);
     await shot('home-guard-on-step', 1500);
-    const r = firstOf(guard8, e => e.type === 'alarm');
+    const r = firstOf(guardRun, e => e.type === 'alarm');
     await load(r.before);
     await go('out to the market with Earl on', keyOf(r.before, r.choice));
     const home = await ev(`(() => { const b = [...document.querySelectorAll('.rn-alert-way')].find(x => !x.disabled && /in time/.test(x.textContent)); return b ? b.dataset.key : null; })()`);
@@ -247,7 +250,7 @@ try {
   await audit('guard');
   if (want('gotin')) {
     // (the one who ignores it: at the flea market while the window runs out; they got in; then home, and seen)
-    const r = firstOf(ignore8, e => e.type === 'raid' && e.taken > 0);
+    const r = firstOf(ignoreRun, e => e.type === 'raid' && e.taken > 0);
     await load(r.before);
     await go('the hour the window runs out', keyOf(r.before, r.choice));
     await shot('home-notice-got-in', 1200);
@@ -256,7 +259,7 @@ try {
   }
   await audit('gotin');
   if (want('safe')) {
-    const r = guard8.find(x => x.before.place === 'crib' && x.before.day >= 2) ?? guard8[0];
+    const r = guardRun.find(x => x.before.place === 'crib' && x.before.day >= 2) ?? guardRun[0];
     await load({ ...r.before, things: { ...(r.before.things ?? {}), floorsafe: true, deadbolt: true } });
     await page.sleep(3000);
     await shot('home-floor-safe-room', 1500);

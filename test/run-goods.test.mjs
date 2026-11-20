@@ -37,7 +37,7 @@ test('goods: with none of a good a selling job takes, it is not dealt, and the v
   const v = view(cfg, at('market'));
   const crowd = v.selling.jobs.find(j => j.job === 'crowd');
   assert.equal(crowd.dealt, false);
-  assert.match(crowd.text, /Sell to the crowd is not dealt: you carry nothing it takes\. Teo sells bootleg films on disc at the flea market; Cousin Earl sells loose cigarettes in the trailer park\./);
+  assert.match(crowd.text, /Sell to the crowd is not dealt: you carry nothing it takes\. Teo sells bootleg films on disc at the Jay St night market; Cousin Earl sells loose cigarettes in the trailer park\./);
   // with some on you it is dealt, says what it uses and what is left after; it pays what that good pays there
   const s = dealtAt(cfg, 'market', 'crowd', { goods: { smokes: 3 } });
   const o = view(cfg, s).options.find(x => x.id === 'crowd');

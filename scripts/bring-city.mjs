@@ -19,7 +19,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 /** The trunk commit this repo's city is pinned to. Change it here, run the script, then re-test the demo. */
-const PIN = '8b0b8dfd2e6fa56916cb4dcf566635869233ef93';
+const PIN = 'd5a6e641f95df0c1312d3e18a6f54d031ebb4911';
 
 /** What the city page needs: the city itself, the world it imports, and the sim's place list its go-to menu reads. */
 const INCLUDE = ['style/city', 'world', 'sim2/places.json'];

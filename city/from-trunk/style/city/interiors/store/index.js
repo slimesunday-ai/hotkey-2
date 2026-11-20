@@ -2,6 +2,8 @@
 // home set: interiors/home/lib.js volFor), and the map a later store-interiors pass needs: which objects furnish which shop, keyed by
 // the city's own shop kinds (signage/lexicon.js SHOPS → disp) and trades.
 import { Vol } from '../../vox.js';
+// the fine pass below the voxel, as on the home kit (../fine.js)
+import { fineOf, gild } from '../fine.js';
 import bodega from './bodega.js';
 import pawn from './pawn.js';
 import wear from './wear.js';
@@ -24,7 +26,11 @@ export const byId = id => OBJECTS.find(o => o.id === id);
 // FORMAT's convention (wave 2, same as the home set): an object or its id; state defaults to the first of `states`; null when there is no far
 export function buildObject(o, { variant = 0, seed = 1, state, far = false } = {}) {
   if (typeof o === 'string') o = byId(o); if (far && !o.far) return null;
-  const V = volFor(o, far); (far ? o.far : o.build).call(o, V, { variant, seed, state: state ?? o.states?.[0] }); V.kind = o.id; return V;
+  const V = volFor(o, far), opt = { variant, seed, state: state ?? o.states?.[0] }; (far ? o.far : o.build).call(o, V, opt);
+  // (near only: a far build is its own 0.1 m drawing)
+  if (!far) fineOf(o, V, opt);
+  gild(V);   // gold and brass drawn glossy (../fine.js gild)
+  V.kind = o.id; return V;
 }
 
 // ───────────────────────── the shop kinds (an object's `tiers`): the city's window-display kinds (signage/lexicon.js SHOPS[k][2],

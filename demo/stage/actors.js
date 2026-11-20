@@ -67,7 +67,7 @@ export async function createActors({ city, CITY }) {
   const peds = city.peds;
   if (!peds) throw new Error('actors: this page has no pedestrians (?peds=0)');
   const sim = peds.sim;
-  const [CH, LOOKS, CLIPS, STYLE, PLAN, PEDSIM, TURN, MOVEMENT, CROWD, GROUNDS, CITYLIFE] = await Promise.all([
+  const [CH, LOOKS, CLIPS, STYLE, PLAN, PEDSIM, TURN, MOVEMENT, CROWD, GROUNDS, CITYLIFE, NAMED] = await Promise.all([
     import(`${CITY}cast.js`),
     import(`${CITY}simstate/looks.js`),
     import(`${CITY}anim/cast/clips/index.js`),
@@ -81,6 +81,10 @@ export async function createActors({ city, CITY }) {
     // (the city's "nobody is a statue" plan for a standing person: only its figures and names are read here, for
     // the director, which follows its rules: demo/stage/director.js "routines")
     import(`${CITY}simstate/life.js`),
+    // (named-1: THE NAMED CAST, the city's own pool of its named people, world/named/: each one's own pieces by name and
+    // their size. Imported by the same url the city's cast resolves, so its pieces register in the one registry the
+    // bake reads)
+    import(`${CITY}../../world/named/index.js`),
   ]);
   while (!peds.ready) await sleepFrame();
   const GROUND = STYLE.SIDE;
@@ -98,6 +102,8 @@ export async function createActors({ city, CITY }) {
   const actors = new Map();
   const waits = new Set();
   const hooks = new Set();
+  /** the hooks that have thrown, each said once (the frame loop, below) */
+  const hookErrors = new WeakSet();
   let clock = 0;
   // the time scale: 1 is life, 2 and 4 hurry everything (walks, clips, waits), 0 holds it all still
   let scale = 1;
@@ -121,18 +127,106 @@ export async function createActors({ city, CITY }) {
     for (let k = 0; k < text.length; k++) h = Math.imul(h ^ text.charCodeAt(k), 16777619);
     return h >>> 0;
   };
-  function lookOf({ seed, pool = 'agent', outfit = null, wear = null }) {
-    const look = CH.rollLook(typeof seed === 'number' ? seed : hashOf(String(seed)) & 0xffffff, { pool });
+  // (named-1) A NAMED PERSON (`named`: their key in the city's pool, world/named/) wears their own pieces and nobody
+  // else's: no roll, no role's clothes under them (the pool's rule, BY NAME ONLY). An outfit or pieces asked over it
+  // (the county issue) go on as over anyone's.
+  // `?named=0`: everyone as they were before (the look each named person had before they were drawn, `was`, at size
+  // 1): for before-and-after pictures and measures.
+  const NAMED_OFF = new URLSearchParams(location.search).get('named') === '0';
+  function lookOf({ seed, pool = 'agent', outfit = null, wear = null, named = null, was = null }) {
+    if (named && NAMED_OFF) return lookOf({ seed, pool, outfit, wear, ...(was ?? {}) });
+    const own = named ? NAMED.lookOf(named) : null;
+    if (named && !own) console.warn(`[actors] nobody called ${named} in the named cast: rolled instead`);
+    const look = own ?? CH.rollLook(typeof seed === 'number' ? seed : hashOf(String(seed)) & 0xffffff, { pool });
     if (outfit) CH.wear(look, CH.OUTFITS[outfit]);
     if (wear) CH.wear(look, wear);
     return look;
   }
+  /** (named-1) The size a look is drawn at: a named person's own (`scale` in their file, 0.85 to 1.3), else 1. */
+  const sizeOf = spec => (spec?.named && !NAMED_OFF ? NAMED.scaleOf(spec.named) : 1);
+  /** (named-1) Looks baked before they are needed (api.prebake), by their spec: the first add() with that spec takes one. */
+  const PREBAKED = new Map();
   function bakeLook(spec) {
+    const ready = PREBAKED.get(JSON.stringify(spec))?.pop();
+    if (ready) return ready;
     const look = lookOf(spec);
     const baked = LOOKS.bake(CH, look);
-    const index = peds.addLook(baked);
+    const size = sizeOf(spec);
+    const index = addLookAt(baked, size);
     if (index < 0) throw new Error('actors: the walker batches refused a look');
-    return { index, look, head: headOf(baked.full) };
+    // (the head as drawn: the bake's own, times the size)
+    const H = headOf(baked.full);
+    const head = size === 1 ? H : { hw: +(H.hw * size).toFixed(3), hd: +(H.hd * size).toFixed(3), y0: +(H.y0 * size).toFixed(3), y1: +(H.y1 * size).toFixed(3) };
+    return { index, look, head, size, hands: !NAMED_OFF && spec.named ? bareOf(look, size, spec.named) : null };
+  }
+
+  // ── (named-1) THE SIZE A BODY IS DRAWN AT ───────────────────────────────────────────────────────────────────────
+  // The pool's rule: one shared body, each named person's whole figure drawn `scale` times. The walker's bake cannot
+  // carry it (the walk's shader poses the legs and arms about joints fixed in the body's own frame: a bigger bake
+  // would bend at the wrong places), so the size goes where the city puts each drawn walker, its instance in the
+  // batch: the matrix the city composes for it (feet, heading, the stage's tilt) times the size, about the feet. The
+  // city writes every drawn walker's slot each frame, the look first and the matrix after it (peds.js update: near,
+  // mid and far tiers alike), so a look of a size other than 1 is known by its geometry in each batch, and its
+  // matrix is sized as it is written. Shadows are cast from the same matrix (the near tier's depth pass reads it).
+  const SIZED = { near: new Map(), mid: new Map(), far: new Map() };
+  /** The walker the city animated last: the near tier writes its slot right after (peds.js update). */
+  let animated = null;
+  const SIZE_V = new THREE.Vector3();
+  function sizeBatch(m, sizes) {
+    if (!m || m.hk2Sized) return;
+    m.hk2Sized = true;
+    const setGeometryIdAt = m.setGeometryIdAt;
+    const setMatrixAt = m.setMatrixAt;
+    const slot = [];
+    m.setGeometryIdAt = function (k, gid) {
+      slot[k] = sizes.get(gid) ?? 1;
+      return setGeometryIdAt.call(this, k, gid);
+    };
+    m.setMatrixAt = function (k, M) {
+      const s = slot[k] ?? 1;
+      if (s !== 1) M.scale(SIZE_V.set(s, s, s));
+      // (the near tier: the walker just animated is this slot's; a seat's lift and a wall's step off, seatAt below)
+      const A = sizes === SIZED.near ? animated?.hk2 : null;
+      animated = null;
+      if (A?.seat) {
+        const e = M.elements;
+        const yaw = A.w.yawS ?? A.ry;
+        e[12] += Math.sin(yaw) * A.seat[1];
+        e[13] += A.seat[0];
+        e[14] += Math.cos(yaw) * A.seat[1];
+      }
+      return setMatrixAt.call(this, k, M);
+    };
+  }
+  {
+    const B = peds.anim;
+    sizeBatch(B.batch, SIZED.near);
+    sizeBatch(B.mid, SIZED.mid);
+    sizeBatch(B.far, SIZED.far);
+  }
+  /** peds.addLook, noting the geometry each batch gives the look when it is drawn at a size other than 1. */
+  function addLookAt(baked, size = 1) {
+    if (size === 1) return peds.addLook(baked);
+    const B = peds.anim;
+    const got = [];
+    const trap = [B.batch, B.mid, B.far].map(m => {
+      const f = m.addGeometry;
+      m.addGeometry = function (...args) {
+        const gid = f.apply(this, args);
+        got.push([m, gid]);
+        return gid;
+      };
+      return () => {
+        m.addGeometry = f;
+      };
+    });
+    try {
+      const index = peds.addLook(baked);
+      if (index >= 0) for (const [m, gid] of got) (m === B.batch ? SIZED.near : m === B.mid ? SIZED.mid : SIZED.far).set(gid, size);
+      return index;
+    } finally {
+      for (const off of trap) off();
+    }
   }
   /**
    * THE HEAD AND HAT OF A LOOK, measured off its bake (anim/cast/bake.js: every vertex tagged with the body part it
@@ -193,7 +287,8 @@ export async function createActors({ city, CITY }) {
     const w = A.w;
     QY.setFromAxisAngle(UP, w.yawS ?? w.p[3]);
     V.set(w.p[0], w.p[1], w.p[2]);
-    M.compose(V, QY, ONE);
+    // (named-1: a clip's prop is in the body's frame, so it is drawn at the body's size)
+    M.compose(V, QY, A.size !== 1 ? SIZE_V.set(A.size, A.size, A.size) : ONE);
     if (prop.partMatrices && prop.partGeometry) {
       A.parts = prop.partMatrices(THREE, state.t, A.parts?.id === prop.id ? A.parts : null);
       A.parts.id = prop.id;
@@ -390,12 +485,129 @@ export async function createActors({ city, CITY }) {
     drawProp(A, g);
   }
 
+  // A TURN A PERSON COULD MAKE (anim-1). The city turns a walker's drawn heading to the heading it is told at up to
+  // 183 degrees a second, taken up in a seventh of a second, and its shader then swings the head a further 26 degrees
+  // into the turn: on a figure whose head is half of it, a body told to face somewhere else is a head whipped round
+  // (the owner's "the head motion is crazy, very intense when turning"; measured 2026-11-18: a stage walk of 16 s spent
+  // 2.7 s turning at over 120 degrees a second, every turn at the city's limit). For OUR people on the stage's own
+  // feet (not a body a scene has in hand, not one on the city's lanes) the drawn heading is eased here instead, from
+  // the same told heading: slower standing (SOFT.rate), a little faster walking (SOFT.walk × the speed, SOFT.most at
+  // most: 150 degrees a second), taken up and let go gently (SOFT.acc), never past the heading; and the head's lead into it is a part of
+  // what it was and eased in (SOFT.head, SOFT.headFor), so it leads a little and settles.
+  const SOFT = { rate: 2.1, walk: 1.15, most: 2.6, gain: 5, acc: 8, head: 0.38, headFor: 0.22 };
+  function softTurn(A, w, g, dt, fresh) {
+    if (A.room || A.mode !== 'free' || !(dt > 0)) {
+      A.softYaw = undefined;
+      A.cityTurn = null;
+      return;
+    }
+    const to = w.p[3];
+    if (A.softYaw === undefined || fresh) {
+      A.softYaw = w.yawS ?? to;
+      A.softW = 0;
+      A.headW = 0;
+      A.cityTurn = { yaw: A.softYaw, omega: 0 };
+    }
+    // (THE STAGE'S OWN TIMING IS NOT CHANGED BY IT: a scene that waits for somebody to have turned, waitTurned below,
+    // waits as long as it always did: for the heading the city's own turn would have drawn by now, kept here beside
+    // the eased one. So no scene starts later than it did, and no two people stand waiting on each other longer)
+    A.cityTurn ??= { yaw: A.softYaw, omega: 0 };
+    TURN.turnToward(A.cityTurn, to, dt, ARC.turnRate);
+    const err = wrap(to - A.softYaw);
+    const cap = Math.min(SOFT.most, Math.max(SOFT.rate, SOFT.walk * (A.vc || 0)));
+    const want = Math.max(-cap, Math.min(cap, err * SOFT.gain));
+    A.softW += Math.max(-SOFT.acc * dt, Math.min(SOFT.acc * dt, want - A.softW));
+    let step = A.softW * dt;
+    if (Math.abs(step) >= Math.abs(err) && Math.sign(step) === Math.sign(err)) {
+      step = err;
+      A.softW = 0;
+    }
+    A.softYaw = wrap(A.softYaw + step);
+    w.yawS = A.softYaw;
+    w.omega = A.softW;
+    w.dyaw = step;
+    A.headW += (A.softW * SOFT.head - A.headW) * (1 - Math.exp(-dt / SOFT.headFor));
+    g.omega = A.headW;
+  }
   const animate0 = sim.animate;
   sim.animate = (w, dt, G, fresh) => {
+    // (named-1: A STEP AT A SIZE. The city's gait strides by the distance the walker moved since its last frame
+    // (pedsim.js animate: from w.gx, w.gz), for the shared body; a body drawn `size` times takes steps `size` times
+    // as long, so it is handed the distance over its size: the same walk, its feet planted, no slide)
+    const size = w.hk2?.size ?? 1;
+    if (size !== 1 && !fresh && w.gx !== undefined && w.g) {
+      w.gx = w.p[0] - (w.p[0] - w.gx) / size;
+      w.gz = w.p[2] - (w.p[2] - w.gz) / size;
+    }
     const g = animate0(w, dt, G, fresh);
-    if (g && w.hk2) pose(w.hk2, g, dt);
+    if (g && w.hk2) {
+      softTurn(w.hk2, w, g, dt, fresh);
+      pose(w.hk2, g, dt);
+      seatAt(w.hk2);
+      handsAt(w.hk2);
+    }
+    // (the near tier writes this walker's slot next: its matrix takes the seat's lift, sizeBatch above)
+    animated = w;
     return g;
   };
+  // (named-1) A SEAT, A LEDGE AND A WALL ARE THE SHARED BODY'S: the city's sitting and leaning loops put its hips on a
+  // bench's front edge 0.47 m up, on a kerb 0.2 m over the feet, its back 0.2 m off a wall. A body drawn at another size
+  // has them that many times as high, or as far back: it is lifted or lowered by what is over or short (its feet a few
+  // centimetres off the ground or in the gutter, which a seated body's are), and stood off the wall by what its back is
+  // deeper, by the clip's weight, as it blends in and out. `A.seat`: [up, forward] (m), read where its matrix is written.
+  const SEATS = { sit_bench: { up: 0.47 }, sit_stoop: { up: 0.2 }, lean_wall: { back: 0.2 } };
+  // (named-1) THEIR OWN THING IN THE HAND, AND WHAT ELSE THE HAND IS FOR. A named person's held piece (the pool's `held`:
+  // Mr. Pruitt's cash box, Cousin Earl's carton) is baked into their look, in the +x hand, or both hands for a two-hand
+  // hold. It shows only while that hand has nothing else to do: while a clip of the city's uses the hand (its own prop, a
+  // hammer, a broom, a phone; or the hand itself, at the mouth, on a counter, in a pocket), or a hand-over or a fight has
+  // the body in hand (the fight's puppet clips), they wear their own look without it (baked at add: `A.bare`), from the
+  // moment the clip is asked for until it has gone out; then their own thing is back. Their own thing stays when it is
+  // the tool (Big Moss's knuckles in a fight: the fight draws no knuckles of its own).
+  // HANDS: which hands each of the city's clips the cast is given uses, from its own note (R the +x hand, L the −x, B both,
+  // 0 none). A clip not listed uses both. Read off anim/cast/clips (deal-hang.js, work.js, acts.js …) 2026-11-19.
+  const HANDS = {
+    sweep: 'B', mop: 'B', stock_shelf: 'R', dig_shovel: 'B', bench_hammer: 'R', carry_box: 'B', rummage: 'B', pick_up: 'R',
+    phone_call: 'R', phone_type: 'B', film_phone: 'R', earpiece_listen: 'R', hail_taxi: 'R', haggle_counter: 'B',
+    smoke: 'L', drink: 'L', wait_stop: 'L', withdrawal_shake: 'B', deal_lookout: 'B', deal_pace: 'B', lean_wall: 'B',
+    sit_stoop: 'B', sit_bench: 'B', listen_nod: 0,
+  };
+  const PUPPET = /^fight_body_/;
+  /** Does the clip called `name` want a hand the body's own thing is in (`hold`: 1 the +x hand, 2 both)? */
+  function clash(A, name) {
+    if (!name) return false;
+    if (PUPPET.test(name)) return !A.ownTool?.fight;
+    const h = name in HANDS ? HANDS[name] : 'B';
+    return h === 'B' || (h === 'R') || (h === 'L' && A.holdHands === 2);
+  }
+  // (`?hands=old`: their own thing stays in the hand whatever the hand does, as before: for before-and-after pictures)
+  const HANDS_OLD = new URLSearchParams(location.search).get('hands') === 'old';
+  function handsAt(A) {
+    if (A.bare === undefined || A.bare === null || HANDS_OLD) return;
+    const busy = clash(A, A.want?.name) || clash(A, A.clipName);
+    A.handsBusy = busy;
+    const index = busy ? A.bare : A.own;
+    if ((A.w.look === A.own || A.w.look === A.bare) && A.w.look !== index) A.w.look = index;
+  }
+  /** (named-1) The look without their own held thing, for the times their hand is wanted (handsAt). */
+  function bareOf(look0, size, named) {
+    const id = look0?.held?.id;
+    if (!named || !id || id === 'none' || id.startsWith('base:')) return null;
+    const pose = NAMED.NAMED_REG.held?.[id]?.pose;
+    const look = JSON.parse(JSON.stringify(look0));
+    look.held = { id: 'none' };
+    const index = addLookAt(LOOKS.bake(CH, look), size);
+    // (their own thing is the tool: Big Moss's brass knuckles in a fight)
+    return { bare: index < 0 ? null : index, holdHands: pose === 'both' ? 2 : 1, ownTool: { fight: named === 'moss' } };
+  }
+  function seatAt(A) {
+    const S = A.size !== 1 ? SEATS[A.clipName] : null;
+    if (!S) {
+      A.seat = null;
+      return;
+    }
+    const k = Math.min(1, A.clipW ?? 0);
+    A.seat = [(S.up ?? 0) * (1 - A.size) * k, (S.back ?? 0) * (A.size - 1) * k];
+  }
 
   // ── travel: the city's lanes under our people ───────────────────────────────────────────────────────────────────
   // A ROUTE is what a walker of ours follows: a stretch of the city's own lane geometry (movement.geomOf) with a
@@ -1193,6 +1405,8 @@ export async function createActors({ city, CITY }) {
     }
     // (making way for someone head-on: off the line by the step chosen, wherever on the route this is)
     if (R.aside) [tx, tz] = R.aside;
+    // (at its mark and ending: back on to its line, whatever step aside it had. advance)
+    if (R.ending) tx = tz = 0;
     let vx = (tx - R.wx) * 4;
     let vz = (tz - R.wz) * 4;
     const speed = Math.hypot(vx, vz);
@@ -1397,6 +1611,7 @@ export async function createActors({ city, CITY }) {
     // (a walk too short for the speed its walker came to it with, an order given to someone at a run with a pace
     // or two to go, RUNS OUT past its end, straight on, braking as hard as a body does: it is never stopped dead)
     const stride = A.vc * dt;
+    const out0 = R.out ?? 0;
     if (stride > R.metres - R.m && A.vc > 0.5) R.out = (R.out ?? 0) + stride - (R.metres - R.m);
     R.m = Math.min(R.metres, R.m + stride);
     R.d = lineAt(R, R.m, L4);
@@ -1408,13 +1623,24 @@ export async function createActors({ city, CITY }) {
     // the walked line's)
     const p = poseOf(R, R.d, P4);
     [p[0], p[2], p[3]] = [L4[0], L4[2], L4[3]];
+    // (sixes-1: A RUN-OUT NEVER GOES INTO ANYTHING either. A long frame by the mark, the walker braking by no more
+    // than half a metre a second in it, ran a buyer 0.4 m on past her mark at the market's picnic table and into the
+    // crate beside it, where she stood the whole scene. It stops where the next of it would be in something solid
+    // or low)
+    if (R.out > out0) {
+      const [ux, uz] = [Math.sin(p[3]), Math.cos(p[3])];
+      const [ex, ez] = [p[0] + R.wx + R.ox + ux * R.out, p[2] + R.wz + R.oz + uz * R.out];
+      if (solidAt(ex, p[1], ez, true) || lowAt(ex, ez, p[1])) [R.out, A.vc] = [out0, Math.min(A.vc, 0.5)];
+    }
     // (THE STEP ASIDE FOR SOMEBODY NEVER GOES INTO ANYTHING. Off the lanes there is no sidewalk's edge to hold it: a
     // walker at Sunny Acres stepped 0.6 m aside for a neighbour, into a mailbox post. Where the body's middle would
     // be in a solid the step aside goes no further this frame (it is left as it was, its sideways speed taken
     // away); and where it is in one even so, the walk having carried it there, it eases back a little a frame)
+    // (sixes-1: a step BACK towards the line is never held: a walker whose offset had carried it into a crate's edge
+    // would be held there by this, each frame back still in it)
     const [wx0, wz0] = [R.wx, R.wz];
     weave(A, R, p[0], p[2], p[3], A.vc, dt);
-    if ((R.wx || R.wz) && !R.part?.G && (solidAt(p[0] + R.wx + R.ox, p[1], p[2] + R.wz + R.oz, true) || lowAt(p[0] + R.wx + R.ox, p[2] + R.wz + R.oz, p[1]))) {
+    if ((R.wx || R.wz) && Math.hypot(R.wx, R.wz) > Math.hypot(wx0, wz0) - 1e-6 && !R.part?.G && (solidAt(p[0] + R.wx + R.ox, p[1], p[2] + R.wz + R.oz, true) || lowAt(p[0] + R.wx + R.ox, p[2] + R.wz + R.oz, p[1]))) {
       [R.wx, R.wz, R.wvx, R.wvz] = [wx0, wz0, 0, 0];
       if ((wx0 || wz0) && solidAt(p[0] + wx0 + R.ox, p[1], p[2] + wz0 + R.oz, true)) [R.wx, R.wz] = [wx0 * 0.92, wz0 * 0.92];
     }
@@ -1434,12 +1660,29 @@ export async function createActors({ city, CITY }) {
     if (A.vc > 0.3) A.ry = Math.atan2(Math.sin(p[3]) * A.vc + R.wvx * Wyaw, Math.cos(p[3]) * A.vc + R.wvz * Wyaw);
     else if (R.wait > 0 || R.d < 0.05) A.ry = p[3];
     // at its mark. One last thing: a step aside still under way is finished first (never dropped in a frame)
+    // (sixes-1: NOBODY ARRIVES OFF THEIR LINE. A step aside still ON them, not only one still under way, is walked
+    // back first: a lean held off somebody passing (leanFor) had no sideways speed left, and its walker arrived with
+    // it, 0.36 m beside its mark and in the market's crate, for the whole of a scene. Nothing new is stepped aside
+    // for while it ends (`ending`: weave). Back takes a second or so; at 4 s, what would still hold it is a body or a
+    // solid on its own line, and it arrives where it is, which the audit's `offLine` counts: no jump on to the mark)
     if (R.metres - R.m < 1e-3 && A.vc > 0.5) {
       // (running out: see above)
-    } else if (R.metres - R.m < 1e-3 && Math.hypot(R.wvx, R.wvz) > 0.3 && (R.settle = (R.settle ?? 0) + dt) < 1.5) {
-      R.aside = null;
+    } else if (R.metres - R.m < 1e-3 && R.out) {
+      // (run out and stopped: what it ran on past its mark is walked back like a step aside, `ending` below. It is
+      // the same offset from the line, so the body does not move this frame)
+      [R.wx, R.wz, R.out] = [R.wx + Math.sin(p[3]) * R.out, R.wz + Math.cos(p[3]) * R.out, 0];
+      A.vc = 0;
+    } else if (R.metres - R.m < 1e-3 && (Math.hypot(R.wvx, R.wvz) > 0.3 || Math.hypot(R.wx, R.wz) > 0.03) && (R.settle = (R.settle ?? 0) + dt) < (Math.hypot(R.wx, R.wz) > 0.03 ? 4 : 1.5)) {
+      [R.aside, R.asideFor, R.leanAt] = [null, null, undefined];
+      R.ending = true;
       A.vc = 0;
     } else if (R.metres - R.m < 1e-3) {
+      // (the audit's `offLine`: whoever arrives with a step aside still on them, more than 5 cm off their mark)
+      const off = Math.hypot(R.wx, R.wz);
+      if (audit && off > 0.05) {
+        audit.offLine += 1;
+        if (audit.examples.length < 160) audit.examples.push(`offLine ${A.id} arrived ${off.toFixed(2)} m off its mark at ${A.x.toFixed(2)}, ${A.z.toFixed(2)} (sideways ${R.wx.toFixed(2)}, ${R.wz.toFixed(2)}; its speed ${Math.hypot(R.wvx, R.wvz).toFixed(2)}; aside ${R.aside ? R.aside.map(v => v.toFixed(2)).join(', ') : R.aside}${R.asideFor ? ' for ' + (R.asideFor.id ?? 'a body') : ''}; lean ${R.leanAt !== undefined}; settled ${(R.settle ?? 0).toFixed(2)} s; ${R.part?.G ? 'on a lane' : 'off the lanes'}; ${(R.metres - R.m).toFixed(4)} m left)`);
+      }
       A.vc = 0;
       A.route = null;
       if (R.endYaw !== null) A.ry = R.endYaw;
@@ -1549,6 +1792,9 @@ export async function createActors({ city, CITY }) {
       w.yawS = A.ry;
       w.omega = 0;
       A.snap = false;
+      // (anim-1: put somewhere at once, facing at once: the eased heading starts again from there)
+      A.softYaw = undefined;
+      A.cityTurn = null;
     }
   }
 
@@ -1619,7 +1865,19 @@ export async function createActors({ city, CITY }) {
     hideCrowd();
     placeMarker();
     if (audit) auditFrame(realDt, dt, pushed);
-    for (const hook of hooks) hook(dt, realDt);
+    // (a hook that throws does not stop the hooks after it: one that threw every frame once froze a deal's clock and
+    // with it the hour, 2026-11-19. Its first error said once, and the frame goes on)
+    for (const hook of hooks) {
+      try {
+        hook(dt, realDt);
+      } catch (err) {
+        if (!hookErrors.has(hook)) {
+          hookErrors.add(hook);
+          // (with its stack, hands-2: the message alone never said where a fault came from)
+          console.warn('[stage] a frame hook threw (said once):', err?.stack ?? err);
+        }
+      }
+    }
     for (const wait of [...waits]) {
       if (!wait.test()) continue;
       waits.delete(wait);
@@ -2331,12 +2589,13 @@ export async function createActors({ city, CITY }) {
         if (clock >= A.bubble.until) {
           A.bubble.el.remove();
           A.bubble = null;
-        } else place(A.bubble.el, A, HEAD + 0.25);
+        } else place(A.bubble.el, A, HEAD * A.size + 0.25);
       }
       if (A.tag) {
         const on = (tagsOn || A.tagged) && !A.bubble;
         A.tag.style.visibility = on ? '' : 'hidden';
-        if (on) place(A.tag, A, HEAD);
+        // (named-1: over the head at its own height: a body drawn at a size has its head that much higher or lower)
+        if (on) place(A.tag, A, HEAD * A.size);
       }
     }
   }
@@ -2702,6 +2961,45 @@ export async function createActors({ city, CITY }) {
     groundAt: (x, z) => groundAt(x, z),
     /** A person's head and hat (headOf: hw, hd half its width and depth, y0 y1 its bottom and top), or the typical one. */
     headOf: id => (actors.get(id)?.head ?? HEAD_TYPICAL),
+    /** (named-1) The size a body is drawn at (a named person's own `scale`; 1 for anyone else, or nobody). */
+    sizeOf: id => actors.get(id)?.size ?? 1,
+    /**
+     * (named-1) A look baked NOW for somebody who will be added later in the middle of something (the fight page's Big
+     * Moss walks on mid-round): `look` as add() will be given it, with its own `seed` (or `named`). The add takes it.
+     */
+    prebake(look) {
+      const spec = { seed: null, ...look };
+      const key = JSON.stringify(spec);
+      if (!PREBAKED.has(key)) PREBAKED.set(key, []);
+      PREBAKED.get(key).push(bakeLook(spec));
+    },
+    /** (named-1) The same, by the name the hand-overs ask for it (hands/perform.js: a body's `scale`). */
+    scaleOf: id => actors.get(id)?.size ?? 1,
+    /**
+     * (named-1) THE CITY'S HOLD with nothing in the hands (`pose`: down, forward, both, raised: world/cast/fit/held.js
+     * HOLD), for a thing that goes about with somebody (props/along.js: the cart man's two hands on his cart's handle):
+     * their own look with that hold is baked the first time (`apply` false: only baked, before anything plays) and worn
+     * while asked for; null: their own look again. A named outfit over them (the county issue) is left as it is.
+     */
+    holding(id, pose = null, apply = true) {
+      const A = get(id);
+      A.holds ??= {};
+      if (pose && A.holds[pose] === undefined) {
+        const look = JSON.parse(JSON.stringify(A.look));
+        look.held = { id: `base:${pose}` };
+        const index = addLookAt(LOOKS.bake(CH, look), A.size);
+        A.holds[pose] = index < 0 ? null : index;
+      }
+      if (!apply) return true;
+      const index = (pose ? A.holds[pose] : null) ?? A.own;
+      if (!A.outfit && A.w.look !== index) A.w.look = index;
+      A.hold = pose;
+      return true;
+    },
+    /** (named-1) The named cast's key a body wears (world/named/), or null. */
+    namedOf: id => actors.get(id)?.named ?? null,
+    /** (named-1) The city's pool of named people (world/named/index.js): PEOPLE, lookOf, scaleOf, personOf. */
+    NAMED,
     /**
      * HOW FAR APART TWO OF OURS STAND when neither is doing a thing to the other (m, middle to middle): their heads'
      * widest half each, and HEAD_ROOM between. `b` null: the widest head the game's pools roll (HEAD_WIDEST).
@@ -2759,7 +3057,7 @@ export async function createActors({ city, CITY }) {
     },
     /** Starts or stops the audit (the counts are listed above auditFrame); returns the counts so far. */
     audit(on) {
-      if (on === true) audit = { frames: 0, scenes: 0, walks: 0, steps: 0, jumps: 0, cuts: 0, shifts: 0, flips: 0, pops: 0, drops: 0, unseated: 0, close: 0, slides: 0, speedSteps: 0, headingSnaps: 0, floating: 0, inRoad: 0, pushes: 0, squeezes: 0, brushes: 0, dodges: 0, rounds: 0, keptRight: 0, waits: 0, gaveWay: 0, replans: 0, seams: 0, through: 0, blind: 0, short: 0, ways: 0, overlaps: 0, overlapFrames: 0, byFigure: 0, furniture: 0, furnitureFrames: 0, vanish: 0, feet: 0, feetFrames: 0, heads: 0, headFrames: 0, heads2: new Map(), spells2: new Map(), spells: [], near: new Map(), kinds: {}, examples: [] };
+      if (on === true) audit = { frames: 0, scenes: 0, walks: 0, steps: 0, jumps: 0, cuts: 0, shifts: 0, flips: 0, pops: 0, drops: 0, unseated: 0, close: 0, slides: 0, speedSteps: 0, headingSnaps: 0, floating: 0, inRoad: 0, pushes: 0, squeezes: 0, brushes: 0, dodges: 0, rounds: 0, keptRight: 0, waits: 0, gaveWay: 0, replans: 0, seams: 0, through: 0, blind: 0, short: 0, ways: 0, overlaps: 0, overlapFrames: 0, byFigure: 0, furniture: 0, furnitureFrames: 0, offLine: 0, vanish: 0, feet: 0, feetFrames: 0, heads: 0, headFrames: 0, heads2: new Map(), spells2: new Map(), spells: [], near: new Map(), kinds: {}, examples: [] };
       // (the picture's count starts from what is on stage now: nobody came on at the moment it was turned on)
       if (on === true) for (const A of actors.values()) Object.assign(A, { pOn: !A.w.hide, pX: A.x, pZ: A.z, pRoom: A.room });
       const out = audit ? { ...audit, near: undefined, heads2: undefined, spells2: undefined, kinds: undefined, lastPush: undefined, examples: audit.examples.slice() } : null;
@@ -2858,6 +3156,8 @@ export async function createActors({ city, CITY }) {
     },
     /** Does the city's collision world hold the real columns there (false: nothing can be said of that ground yet)? */
     solidKnown: (x, z) => !!city.cam?.world?.ready?.(x, z),
+    /** (sixes-1) Is (x, z) the road's carriageway (off every kerb: the plan's kerbOut), not a sidewalk or a square? */
+    inRoad: (x, z) => PLAN.kerbOut(x, z) <= 0,
     /** The metres of the way over the ground from a to b, round what stands between (findWay), or null when there is none. */
     /**
      * Whoever `id` has been standing next to (`others`, ids) is not waited behind on its next walk: the way out of
@@ -3135,12 +3435,14 @@ export async function createActors({ city, CITY }) {
       // pieces asked for that the cast doesn't have are skipped by the cast without a word: keep a note of them
       const missing = Object.entries(look.wear ?? {}).filter(([slot, piece]) => piece !== 'none' && (baked.look[slot]?.id ?? baked.look[slot]) !== piece).map(([, piece]) => piece);
       const A = {
-        id, name, w, look: baked.look, head: baked.head, missing, mode: 'free', spec: look, own: baked.index, suits: {},
+        id, name, w, look: baked.look, head: baked.head, size: baked.size, named: (!NAMED_OFF && look.named) || null, missing, mode: 'free', spec: look, own: baked.index, suits: {},
         x, y: y0, z, ry, route: null, vc: 0, stand: null, room: false, moving: 0, faceTo: null, snap: true, goId: 0,
         want: null, asked: null, clipName: null, clipT: 0, nearAt: 0, rate: 1, props: new Map(),
         bubble: null, tag: null, metres: 0, lastX: x, lastZ: z, portrait: null,
       };
       w.hk2 = A;
+      // (named-1: their look without their own held thing, baked with their own: handsAt)
+      if (baked.hands) Object.assign(A, baked.hands);
       A.tag = document.createElement('div');
       A.tag.className = 'hk2-tag';
       A.tag.textContent = name;
@@ -3162,7 +3464,7 @@ export async function createActors({ city, CITY }) {
       if (outfit && !CH.OUTFITS?.[outfit]) outfit = null;
       if (outfit && A.suits[outfit] === undefined) {
         const look = CH.wear(lookOf({ seed: id, ...A.spec }), CH.OUTFITS[outfit]);
-        const index = peds.addLook(LOOKS.bake(CH, look));
+        const index = addLookAt(LOOKS.bake(CH, look), A.size);
         A.suits[outfit] = index < 0 ? null : index;
       }
       const index = (outfit ? A.suits[outfit] : null) ?? A.own;
@@ -3196,7 +3498,7 @@ export async function createActors({ city, CITY }) {
       if (!A.dressings.has(key)) {
         const spec = { ...A.spec0, wear: { ...(A.spec0.wear ?? {}), ...(pieces ?? {}) } };
         const look = lookOf({ seed: id, ...spec });
-        const index = peds.addLook(LOOKS.bake(CH, look));
+        const index = addLookAt(LOOKS.bake(CH, look), A.size);
         if (index < 0) return false;
         A.dressings.set(key, { index, look, spec });
       }
@@ -3280,7 +3582,8 @@ export async function createActors({ city, CITY }) {
     turned(ids, limit = 1) {
       const end = clock + limit;
       const list = ids.map(get);
-      return until(() => clock >= end || list.every(A => !A.drawn || turnOf(A.w.yawS ?? A.ry, A.faceTo ? Math.atan2(A.faceTo[0] - A.x, A.faceTo[1] - A.z) : A.ry) < 0.15));
+      // (anim-1: turned, as the city's own turn would have it by now: softTurn above keeps that beside the eased heading)
+      return until(() => clock >= end || list.every(A => !A.drawn || turnOf(A.cityTurn?.yaw ?? A.w.yawS ?? A.ry, A.faceTo ? Math.atan2(A.faceTo[0] - A.x, A.faceTo[1] - A.z) : A.ry) < 0.15));
     },
 
     /** Play a walker's clips faster than life (a busy hour squeezed to fit). 1 is life. */
@@ -3597,7 +3900,7 @@ export async function createActors({ city, CITY }) {
     screenOf(id) {
       const A = actors.get(id);
       if (!A) return { x: 0, y: 0, visible: false };
-      V.set(A.w.p[0], A.w.p[1] + HEAD, A.w.p[2]).project(city.camera);
+      V.set(A.w.p[0], A.w.p[1] + HEAD * A.size, A.w.p[2]).project(city.camera);
       const visible = V.z < 1 && Math.abs(V.x) <= 1 && Math.abs(V.y) <= 1 && !A.w.hide;
       return { x: (V.x * 0.5 + 0.5) * innerWidth, y: (-V.y * 0.5 + 0.5) * innerHeight, visible };
     },
@@ -3609,7 +3912,7 @@ export async function createActors({ city, CITY }) {
       for (const A of actors.values()) {
         const head = api.screenOf(A.id);
         if (!head.visible) continue;
-        V.set(A.w.p[0], A.w.p[1] + 0.9, A.w.p[2]).project(city.camera);
+        V.set(A.w.p[0], A.w.p[1] + 0.9 * A.size, A.w.p[2]).project(city.camera);
         const bx = (V.x * 0.5 + 0.5) * innerWidth;
         const by = (-V.y * 0.5 + 0.5) * innerHeight;
         // the distance to the line from the head to the middle of the body

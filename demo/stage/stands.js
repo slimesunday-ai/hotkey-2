@@ -95,16 +95,24 @@ export function createStands({ map, data = null, fit = (x, z, along = 0) => ({ x
     // (from everybody's place, a head and more, and from the place's own spots, which somebody will be given again)
     const own = (heldPools.get(block) ?? all.filter(s => s.block === block)).filter(s => !s.unfit);
     const far = (x, z) => [...holds.entries()].every(([who, h]) => Math.hypot(h.x - x, h.z - z) >= Math.max(ROW, apartOf(id, who, [x, z], [h.x, h.z]))) && own.every(h => Math.hypot(h.x - x, h.z - z) >= ROW);
+    // (sixes-1, second pass: ground not known yet, `blocked` 'unknown', only when no known free ground is in reach)
+    let unknown = null;
     for (let r = 0; r <= ROW * 8; r += ROW * 0.5) {
       const n = r ? Math.ceil((2 * Math.PI * r) / ROW) : 1;
       for (let k = 0; k < n; k++) {
         const [x, z] = [at[0] + Math.sin((k * 2 * Math.PI) / n) * r, at[1] + Math.cos((k * 2 * Math.PI) / n) * r];
         // (`blocked`: the stage's word that something stands there, a step or a chair, whatever `vet` can say yet.
         // `ground`: and that it is standing ground, off the roadway and off the walkers' own lane)
-        if (far(x, z) && !crowd?.(x, z) && !blocked?.(x, z) && ground(x, z) && vet?.(at, { x, z, kind: 'open' }) !== false) return { x, z, ry: null, entry: null, kind: 'open', block, by: null, spare: `${block}/${spot}` };
+        if (!far(x, z) || crowd?.(x, z) || !ground(x, z) || vet?.(at, { x, z, kind: 'open' }) === false) continue;
+        const b = blocked?.(x, z);
+        if (b === 'unknown') {
+          unknown ??= { x, z };
+          continue;
+        }
+        if (!b) return { x, z, ry: null, entry: null, kind: 'open', block, by: null, spare: `${block}/${spot}` };
       }
     }
-    return null;
+    return unknown ? { ...unknown, ry: null, entry: null, kind: 'open', block, by: null, spare: `${block}/${spot}` } : null;
   }
 
   /** The [x, z] a block's spot names. `door:<id>` and `pad:<id>` are that seat's own door when the set gives one. */

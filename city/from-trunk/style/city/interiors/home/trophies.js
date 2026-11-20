@@ -1,7 +1,7 @@
 // Home objects · catalogue v2 · trophies: one per sim MARK (OUTLINE §1.9) plus two awards. A MARK made physical, something you'd put on
 // the shelf to show off, never a plaque or a shield. Never stolen, never traded (game.kind 'trophy', stealable false). Event marks have
 // no rarity of their own in FORMAT, so they read 'rare' with an 'event' tag.
-import { def, K, pick, cyl, cylZ, line, glow, LIT, shade, hash, rng, txt, M3, face } from './lib.js';
+import { def, K, pick, cyl, cylZ, line, glow, LIT, shade, hash, rng, txt, M3, face, lathe, prof, ball } from './lib.js';
 import { tro, vitrine, cushion, brick } from './bits.js';
 
 const T = o => def({ cat: 'trophies', tiers: ['trailer', 'apartment', 'house', 'penthouse'], ...o, tags: ['trophy', ...(o.tags || [])] });
@@ -10,11 +10,23 @@ const shell = (V, cx, cy, cz, r, keep, c, l = 1) => { for (let x = Math.floor(cx
 
 export const firstHouse = T({ id: 'trophy-first-house', name: 'First-house snow globe', place: 'surface', foot: [2, 2], h: 0.5, tags: ['snow globe', 'house'],
   game: tro('common', 'first-house'),
+  grain: 0.025, shaped: 'a snow globe: the glass ball, the little house and the snow inside it',
   build(V) {
-    V.box(1, 0, 1, 9, 2, 9, K.walnut); V.box(3, 0, 9, 7, 2, 10, K.gold, 2); V.box(2, 2, 2, 8, 3, 8, K.white);                             // base, its gold plate, the snow
-    V.box(3, 3, 4, 7, 5, 7, K.yellow); V.box(3, 5, 4, 7, 6, 7, K.red); V.box(4, 6, 5, 6, 7, 6, K.red); V.set(5, 3, 7 - 1, K.ink); V.set(4, 4, 6, K.cyan, LIT);   // the house: walls, roof, door, a lit window
-    shell(V, 5, 5.6, 5, 3.9, (x, y, z) => z + .5 < 5 || Math.abs(y + .5 - 5.6) < .8, K.glass);                                          // the globe: its back half, a rim of glass
-    for (const [x, z] of [[2, 3], [7, 7], [6, 3]]) V.set(x, 3, z, K.white);                                                               // drifts
+    // THIRD PASS · a walnut base with its gold plate; in the glass a snowy mound, a little red house (a white roof, a lit window, a
+    // chimney), a fir tree; the ball drawn as its far half (pale glass and the snow stuck on it), so you look into it, as you do
+    lathe(V, 10, 10, 0, 5, prof([[0, 7.6], [1, 7.6], [5, 6.4]]), (x, y) => (y === 4 ? shade(K.walnut, 1.2) : K.walnut));   // the base
+    V.box(7, 1, 16, 13, 3, 17, K.gold, 2);                                                                                 // its plate
+    lathe(V, 10, 10, 5, 7, prof([[5, 6.6], [7, 4]]), K.white);                                                            // the snow mound
+    V.box(8, 7, 9, 13, 10, 13, K.red); V.box(10, 7, 12, 11, 9, 13, 0x5a3418); V.set(12, 8, 12, K.yellow, LIT);            // the house: walls, a door, a window
+    for (let k = 0; k < 3; k++) V.box(8 - 1 + k, 10 + k, 9 - 0, 13 + 1 - k, 11 + k, 13, K.white);                         // its roof, under snow
+    V.box(11, 11, 10, 12, 13, 11, K.brick);                                                                                 // the chimney
+    for (let k = 0; k < 4; k++) cyl(V, 5.5, 9.5, 2 - k * .45, 7 + k * 1.5, 8.5 + k * 1.5, K.leafD); V.set(5, 13, 9, K.white);   // a fir, its snowy tip
+    const cy = 12.4, R = 7.6, vd = [.48, .5, .72];
+    for (let y = 5; y < 20; y++) for (let z = 0; z < 20; z++) for (let x = 0; x < 20; x++) {
+      const dx = x + .5 - 10, dy = y + .5 - cy, dz = z + .5 - 10, d = Math.hypot(dx, dy, dz); if (d > R || d < R - 1.1) continue;
+      if ((dx * vd[0] + dy * vd[1] + dz * vd[2]) / d > -.05 && y > 6) continue;                                            // the near half: clear
+      V.set(x, y, z, hash(x, y, z) > .86 ? K.white : 0xcfe8f5, 1); }
+    for (const [x, y, z] of [[4, 17, 6], [14, 18, 5], [9, 19, 6]]) V.set(x, y, z, K.glint, 1);                            // the glass catching the light
   } });
 
 export const firstDeal = T({ id: 'trophy-first-deal', name: 'The first bill, framed', place: 'wall', foot: [2, 3], h: 0.1, mount: 1.3, tags: ['framed', 'cash'],
@@ -38,14 +50,22 @@ export const didTime = T({ id: 'trophy-did-time', name: 'Mugshot with commissary
 
 export const snitch = T({ id: 'trophy-snitch', name: 'RAT designer toy', place: 'surface', foot: [2, 2], h: 0.6, tags: ['rat', 'vinyl toys', 'snitch'],
   game: tro('rare', 'snitch'),
+  grain: 0.025, shaped: 'a vinyl rat: the big round ears, the long snout and nose, whiskers, the tail, the phone at its ear',
   build(V) {
-    V.box(1, 0, 1, 9, 2, 9, K.white, 1); V.box(7, 0, 9 - 1, 9, 2, 9, K.red);                                                           // the toy base, a report-flag sticker
-    V.box(3, 2, 3, 7, 7, 7, K.buff); V.box(3, 6, 6, 7, 7, 7, shade(K.buff, .8)); V.box(4, 2, 7, 6, 5, 8, K.buff);                        // the trench coat, collar popped
-    V.box(2, 7, 3, 8, 11, 8, K.grey, 1); V.box(3, 7, 8, 7, 9, 10, K.grey, 1); V.set(5, 8, 9, K.pink); V.set(4, 8, 9, K.pink);            // the big head, the snout, a pink nose
-    for (const x of [1, 8]) { V.box(x, 10, 4, x + 1, 12, 7, K.grey, 1); V.box(x, 10, 5, x + 1, 11, 6, K.pink); }                         // ears
-    V.set(3, 10, 8, K.ink); V.set(6, 10, 8, K.ink); V.set(4, 10, 8, K.white); V.set(7, 10, 8, K.white);                                  // shifty eyes
-    V.box(8, 8, 5, 9, 11, 7, K.ink); V.set(8, 9, 7, K.cyan, LIT);                                                                       // on the phone
-    line(V, 3, 2, 3, 1, 2, 4, K.pink); line(V, 1, 2, 4, 1, 2, 8, K.pink);                                                                 // the tail
+    // THIRD PASS · a designer-toy rat: a big grey head with round pink-lined ears, a long snout, a pink nose, beady eyes, whiskers and
+    // two buck teeth; a trench coat with the collar up; a phone at its ear (the snitch); the long pink tail curled on the base
+    lathe(V, 10, 10, 0, 2, () => 8.4, K.white, 1); V.box(15, 0, 15, 18, 2, 18, K.red);                                // the base, a report sticker
+    lathe(V, 10, 10, 2, 11, prof([[2, 4.6], [11, 3.4]]), (x, y, z, d, th) => (Math.abs(th - Math.PI / 2) < .18 && y > 3 ? shade(K.buff, .8) : K.buff));   // the trench coat, its opening
+    lathe(V, 10, 10, 10, 12, () => 3.9, shade(K.buff, .82));                                                        // the collar, up
+    for (const sx of [-1, 1]) line(V, 10 + sx * 3.5, 9, 10, 10 + sx * 4.5, 6, 12, K.buff);                           // the arms
+    ball(V, 10, 15.5, 10, 5.2, 4.6, 5, K.grey, 1);                                                                   // the head
+    ball(V, 10, 14, 15, 2.8, 2.2, 3.4, K.grey, 1); ball(V, 10, 14.4, 18.4, 1.1, 1, 1, K.pink, 1);                   // the snout, the nose
+    V.box(9, 11.5, 16, 11, 12.5, 17, K.white);                                                                       // buck teeth
+    for (const sx of [-1, 1]) { ball(V, 10 + sx * 4.8, 20, 8.6, 3.4, 3.4, 1.2, (x, y, z, u, v, w) => (Math.hypot(u, v) < .62 && w > 0 ? K.pink : K.grey), 1);   // the ears, round, to the front
+      V.set(10 + sx * 2.3, 16.8, 14.4, K.ink); V.set(10 + sx * 2.3 + (sx > 0 ? -1 : 0), 17.2, 14.4, K.white);        // the eyes, a glint
+      for (const dy of [-.8, .4]) line(V, 10 + sx * 2.4, 14 + dy, 16.5, 10 + sx * 7, 14.6 + dy * 2, 17.5, K.ink); }   // whiskers
+    V.box(15, 13, 8, 16, 18, 11, K.ink); V.box(15, 14, 10, 16, 17, 11, K.cyan, LIT); line(V, 14, 9, 11, 15, 13, 10, K.buff);   // the phone at its ear, its arm
+    for (let k = 0; k < 14; k++) { const t = k / 13, a = Math.PI * .6 + t * 3.4; V.set(10 + Math.cos(a) * (6.2 + t), 2, 10 + Math.sin(a) * (6.2 + t), K.pink); }   // the tail, curled round
   } });
 
 export const gotRobbed = T({ id: 'trophy-got-robbed', name: 'The empty case', place: 'surface', foot: [2, 2], h: 0.55, tags: ['vitrine', 'empty', 'robbed'],
@@ -54,7 +74,7 @@ export const gotRobbed = T({ id: 'trophy-got-robbed', name: 'The empty case', pl
     V.box(1, 0, 1, 9, 4, 9, K.ink); V.box(2, 4, 2, 8, 5, 8, K.oxblood);                                                                  // plinth, velvet
     for (const [x, z] of [[3, 4], [4, 4], [5, 4], [6, 4], [3, 6], [4, 6], [5, 6], [6, 6], [3, 5], [6, 5]]) V.set(x, 4, z, K.white);       // a chalk outline where the brick sat
     V.box(6, 5, 2, 8, 6, 4, K.yellow); V.set(7, 5, 3, K.ink);                                                                             // the IOU note
-    for (const [x, z] of [[1, 1], [8, 1], [1, 8]]) V.box(x, 4, z, x + 1, 10, z + 1, K.gold, 2); V.box(1, 10, 1, 9, 11, 9, K.gold, 2);    // three posts left, the lid
+    for (const [x, z] of [[1, 1], [8, 1], [1, 8]]) V.box(x, 4, z, x + 1, 10, z + 1, K.gold, 2); for (const z of [1, 8]) V.box(1, 10, z, 9, 11, z + 1, K.gold, 2); for (const x of [1, 8]) V.box(x, 10, 1, x + 1, 11, 9, K.gold, 2);   // three posts left, the lid's rim (clear: third pass)
     V.box(8, 4, 8, 9, 6, 9, K.gold, 2); V.set(8, 4, 7, K.glint, 1); V.set(7, 4, 8, K.glint, 1);                                           // the jimmied post, glass on the floor
   } });
 
@@ -104,11 +124,24 @@ export const kingpinCrown = T({ id: 'trophy-kingpin-crown', name: 'Kingpin crown
 
 export const goldGrill = T({ id: 'trophy-gold-grill', name: 'Gold grill on a jaw', place: 'surface', foot: [2, 2], h: 0.5, tags: ['grill', 'gold', 'richest'],
   game: tro('epic', 'gold-grill'),
+  grain: 0.025, shaped: 'a gold grill on a jaw: the arch of the gums, each tooth and its gold cap, the diamonds',
+  grain: 0.025, shaped: 'a gold grill on a jaw: the arch of the gums, each tooth and its gold cap, the diamonds',
   build(V) {
-    V.box(1, 0, 1, 9, 1, 9, K.ink); V.box(2, 1, 2, 8, 6, 7, 0x1f1f24);                                                                   // base, a velvet jaw form
-    for (let x = 2; x < 8; x++) { V.box(x, 3, 7, x + 1, 6, 8, x % 2 ? K.gold : shade(K.gold, .85), 2); V.box(x, 1, 7, x + 1, 3, 8, x % 2 ? shade(K.gold, .85) : K.gold, 2); }   // top row, bottom row
-    V.set(2, 2, 8, K.gold, 2); V.set(7, 2, 8, K.gold, 2); V.set(4, 4, 8, K.cyan, 2); V.set(5, 1, 8, K.cyan, 2);                         // fangs, two diamonds
-    vitrine(V, 0, 0, 10, 10, 1, 10);
+    // THIRD PASS · a jaw form on a velvet plinth, its lips parted: two arches of pink gums, every front tooth capped in gold, two
+    // set with a diamond; the case's lid is clear (bits.js vitrine), so the grill is what you see from above and from the front
+    V.box(1, 0, 1, 19, 1, 19, K.ink); V.box(2, 1, 2, 18, 5, 18, 0x1f1f24); V.box(7, 2, 18 - 1, 13, 4, 18, K.gold, 2);   // the plinth, its plate
+    const cx = 10, arch = (x, z0, depth) => z0 - ((x + .5 - cx) ** 2) / depth;                                        // the U of a jaw, front at +z
+    const GUM = 0xe0707a, GUMD = 0xb84f5c;
+    for (const [y0, y1, up] of [[5, 10, false], [11, 16, true]]) {                                                       // the lower jaw, the upper
+      for (let x = 2; x < 18; x++) { const zf = arch(x, 16.5, 5.5); if (zf < 5) continue;
+        for (let z = Math.max(4, Math.floor(zf - 3.2)); z <= Math.floor(zf); z++) for (let y = y0; y < y1; y++) {
+          const gum = up ? y >= y1 - 2 : y < y0 + 2, front = z === Math.floor(zf), tooth = !gum && front;
+          const tx = Math.floor((x - 2) / 2), gold = tooth && Math.abs(x + .5 - cx) < 6.2, gap = tooth && y % 5 === (up ? 1 : 4);
+          V.set(x, y, z, gum ? (front ? GUM : GUMD) : gap ? 0x8a6a28 : gold ? (tx % 2 ? K.gold : shade(K.gold, .9)) : K.white, gum ? 1 : gold || gap ? 2 : 1); } }
+    }
+    for (const [x, y] of [[8, 7], [12, 13]]) V.set(x, y, Math.floor(arch(x, 16.5, 5.5)) + 1, K.cyan, 1);               // two diamonds, set proud
+    V.box(4, 10, 8, 16, 11, 13, 0x5a1f2a);                                                                               // the dark of the mouth between
+    vitrine(V, 0, 0, 20, 20, 1, 20);
   } });
 
 export const halo = T({ id: 'trophy-halo', name: 'Most Trusted halo', place: 'floor', foot: [2, 2], h: 1.5, tags: ['halo', 'handshake', 'trusted'],
@@ -172,29 +205,66 @@ export const firstHeist = T({ id: 'trophy-first-heist', name: 'First-heist vault
 
 export const cornerMansion = T({ id: 'trophy-corner-mansion', name: 'Corner-lot mansion model', place: 'surface', foot: [3, 3], h: 0.55, tags: ['model', 'mansion', '1 of 1'],
   game: tro('1of1', 'first-corner-mansion'),
+  grain: 0.025, shaped: 'a model of a house: the columns, the roof, the windows, the pool and the trees',
   build(V) {
-    V.box(0, 0, 0, 15, 2, 15, 0x1f1f24); V.box(1, 2, 1, 14, 3, 14, (x, y, z) => z > 11 || x > 11 ? (z > 12 || x > 12 ? K.slate : K.white) : K.grass);   // the base, the lot on its corner
-    V.box(3, 3, 3, 11, 8, 9, K.gold, 2); V.box(1, 3, 4, 3, 6, 8, K.gold, 2); V.box(11, 3, 4, 12, 6, 8, K.gold, 2); V.box(3, 8, 4, 11, 9, 8, shade(K.gold, .85), 2); V.box(5, 9, 5, 9, 10, 7, shade(K.gold, .85), 2);   // the house, wings, roof
-    for (const x of [4, 6, 8, 10]) V.box(x, 3, 9, x + 1, 8, 10, K.white, 1); V.box(3, 8, 9, 11, 9, 11, K.gold, 2);                         // portico columns
-    V.box(4, 2, 1, 9, 3, 3, K.cyan, LIT);                                                                                               // the pool out back
-    vitrine(V, 0, 0, 15, 15, 2, 11);
+    // THIRD PASS · the model on its plinth: a corner lot (lawn, the sidewalk round two sides, a drive), a gold mansion with two wings,
+    // a pitched roof, a portico of white columns, dark windows; a lit pool out back and three trees. The case's lid is clear
+    V.box(0, 0, 0, 30, 3, 30, 0x1f1f24); V.box(11, 1, 30 - 1, 19, 3, 30, K.gold, 2);                                  // the plinth, its plate
+    V.box(1, 3, 1, 29, 4, 29, (x, y, z) => (z > 24 || x > 24 ? (z > 26 || x > 26 ? K.slate : K.white) : K.grass));     // the lot on its corner
+    V.box(13, 3, 20, 17, 4, 27, K.pale);                                                                                // the drive
+    const G = K.gold, GD = shade(K.gold, .82), WIN = 0x1b2a55;
+    V.box(8, 4, 9, 22, 13, 19, G, 2); V.box(3, 4, 11, 8, 10, 18, G, 2); V.box(22, 4, 11, 27, 10, 18, G, 2);          // the house, its wings
+    for (let k = 0; k < 4; k++) V.box(8 - k * .0 + k, 13 + k, 9 + k, 22 - k, 14 + k, 19 - k, k % 2 ? G : GD, 2);    // the roof, stepped to a ridge
+    for (const x0 of [3, 22]) for (let k = 0; k < 3; k++) V.box(x0 + k, 10 + k, 11 + k, x0 + 5 - k, 11 + k, 18 - k, GD, 2);
+    for (const x of [10, 12.5, 15, 17.5]) V.box(x, 4, 19, x + 1, 12, 20, K.white, 1);                                // the portico's columns
+    V.box(9, 12, 19, 21, 13, 21, K.white, 1); for (let k = 0; k < 2; k++) V.box(10 + k * 2, 13, 19, 20 - k * 2, 14, 21, K.white, 1);   // its pediment
+    for (const [x, y] of [[9, 6], [9, 9], [19, 6], [19, 9], [14, 9]]) V.box(x, y, 19, x + 2, y + 2, 20, WIN);      // windows, front
+    for (const x of [4, 6, 23, 25]) V.box(x, 6, 18, x + 1, 8, 19, WIN);
+    V.box(14, 4, 19, 16, 8, 20, 0x5a3418);                                                                              // the door
+    V.box(10, 3, 3, 20, 4, 8, K.white); V.box(11, 3, 4, 19, 4, 7, K.cyan, LIT);                                       // the pool out back
+    for (const [x, z, r] of [[4, 4, 2.4], [25, 5, 2.2], [4, 24, 2.2]]) { V.box(x, 4, z, x + 1, 6, z + 1, K.woodD); ball(V, x + .5, 8, z + .5, r, r * 1.1, r, K.leaf); }   // trees
+    vitrine(V, 0, 0, 30, 30, 3, 22);
   } });
 
 export const dirtyCop = T({ id: 'trophy-dirty-cop', name: 'Dirty-cop donut box', place: 'surface', foot: [3, 2], h: 0.3, tags: ['donuts', 'cash', 'dirty cop'],
   game: tro('rare', 'dirty-cop'),
+  grain: 0.025, shaped: 'a box of donuts: each donut round with its hole, icing and sprinkles',
+  grain: 0.025, shaped: 'a box of donuts: each donut round with its hole, icing and sprinkles',
+  grain: 0.025, shaped: 'a box of donuts: each donut round with its hole, icing and sprinkles',
+  grain: 0.025, shaped: 'a box of donuts: each donut round with its hole, icing and sprinkles',
+  grain: 0.025, shaped: 'a box of donuts: each donut round with its hole, icing and sprinkles',
   build(V) {
-    V.box(0, 0, 2, 15, 2, 10, K.pink); V.box(1, 1, 3, 14, 2, 9, K.white); V.box(0, 0, 0, 15, 6, 2, K.pink); V.box(1, 1, 1, 14, 5, 2, K.white);   // the box, the lid open, its inside
-    for (let k = 0; k < 5; k++) V.set(3 + k * 2, 4, 0, k % 2 ? K.white : K.red);                                                          // the lid's stripe
-    for (const cx of [3, 7]) { cyl(V, cx, 6, 1.8, 2, 3, K.buff); cyl(V, cx, 6, 1.4, 3, 4, K.pink); V.set(cx, 3, 6, K.buff); V.set(cx - 1, 3, 5, K.yellow); V.set(cx, 3, 7, K.cyan); }   // donuts, icing, sprinkles
-    brick(V, 10, 2, 4, 4, 3, 2); brick(V, 10, 4, 5, 4, 2, 1); for (const [x, y] of [[7, 5], [6, 4], [8, 4], [7, 3]]) V.set(x, y, 0, K.gold, 2);   // cash bricks, a gold star on the lid
+    // THIRD PASS · the pink box open, its lid up behind with a gold star; four round donuts with holes, pink and chocolate icing,
+    // sprinkles; and the cash where two donuts should be
+    V.box(0, 0, 4, 30, 4, 20, K.pink); V.box(1, 1, 5, 29, 4, 19, -1); V.box(1, 0, 5, 29, 1, 19, K.white);       // the box, hollow, its white floor
+    V.box(0, 0, 0, 30, 11, 4, K.pink); V.box(1, 1, 3, 29, 10, 4, K.white); V.box(0, 11, 0, 30, 12, 4, shade(K.pink, .85));   // the lid, standing open
+    for (let k = 0; k < 7; k++) V.box(3 + k * 4, 9, 0 - 0, 5 + k * 4, 10, 1, k % 2 ? K.white : K.red);               // the lid's stripe
+    for (const [x, y] of [[15, 6], [14, 5], [16, 5], [15, 4], [13, 6], [17, 6], [15, 7]]) V.set(x, y, 0 - 0, K.gold, 2);   // the gold star
+    const ICE = [0x5a3418, K.white, K.yellow, 0x5a3418];
+    [[6, 9], [14.5, 9], [6, 15.5], [14.5, 15.5]].forEach(([dx, dz], k) => {                                                     // four donuts
+      for (let x = Math.floor(dx - 5); x < dx + 5; x++) for (let z = Math.floor(dz - 5); z < dz + 5; z++) for (let y = 1; y < 6; y++) {
+        const d = Math.hypot(x + .5 - dx, z + .5 - dz), t = Math.hypot(d - 2.6, y + .5 - 2.7); if (t > 1.65) continue;
+        const iced = (y >= 3 && d > 1.2 && d < 4) || (y === 2 && d > 3.6 && hash(x, z, k) > .5), sp = y >= 3 && iced && k !== 2 && hash(x, y, z + k * 9) > .86;
+        V.set(x, y, z, sp ? pick([K.yellow, K.cyan, K.lime, K.white, K.red], (hash(z, x, y) * 5) | 0) : iced ? ICE[k] : (y < 3 ? 0xb07a3c : 0xd9a05b), iced ? 1 : 0); } });
+    for (let k = 0; k < 2; k++) { V.box(20, 1 + k * 2, 7 + k, 28, 3 + k * 2, 13 + k, K.cash); V.box(23, 1 + k * 2, 7 + k, 24, 3 + k * 2, 13 + k, K.white); }   // two bricks of cash
   } });
 
 export const bribed = T({ id: 'trophy-bribed-10', name: 'Greasy palm (10 bribes)', place: 'surface', foot: [2, 2], h: 0.6, tags: ['award', 'bribe', 'gold'],
   game: tro('rare', 'bribed-10'),
+  grain: 0.025, shaped: 'a gold hand: the palm, four fingers and a thumb, a fat envelope in it',
   build(V) {
-    V.box(1, 0, 1, 9, 2, 9, K.white, 1); V.box(4, 2, 4, 7, 7, 7, K.gold, 2);                                                            // marble foot, the forearm
-    V.box(2, 7, 3, 8, 9, 8, K.gold, 2); V.box(2, 9, 7, 8, 10, 8, K.gold, 2); V.box(1, 8, 3, 2, 10, 5, K.gold, 2);                         // the palm, fingers curling up, the thumb
-    V.box(3, 9, 3, 7, 11, 7, K.white); V.box(4, 11, 4, 6, 12, 6, K.cash); V.set(5, 10, 7 - 1, K.red);                                      // a fat envelope, cash peeking, a wax seal
+    // THIRD PASS · on a marble foot, a gold forearm and an open hand palm up, four fingers curling up behind and the thumb out to
+    // the side; in the palm a fat envelope, cash showing, a red seal
+    V.box(2, 0, 2, 18, 3, 18, (x, y, z) => (hash(x, y, z) > .9 ? 0xb9b9c0 : K.white), 1); V.box(2, 3, 2, 18, 4, 18, shade(K.white, .9), 1);   // marble foot
+    V.box(6, 1, 18 - 1, 14, 3, 18, K.gold, 2);                                                                          // its plate
+    lathe(V, 10, 10, 4, 12, prof([[4, 2.9], [6, 2.5], [12, 2.3]]), K.gold, 2); lathe(V, 10, 10, 4, 6, () => 3.3, shade(K.gold, .85), 2);   // the forearm, its cuff
+    V.box(5, 12, 6, 15, 15, 15, K.gold, 2); V.box(6, 11, 7, 14, 12, 14, K.gold, 2);                                  // the palm (fingers to the back, −z)
+    for (let k = 0; k < 4; k++) { const x0 = 5.2 + k * 2.5, len = [4, 5, 4.6, 3.6][k];                             // four fingers: back, then up
+      V.box(x0, 13, 6 - len * .6, x0 + 2, 15, 6, K.gold, 2); V.box(x0, 15, 6 - len * .6, x0 + 2, 15 + len * .9, 6 - len * .6 + 2, K.gold, 2);
+      V.box(x0, 14 + len * .9, 6 - len * .6, x0 + 2, 15 + len * .9, 6 - len * .6 + 1, shade(K.gold, .82), 2); }   // the nail edge
+    line(V, 15, 13, 12, 18, 17, 13, K.gold, 2); line(V, 15, 14, 12, 18, 18, 13, K.gold, 2); line(V, 16, 13, 11, 18, 17, 12, K.gold, 2);   // the thumb, out and up
+    V.box(6, 15, 8, 14, 18, 14, K.white, 1); V.box(7, 18, 9, 13, 20, 13, K.cash); V.box(9, 18, 9, 10, 20, 13, K.white);   // the envelope, the cash, its band
+    V.box(9, 15, 14, 11, 17, 15, K.red, 1);                                                                             // the seal
   } });
 
 export const burgled = T({ id: 'trophy-burgled-10', name: 'Gold crowbar (10 jobs)', place: 'wall', foot: [6, 2], h: 0.2, mount: 1.4, tags: ['award', 'crowbar', 'burglary'],

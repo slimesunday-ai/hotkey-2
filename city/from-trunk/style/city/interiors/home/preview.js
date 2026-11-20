@@ -106,7 +106,7 @@ function buffText(G) { if (!G) return ''; const b = G.buff ?? {}, pc = v => `${v
   const t = []; if (b.secure) t.push(`${b.secure}${b.burgleOdds ? ' ' + b.burgleOdds + '% burgle' : ''}${b.safeTake ? ' take ' + pc(b.safeTake) : ''}`); if (b.stashTake) t.push(`stash take ${pc(b.stashTake)}`);
   if (b.cook) t.push(`cook: ${b.cook}`); if (b.heatDecay) t.push(`heat decay ×${b.heatDecay}`); if (b.crib) t.push(`crib +${b.crib}`); return t.join(' · '); }
 function badge(o) { const G = o.game; if (!G) return ''; return `<i class="g"><b class="r ${G.rarity}">${G.rarity === '1of1' ? '1 of 1' : G.rarity}</b> ${G.kind}${G.stealable ? '' : ' · safe'} · ${buffText(G)}</i>`; }
-const V2T = { base: 'v2 · base kit additions (everyone gets these)', gear: 'v2 · gear: stash spots, security, cook gear, laying low', crime: 'v2 · collectibles: the crime shelf', collector: 'v2 · collectibles: collector culture', wallfloor: 'v2 · collectibles: wall, floor, ceiling', trophy: 'v2 · trophies: one per MARK (never stolen)' };
+const V2T = { base: 'v2 · base kit additions (everyone gets these)', gear: 'v2 · gear: stash spots, security, cook gear, laying low', crime: 'v2 · collectibles: the crime shelf', collector: 'v2 · collectibles: collector culture', wallfloor: 'v2 · collectibles: wall, floor, ceiling', trophy: 'v2 · trophies: one per MARK (never stolen)', hustle: 'the hustle: the run\'s pieces that had no model' };
 
 
 // ═════════ tier rooms (dollhouse cut: floor, back wall at z = 0, right wall at x = Wr)

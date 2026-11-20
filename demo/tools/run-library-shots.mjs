@@ -17,9 +17,11 @@ function opt(name, fallback) {
 const out = path.resolve(opt('--out', 'demo/shots/run-library'));
 const port = opt('--port', 5470);
 const [W, H] = opt('--size', '1600x1000').split('x').map(Number);
-const WEAR = opt('--wear', 'hat:old_bucket,eyewear:precinct_aviators,bottom:old_baggy').split(',');
+const WEAR = opt('--wear', 'hat:old_bucket,eyewear:precinct_aviators,bottom:old_drop_p_lockbox_cargo').split(',');
 const HOME = opt('--home', 'kit:boombox,kit:plant-monstera,kit:arcade-cab').split(',');
-const TRY = opt('--try', 'top:old_varsity_jacket').split(',');
+const TRY = opt('--try', 'top:old_chenille').split(',');
+// (notes-1: old_baggy and old_varsity_jacket, the defaults since lib-1 c86d13f, were never pieces the run sells: the
+// library's bottoms and the chenille varsity stand in for them)
 const KEY = 'pad:a1';
 mkdirSync(out, { recursive: true });
 const url = `http://127.0.0.1:${port}/demo/?mode=run&seed=${opt('--seed', '3')}`;

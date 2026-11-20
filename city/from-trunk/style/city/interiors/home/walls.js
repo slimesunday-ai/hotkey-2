@@ -1,14 +1,24 @@
 // Home objects · rugs (free rotation) and the wall: framed prints, posters, a graffiti canvas, family photos, big art, wood panelling.
 // Pictures are painted on the +z face; frames stand 1 cube proud. No real artworks, brands or marks: every image is invented.
-import { def, K, pick, cyl, line, glow, LIT, shade, mix, rng, hash, txt, M3, M5, face } from './lib.js';
+import { def, K, pick, cyl, line, glow, LIT, shade, mix, rng, hash, txt, M3, M5, face, fsurf } from './lib.js';
 
 // ── rugs (h = pile height)
 export const rugShag = def({ id: 'rug-shag', name: 'Shag rug', cat: 'rugs', place: 'floor', foot: [8, 6], h: 0.1, rot: 45,
   tiers: ['trailer', 'apartment', 'house'], tags: ['70s', 'shag', 'cosy'], variants: 3, vnames: ['orange', 'green', 'pink'],
+  grain: 0.025, shaped: 'a shag rug: deep pile in tufts, soft rounded edges',
+  grain: 0.025, shaped: 'a shag rug: deep pile in tufts, soft rounded edges',
   build(V, { variant = 0, seed = 1 } = {}) {
-    const c = pick([K.orange, K.grass, K.pink], variant);
-    for (let x = 0; x < 40; x++) for (let z = 0; z < 30; z++) { if (Math.min(x, 39 - x) + Math.min(z, 29 - z) < 2) continue; const q = hash(x, z, seed);
-      V.set(x, 0, z, q > .5 ? c : shade(c, .9)); if (q > .45 && Math.min(x, 39 - x, z, 29 - z) > 0) V.set(x, 1, z, q > .8 ? shade(c, 1.14) : shade(c, .94)); }
+    // THIRD PASS · deep pile: the backing, then tufts in clumps of a few strands, each clump its own height and tone, the tips
+    // catching the light; the corners rounded and the pile lower at the edge, so it reads soft and deep, not a sponge
+    const c = pick([K.orange, K.grass, K.pink], variant), W = 80, D = 60;
+    const inRug = (x, z) => { const ex = Math.min(x, W - 1 - x), ez = Math.min(z, D - 1 - z); return ex >= 0 && ez >= 0 && !(ex < 5 && ez < 5 && Math.hypot(5 - ex, 5 - ez) > 5.2); };
+    for (let x = 0; x < W; x++) for (let z = 0; z < D; z++) { if (!inRug(x, z)) continue;
+      const cx = Math.floor(x / 4), cz = Math.floor(z / 4), q = hash(cx, cz, seed), edge = Math.min(x, W - 1 - x, z, D - 1 - z);
+      const h = edge < 2 ? 1 : edge < 4 ? 2 : 2 + (q > .5 ? 1 : 0), lean = hash(cx + 7, cz, seed) > .5;
+      V.set(x, 0, z, shade(c, .72));
+      for (let y = 1; y <= h; y++) V.set(x, y, z, y === h ? (q > .7 ? mix(c, K.white, .22) : q < .2 ? shade(c, .86) : c) : shade(c, .85));
+      if (lean && h > 2 && (x % 4 === 1) && x + 1 < W && inRug(x + 1, z)) V.set(x + 1, h, z, mix(c, K.white, .12));   // a strand laid over
+    }
   } });
 
 export const rugPersian = def({ id: 'rug-persian', name: 'Persian-style rug', cat: 'rugs', place: 'floor', foot: [10, 7], h: 0.05, rot: 45,
@@ -92,14 +102,22 @@ export const poster = def({ id: 'poster', name: 'Poster', cat: 'wall', place: 'w
 export const artGraffiti = def({ id: 'art-graffiti', name: 'Graffiti canvas', cat: 'wall', place: 'wall', foot: [6, 4], h: 0.1, mount: 1.1,
   tiers: ['apartment', 'house', 'penthouse'], tags: ['art', 'street', 'spray paint'], variants: 3, vnames: ['BAD on white', 'ICE on black', 'YO! on brick'], far: true,
   build(V, { variant = 0, seed = 1 } = {}) {
+    // THIRD PASS · no loose cubes: the canvas, and on it, flat, a tag in fat letters with an outline, a drop shadow and long drips;
+    // the spray mist, the shines and a star painted (fine)
     const [word, bg, fill, shd] = pick([['BAD', K.white, K.pink, K.purple], ['ICE', 0x1f1f24, K.cyan, K.cobalt], ['YO!', K.brick, K.yellow, K.red]], variant), r = rng(seed * 7 + variant);
-    V.box(0, 0, 0, 30, 20, 1, bg); V.box(0, 0, 1, 30, 20, 2, (x, y) => (hash(x, y, seed) > .93 ? mix(bg, fill, .35) : undefined));   // canvas, overspray
-    const M = M5(word), X0 = Math.round((30 - M.w - 2) / 2) + 1, Y = 15, on = (x, y) => { const i = x - X0, j = Y - y; return i >= 0 && i < M.w && j >= 0 && j < 7 && M.at(i, j); };
-    const blob = (x, y) => on(x, y) || on(x - 1, y) || on(x + 1, y) || on(x, y - 1) || on(x, y + 1);
-    for (let x = 0; x < 30; x++) for (let y = 0; y < 20; y++) { if (blob(x - 1, y + 1)) V.set(x, y, 1, shd); }                    // the drop shadow
-    for (let x = 0; x < 30; x++) for (let y = 0; y < 20; y++) if (blob(x, y)) V.set(x, y, 1, on(x, y) && hash(x, y) > .8 ? K.white : fill);   // bubble letters, highlights
-    for (let x = 0; x < 30; x++) if (blob(x, 8) && r() < .35) { const n = 2 + ((r() * 4) | 0); for (let k = 1; k <= n; k++) V.set(x, 8 - k, 1, fill); }   // drips
-    for (let k = 0; k < 3; k++) { const x = 3 + ((r() * 24) | 0), y = 16 + ((r() * 3) | 0); if (!blob(x, y)) { V.set(x, y, 1, K.white); V.set(x - 1, y, 1, K.white); V.set(x + 1, y, 1, K.white); V.set(x, y - 1, 1, K.white); V.set(x, y + 1, 1, K.white); } }   // sparkles
+    V.box(0, 0, 0, 30, 20, 1, bg);                                                                                        // the canvas
+    const M = M5(word), sc = Math.min(2, 26 / M.w), X0 = Math.round((30 - M.w * sc) / 2), Y = 17, on = (x, y) => { const i = Math.floor((x - X0) / sc), j = Math.floor((Y - y) / 2); return i >= 0 && i < M.w && j >= 0 && j < 7 && M.at(i, j); };
+    const fat = (x, y) => on(x, y) || on(x - 1, y) || on(x + 1, y) || on(x, y - 1) || on(x, y + 1), rim = (x, y) => !fat(x, y) && (fat(x - 1, y) || fat(x + 1, y) || fat(x, y - 1) || fat(x, y + 1));
+    for (let x = 0; x < 30; x++) for (let y = 0; y < 20; y++) { if (rim(x, y) || fat(x, y)) V.set(x, y, 1, fat(x, y) ? fill : K.ink); else if (fat(x - 1, y + 1)) V.set(x, y, 1, shd); }   // letters, outline, shadow
+    for (let x = 1; x < 29; x++) if (fat(x, 4) && !fat(x, 3) && r() < .5) { const n = 2 + ((r() * 3) | 0); for (let k = 1; k <= n && 4 - k >= 0; k++) V.set(x, 4 - k, 1, fill); }   // drips, flat on the canvas
+  },
+  fine(P, { variant = 0, seed = 1, V } = {}) {
+    // the spray mist round the letters, white shines on them, a little star
+    const [bg, fill] = pick([[K.white, K.pink], [0x1f1f24, K.cyan], [K.brick, K.yellow]], variant);
+    fsurf(P, V, '+z', 0, 0, 0, 30, 20, 2, (x, y, z, i, j) => { const h = hash(x * 4 + i, y * 4 + j, seed);
+      if (z === 0 && h > .95 && (x + y) % 2) return mix(bg, fill, .45);                                                                 // mist on the bare canvas
+      if (z === 1 && V.pal[V.d[x + z * V.nx + y * V.sxz]] === fill && i === 1 && j >= 2 && (x + y) % 4 === 0) return K.white;   // shines
+      return null; });
   } });
 
 export const photosFamily = def({ id: 'photos-family', name: 'Family photos', cat: 'wall', place: 'wall', foot: [4, 3], h: 0.1, mount: 1.2,

@@ -160,8 +160,10 @@ test('saving: loadRun never throws: another version says `version`, anything els
   const text = saveRun(s);
   assert.equal(JSON.parse(text).kind, SAVE_KIND);
   assert.equal(JSON.parse(text).v, RUN_STATE_VERSION);
-  // another state version: no migration
-  for (const v of [RUN_STATE_VERSION - 1, RUN_STATE_VERSION + 1, 1]) {
+  // another state version: no migration (memory-1: but version 8 is read: run-memory.test.mjs; styles-1: and 9,
+  // run-styles.test.mjs)
+  // (sixes-1: and 10; so 7 is the newest refused)
+  for (const v of [7, RUN_STATE_VERSION + 1, 1]) {
     const old = JSON.stringify({ kind: SAVE_KIND, v, state: { ...s, v } });
     const r = loadRun(old);
     assert.deepEqual([r.ok, r.why, r.found, r.wants], [false, 'version', v, RUN_STATE_VERSION]);

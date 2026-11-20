@@ -25,7 +25,7 @@
 // KEYS (ui-3, leg 2: the dock, below; one key one meaning everywhere in the run): 1 2 3 the three things in front of
 // you; B Shop, R Rob, X Bins, T Travel, H Home, Z Sleep, the six verbs that never move, renumber or vanish; ← → along
 // the dock, ↑ ↓ what the picked thing is set to; Enter does it; Esc closes; Space skips a scene (never the result
-// card). C You, L the Library (leg 3: everything there is), G Guide, O Stuff, M Map, V Arrange, K the home risk, J the
+// card). C You, L the Library (leg 3: everything there is), U Ahead (tree-1: what there is to get, and where), G Guide, O Stuff, M Map, V Arrange, K the home risk, J the
 // journal, I the frame's size, F the dock to one row, N your numbers to one line. W A S D are never the run's (kept for moving). The heat HERE is
 // under the danger's number (POLICE where they are about), in words on the row when the place is hot, on the top
 // line's stops and the map's.
@@ -43,10 +43,10 @@ import { h, fill, ensureStyles, makeRoot, barEl } from '../hud/dom.js';
 import { tabs as kitTabs } from '../../city/from-trunk/style/city/ui/kit.js';
 import { RUN_CONFIG, newRun, view, step, checkRunBooks } from '../../src/run/index.mjs';
 import { YOU, stageGame, lineOf as lineAt, endOf, stopSpots } from './scenes.js';
-import { scenesOf, binsOf, STEP, FAR_IN, FRONT, YARD, VISIT, POST, WAIT, WAIT_EAST, GUARD, homeWho } from './acted.js';
-import { characterStats, characterWearing, characterPeople, movesBody, stuffBody, lineNote, stopFlag, stopBody, stopOf, STOP_NAME, hookedShort, hookedText, trustMark, trustTitle, tellEl, signedT, goodWord as goodWordOf, goodsWords as goodsWordsOf, packWord as packWordOf, thingWord, WEAR_LOOK, shortName as personShort } from './panels.js';
+import { scenesOf, binsOf, STEP, FAR_IN, FRONT, YARD, VISIT, POST, WAIT, WAIT_EAST, GUARD, homeWho, SENT, SIXES_TWO, CREW_FRIEND } from './acted.js';
+import { characterStats, characterWearing, characterPeople, characterFight, movesBody, stuffBody, lineNote, stopFlag, stopBody, stopOf, STOP_NAME, hookedShort, hookedText, trustMark, trustTitle, tellEl, signedT, goodWord as goodWordOf, goodsWords as goodsWordsOf, packWord as packWordOf, thingWord, WEAR_LOOK, shortName as personShort } from './panels.js';
 // (the door's answer as the rules will have it: refusing from with you is sore, not a grudge. Read only, as panels.js does)
-import { trustAfter, trustBand } from '../../src/run/rules.mjs';
+import { trustAfter, trustBand, fightAdvice } from '../../src/run/rules.mjs';
 import { createRunMap } from './map.js';
 import { createArrangeMode } from './arrange.js';
 import { dressOf as dressWorn, thingOf, tryOn as tryOnOf } from '../../src/run/library.mjs';
@@ -64,6 +64,16 @@ import { nameOf as pieceName, tierWord } from './catalog.js';
 // (join-1: THE TRY-OUT STOP, the fight behind the dead mall as a side trip of the page's, tryout.js and trip.js)
 import { TRYOUT, TRYOUT_CHOICE, isTryout, withTryout, tryoutOffered, tryoutRow, tryoutGo, tryoutWhy } from './tryout.js';
 import { createTrip } from './trip.js';
+import { createDuel } from './duel.js';
+// (tree-1: WHAT'S AHEAD, the trees of every way to fight, piece of gear, piece for the home and place, ahead.js)
+import { createAhead } from './ahead.js';
+// (smooth-1: THE FIGHT ODDS IN THE BACKGROUND, odds.js: the rules' samples of fights played in workers, never on the
+// page's thread; a figure not worked out yet says "…" and a choice resting on one waits for it)
+import { createOdds, pendingIn, watchPending } from './odds.js';
+// (raid-1: THE RAID ON YOUR HOME on the page, raid.js: the word, the WORTH meter, the one decision, the night's card)
+import { createRaidUI, RAID_KEY } from './raid.js';
+// (raidfight-1: the raid played at your door, the fight page's scene: docs/animation/raid-fight.md)
+import { createRaidFight } from './raidfight.js';
 
 const CSS = new URL('./run.css', import.meta.url).href;
 // (ui-3: the new frame's parts, ui.css, and their look, skin.css: every colour, outline and shadow, one file to swap)
@@ -94,6 +104,9 @@ const SHEETS = [
   { id: 'character', key: 'C', label: 'You', short: 'You', title: 'You', icon: 'person' },
   // (ui-3, leg 3: the owner, "where is the catalog?": every piece there is, L. The home risk slip went to K for it)
   { id: 'library', key: 'L', label: 'Library', short: 'Library', title: 'Library', icon: 'library' },
+  // (tree-1, the owner: "the what's ahead screen": every way to fight, gear, piece for the home and place, what each does
+  // and opens, and where it is had. U: none of the run's other letters, and kept for nothing else)
+  { id: 'ahead', key: 'U', label: 'Ahead', short: 'Ahead', title: 'Ahead: what there is to get, and where', icon: 'tree' },
   { id: 'moves', key: 'G', label: 'Guide', short: 'Guide', title: 'Guide: every move there is', icon: 'journal' },
   { id: 'stuff', key: 'O', label: 'Stuff', short: 'Stuff', title: 'Stuff: everything to buy, everywhere', icon: 'goods' },
   { id: 'map', key: 'M', label: 'Map', short: 'Map', title: 'The map', icon: 'map' },
@@ -115,6 +128,40 @@ export function mountRun(host, opts = {}) {
   const root = makeRoot(host);
   root.classList.add('rn');
   const cfg = RUN_CONFIG;
+  // THE FIGHT ODDS IN THE BACKGROUND (smooth-1, odds.js; docs/perf/2026-11-18-audit.md fix 1): every sample of fights
+  // the rules ask for while the page draws (the view, the Map, Ahead, the advice) is played by workers, and the figure
+  // waits as "…" (watchPending) until its count is kept; then whatever showed it is drawn again (oddsKept). The step
+  // is always exact (stepExact): played with every count it asks for, those not kept yet worked out first in the
+  // workers while the frames go on. The next hour's samples are asked for the moment it is decided, so they are worked
+  // out while its scene plays.
+  // (&oddsworkers=N: how many workers, for the tools; 0 plays the counts in idle slices of a few ms, the fallback)
+  const oddsWorkers = Number(new URLSearchParams(location.search).get('oddsworkers') ?? 3);
+  const odds = createOdds({ onKept: () => oddsKept(), workers: Number.isFinite(oddsWorkers) ? Math.max(0, Math.min(8, oddsWorkers)) : 3 });
+  const pendingWords = watchPending(root);
+  /**
+   * THE RULES' STEP, EXACT, WITHOUT A FREEZE: played as it is; when it asks for a count not kept yet (the trailer park
+   * between the ride home and the door, which no view ever showed: its cards' fights), that try is thrown away, the
+   * counts are worked out in the workers while the frames go on, and it is played again. What it returns is always
+   * the step with every count there, the very one Node plays.
+   */
+  async function stepExact(...a) {
+    for (;;) {
+      let err = null;
+      const r = odds.collect(() => {
+        try {
+          return step(...a);
+        } catch (e) {
+          err = e;
+          return null;
+        }
+      });
+      if (!r.missing.length) {
+        if (err) throw err;
+        return r.value;
+      }
+      await odds.whenKept(r.missing);
+    }
+  }
   // GOODS ON THE PAGE (goods-1): short words for what you carry, in the page's own type (panels.js)
   const goodWord = (g, n) => goodWordOf(cfg, g, n);
   const goodsWords = goods => goodsWordsOf(cfg, goods);
@@ -156,6 +203,11 @@ export function mountRun(host, opts = {}) {
     // meter's click, or L); and THE NOTICE that cannot be missed, over the picture's top: somebody at your door now and
     // the ways home, or how an attempt you were not there for went. Neither is a panel the stage makes way for
     homePrint: h('div', { class: 'rn-print rn-home-print', role: 'note', hidden: true }),
+    // (sixes-1: the Sixes' slip, as HOME's)
+    sixesPrint: h('div', { class: 'rn-print rn-home-print rn-sixes-print', role: 'note', hidden: true }),
+    // (raid-1: the WORTH meter's slip, and THE ONE DECISION before the Sixes come for your crib, a card as the slips are)
+    worthPrint: h('div', { class: 'rn-print rn-home-print rn-worth-print', role: 'note', hidden: true }),
+    raidPrint: h('section', { class: 'rn-print rn-home-print rn-raid-print', role: 'dialog', 'aria-label': 'Your door', hidden: true }),
     alert: h('div', { class: 'rn-alert', role: 'alert', hidden: true }),
     // (save-1: NEW RUN's second ask, what it ends, a slip under the button)
     ask: h('div', { class: 'rn-new-ask', role: 'alert', hidden: true }),
@@ -166,10 +218,19 @@ export function mountRun(host, opts = {}) {
   const cardBody = h('div', { class: 'rn-card-body' });
   el.left.append(dock);
   // (the panel after the card: at phone width it is a sheet from the bottom over it; the day's report over both)
-  root.append(el.top, el.where, el.side, el.notice, el.left, el.card, el.print, el.homePrint, el.sheet, el.res, el.alert, el.ask, el.trying, el.back, el.dark, el.overlay, el.toasts);
+  root.append(el.top, el.where, el.side, el.notice, el.left, el.card, el.print, el.homePrint, el.sixesPrint, el.worthPrint, el.raidPrint, el.sheet, el.res, el.alert, el.ask, el.trying, el.back, el.dark, el.overlay, el.toasts);
   el.back.addEventListener('click', () => cycleSize());
 
   const game = stageGame();
+  // THE FIGHTS (duel-1, RUN.md "Fights"): a fight the rules decided, played on the stage between the two in the picture
+  const duel = createDuel({ stage, root });
+  // (raid-1: the raid on your home's own parts of the page: raid.js. `toggle` opens or folds its two slips)
+  // (a choice made on the card keeps the card up while it is made: S.raidKeep, until the step has played)
+  const raidUI = createRaidUI({ cfg, odds, S: () => S, fromPanel: (k, go) => { S.raidKeep = !!(go && S.phase === 'choose' && S.v.choices.find(x => x.key === k)?.available); fromPanel(k, go); }, toggle: (which, on) => toggleRaid(which, on) });
+  /** (raid-1) For the tools: each night of the Sixes played on the page, and the scene's record of it. */
+  const raidLog = [];
+  // (raid-1: THE RAID AT YOUR DOOR, the fight page's scene, made once beside the fights')
+  const raidFight = createRaidFight({ stage, root });
   // THE TILES (ui-3, leg 3; tiles.js): a piece's picture for the lists. Drawn only between scenes: while an hour plays,
   // the opening runs or the stage is between two places, nothing is drawn
   const busyWhy = () => (!(S.phase === 'choose' || S.phase === 'held' || S.phase === 'report' || S.phase === 'done') ? `phase ${S.phase}` : S.opening ? 'opening' : S.hold ? 'an hour holds' : stage.travelling ? 'travelling' : S.away ? 'on the try-out' : null);
@@ -356,6 +417,53 @@ export function mountRun(host, opts = {}) {
     }
     S.saveAt = text && slot.write(text) ? atOf(state, view(cfg, state)) : false;
   }
+  // ── THE ODDS, WORKED OUT IN THE BACKGROUND (smooth-1, odds.js) ───────────────────────────────────────────────────
+  /**
+   * Counts the page was waiting for are kept: whatever was drawn with a figure still "…" is drawn again, the view of
+   * now and the one held while an hour plays, the panels (the Map's places, the cards) and Ahead's tables.
+   */
+  function oddsKept() {
+    if (S.dead) return;
+    let again = pendingWords.seen > 0;
+    if (S.v && pendingIn(S.v)) {
+      S.v = view(cfg, S.state);
+      again = true;
+    }
+    if (S.hold?.v && pendingIn(S.hold.v)) {
+      S.hold.v = view(cfg, S.hold.state);
+      again = true;
+    }
+    ahead.kick?.();
+    if (!again || S.phase === 'start') return;
+    pendingWords.seen = 0;
+    paint();
+  }
+  /**
+   * A choice whose odds are still being worked out waits for them: its own figures (a card's fight, a way's danger),
+   * or the danger of the hour here for anything that spends that hour (everything but what takes no time).
+   */
+  function oddsWait(c) {
+    if (pendingIn(c)) return true;
+    const spends = !(c.hours === 0 || c.kind === 'set' || c.kind === 'buy');
+    return spends && !!S.v.danger?.here && pendingIn(S.v.danger);
+  }
+  /**
+   * AFTER A FIGHT LOST, WHAT WOULD HAVE HELPED (rules.mjs fightAdvice: a few hundred fights a line): at once when its
+   * samples are kept; else the card says "…" there and the line is put on it (and for the tools) when they are.
+   */
+  function adviceFor(before, duel, steps, card) {
+    const jumped = !!duel.jumped;
+    const r = odds.collect(() => fightAdvice(cfg, before, duel));
+    if (!r.missing.length) return { ...r.value, step: steps, jumped };
+    const wait = { key: null, pct: NaN, was: NaN, in10: NaN, line: 'NaN', step: steps, jumped, pending: true };
+    odds.settle(() => fightAdvice(cfg, before, duel)).then(a => {
+      if (S.advice !== wait || S.dead) return;
+      S.advice = { ...a, step: steps, jumped };
+      if (card && card === S.card) card.advice = a.line;
+      paint();
+    });
+    return wait;
+  }
   // (ARRANGE MODE at the crib, demo/run/arrange.js: V, between choices; no hour passes while it is up)
   const arrange = createArrangeMode({ stage, root, pad: `pad:${YOU}`, seed: () => S.state.seed, can: () => S.phase === 'choose' && S.v?.place === 'crib' && !S.v.door && !S.dead, tile: (piece, o) => tiles.el(piece, o) });
   // (every hour the stage plays knows the people as the view has them after the step: who has left for the day, who
@@ -373,7 +481,8 @@ export function mountRun(host, opts = {}) {
   const EXTRA = /^npc:(passer:\d+|robber[12]|police1)$/;
   function peopleOn(line, door, at = []) {
     const cold = new Set((S.v?.people ?? []).filter(p => p.mood === 'cold').map(p => p.id));
-    const want = [...(door ? [{ id: door.id, spot: STEP, action: 'chore', clips: door.calm ? ['listen_nod'] : ['withdrawal_shake'], face: YOU, back: null }] : []), ...at];
+    // (memory-1: somebody come for another go is no craving regular: he stands his ground at the foot of the step and waits)
+    const want = [...(door ? [{ id: door.sent ? SENT : door.id, spot: STEP, action: 'chore', clips: door.calm || door.due || door.kind === 'due' ? ['listen_nod'] : ['withdrawal_shake'], face: YOU, back: null }] : []), ...at];
     // (home-1: COUSIN EARL ON YOUR STEP while he is on, the view's guard: at his post to the east of your door (porch.post),
     // his back to it, at the city's guard_post. One person: buying his cartons
     // walks you to him there)
@@ -489,6 +598,10 @@ export function mountRun(host, opts = {}) {
       return;
     }
     if (stage.travelling) return void stage.skipTravel();
+    // (duel-1: a fight on: its own skip, to the same result)
+    if (duel.active) return void duel.skip();
+    // (raid-1: the raid at your door: its own skip, to the rules' result)
+    if (raidFight.active) return void raidFight.skip();
     // (routes-1: the board still rolling in after the hour, wayOn: ended at once, under a dip, on his spot)
     if (!S.playing && S.phase === 'playing' && stage.travel?.rides?.busy?.(YOU)) return void dipped(() => stage.travel.cancel(YOU));
     if (!S.playing || S.skipped) return;
@@ -503,6 +616,36 @@ export function mountRun(host, opts = {}) {
       if (stage.travelling) stage.skipTravel();
       await stage.playHour(S.line, { seen: [], speed: 1000 }).catch(err => console.warn('[run] the skip did not settle:', err));
     });
+  }
+
+  /**
+   * AN HOUR WITH A FIGHT IN IT (duel-1, RUN.md "Fights"): what came before it (the job's start, the door shut on him),
+   * the fight itself (duel.js: the rules' own fight, seen to its end), and what came after, in turn. `lineFor(events,
+   * last)` makes each line; the last one is always played, so the hour ends where the rules have the player. Skipped
+   * at any point, the rest is settled under the black, to the same result.
+   */
+  async function duelHour(events, lineFor) {
+    const i = events.findIndex(e => e.duel);
+    const fightE = events[i];
+    await playOn(lineFor(events.slice(0, i + 1), false));
+    let skipped = S.skipped;
+    // (styles-1: jumped, two at once, the two who jumped you; somebody sent to your door, whoever stands there for him)
+    // (sixes-1: two of the Sixes by the steps: their own two)
+    const them = fightE.sixes ? [...SIXES_TWO] : fightE.duel.jumped ? ['npc:robber1', 'npc:robber2'] : fightE.sent ? SENT : fightE.who?.id;
+    const themName = fightE.sixes ? 'Two of the Sixes' : fightE.duel.jumped ? 'Two of them' : cap(fightE.duel.them?.name ?? fightE.who?.name ?? 'them');
+    if (!S.dead && !skipped && them) {
+      try {
+        const r = await duel.play({ duel: fightE.duel, you: YOU, them, youName: 'You', themName });
+        skipped = !!r?.skipped;
+      } catch (err) {
+        console.warn('[run] the fight did not play:', err);
+      }
+    }
+    if (S.dead) return;
+    // (styles-1: after a jump, the two of them go the stage's own way off, first thing of what comes after: acted.js)
+    const rest = lineFor([...(fightE.duel.jumped ? [{ ...fightE, type: 'jumpedAway', sixes: !!fightE.sixes, text: null, money: [] }] : []), ...events.slice(i + 1)], true);
+    if (skipped) await dipped(() => playOn(rest, { instant: true }));
+    else await playOn(rest);
   }
 
   // ── the ride home lands a little up the lane from the trailer ────────────────────────────────────────────────────
@@ -574,7 +717,10 @@ export function mountRun(host, opts = {}) {
     // the crib from the starter pack, and the city before it (demo/stage/opening.js): not on auto, not with no scenes
     // (the room shows what is owned: the bed, and the things for the trailer, goods-1: set/starter.js)
     // (a run picked up has no opening: it is put where it was saved, under the stage's own cut)
-    const opened = await stage.openRun?.({ you: YOU, owned: () => ({ ...S.state.owned, things: { ...(S.state.things ?? {}) } }), opening: !opts.pilot && opts.scenes !== false && !pickedUp });
+    // (raid-1: a piece the Sixes knocked out is not in its place until it is mended: the door bar off the door, the
+    // camera off the wall; the HOME slip says until when)
+    const working = st => Object.fromEntries(Object.entries(st.things ?? {}).filter(([k]) => !((st.home?.out?.[k] ?? -1) >= st.day)));
+    const opened = await stage.openRun?.({ you: YOU, owned: () => ({ ...S.state.owned, things: working(S.state) }), opening: !opts.pilot && opts.scenes !== false && !pickedUp });
     stage.begin({ game, you: YOU, mode: 'play' });
     dressYou();
     stage.markPlayer?.(YOU);
@@ -642,8 +788,17 @@ export function mountRun(host, opts = {}) {
   function ask() {
     return new Promise(resolve => {
       S.resolve = resolve;
-      const answer = opts.pilot?.(S.v, S.state);
+      // (smooth-1: the auto-play reads the odds off the view as the player does: never a figure still being worked
+      // out. With none waiting it answers at once, as before; else once they are kept)
+      const r = opts.pilot ? odds.collect(() => (pendingIn(S.v) ? null : opts.pilot(S.v, S.state))) : null;
+      const answer = r && !r.missing.length && !pendingIn(S.v) ? r.value : null;
       if (answer) setTimeout(() => S.resolve === resolve && send(answer), 120);
+      else if (opts.pilot) {
+        const st = S.state;
+        odds.settle(() => opts.pilot(view(cfg, st), st)).then(a => {
+          if (a && S.resolve === resolve) setTimeout(() => S.resolve === resolve && send(a), 120);
+        });
+      }
     });
   }
 
@@ -658,7 +813,7 @@ export function mountRun(host, opts = {}) {
   }
 
   /** The choices whose outcome waits for their scene (the reveal), the ones played as work, and the door's events. */
-  const HOLDS = new Set(['job', 'subway', 'inside', 'out', 'rob', 'bins', 'shop', 'pack', 'get', 'rough', 'give', 'refuse', 'walk', 'skate', 'onward', 'card', 'guard']);
+  const HOLDS = new Set(['job', 'subway', 'inside', 'out', 'rob', 'bins', 'shop', 'pack', 'get', 'rough', 'give', 'refuse', 'walk', 'skate', 'onward', 'card', 'guard', 'tax']);
   const WORKS = new Set(['job', 'rob', 'bins', 'card']);
   // (routes-1: the moves along a way: setting out on foot or on the board, and going on from a stop. wayOn)
   const WAYS = new Set(['walk', 'skate', 'onward']);
@@ -668,7 +823,7 @@ export function mountRun(host, opts = {}) {
 
   async function act(choice) {
     const before = S.state;
-    let { state, events } = step(cfg, before, choice);
+    let { state, events } = await stepExact(cfg, before, choice);
     // HOME FROM THE MARKET, ALL THE WAY IN (the coordinator's ruling, flagged to the owner as such): in the trailer park
     // nobody acts on you, so there is nothing to decide between the ride and the door. The page sends `inside` itself
     // (the engine untouched), the ride's cut puts you a little up the lane from your trailer, and you walk to your
@@ -676,7 +831,7 @@ export function mountRun(host, opts = {}) {
     // (routes-1: and the same at the end of a way home, on foot or on the board)
     const home = (choice.do === 'subway' && choice.to === 'park' && state.place === 'park') || (WAYS.has(choice.do) && state.place === 'park' && !state.route);
     if (home) {
-      const r = step(cfg, state, { do: 'inside' });
+      const r = await stepExact(cfg, state, { do: 'inside' });
       state = r.state;
       // (goods-1: and what was left at home, said on the same line: "You left 4 cigarettes at home")
       const left = st => (hasGoods(st) ? ` You left ${goodsWords(st)} at home.` : '');
@@ -693,6 +848,13 @@ export function mountRun(host, opts = {}) {
     const news = { cfg, before, state, events, v0: view(cfg, before), v1: S.v, words: newsWords };
     S.card = newsOf(news);
     S.cardGone = false;
+    // (styles-1) AFTER A LOSS, ONE LINE OF WHAT WOULD HAVE HELPED: the same fight with each thing of the run that could
+    // change it (rules.mjs fightAdvice, the simulator's own, as the arena's advice): on the card, and for the tools
+    // (raid-1: not after the Sixes' night at your door: its card says what it cost, and the raid's card what helps)
+    const lostE = events.find(e => e.duel && e.duel.result !== 'won' && !e.duel.sixesRaid);
+    // (smooth-1: its fights are a sample: worked out in the background, and said once they are; "…" until then)
+    S.advice = lostE ? adviceFor(before, lostE.duel, S.steps, S.card) : null;
+    if (S.card && S.advice) S.card.advice = S.advice.line;
     if (S.card) {
       // (the quiet roll, said: nobody came for you that hour, at its chance)
       const calm = S.result.rolls.find(x => x.quiet);
@@ -741,6 +903,31 @@ export function mountRun(host, opts = {}) {
         text: `The police took ${[pinched.seized ? money(pinched.seized) : null, goodsWords(pinched.goodsSeized)].filter(Boolean).join(' and ')} off you. ${names} ${days ? 'won\'t sell to you' : 'trust you less'}; heat ${pinched.heatAfter} after jail.`,
         suggest: { text: other ? `Buy ${packWord(other.good)}s from ${cap(other.who.name)}, ${other.placeLabel}` : 'Sell what you left at home' } };
     }
+    // (memory-1: WHO IS COMING TO YOUR DOOR TOMORROW, said the evening before; and a mark that ran out or broke: "Benny
+    // isn't scared of you any more". The notice's slip, as a call to the police elsewhere is)
+    const coming = events.filter(e => e.type === 'coming');
+    const ended = events.filter(e => e.type === 'markEnd');
+    if (coming.length || ended.length) {
+      const scared = ended.filter(e => e.kind === 'beat' || e.kind === 'robbed');
+      S.notice = { head: coming.length ? 'Coming tomorrow' : scared.length ? 'Not scared any more' : 'Let it go', day: state.day, who: null, memory: true,
+        text: [...ended, ...coming].map(e => e.text).join(' ') };
+    }
+    // (sixes-1: THE SIXES' NEWS: Dutch's word, two of them waiting by the steps tomorrow (or gone home again), the meter
+    // easing off; and the dog left unfed. The notice's slip, as who is coming to your door is)
+    const six = events.filter(e => (e.type === 'sixes' && ['word', 'jumpWarned', 'jumpOff', 'ease', 'refused'].includes(e.what)) || (e.type === 'dogFed' && !e.paid));
+    if (six.length) {
+      const top = six.find(e => e.what === 'jumpWarned') ?? six.find(e => e.what === 'word') ?? six.find(e => e.what === 'refused') ?? six[0];
+      const n = { head: top.type === 'dogFed' ? 'The dog' : top.what === 'jumpWarned' ? 'The Sixes: tomorrow' : top.what === 'word' ? 'A word from Dutch' : top.what === 'refused' ? 'You refused the Sixes' : 'The Sixes', day: state.day, who: null, sixes: true,
+        text: six.map(e => e.text).join(' ') };
+      // (second pass: what she says in the hour is seen first, then the notice: told before the scene, it gave it away)
+      if (opts.scenes !== false && six.some(e => e.what === 'word' || e.what === 'refused')) S.noticeAfter = n;
+      else S.notice = n;
+    }
+    // (raid-1: THE WORD, the morning before: the Sixes are coming for your crib. The notice; the card of the one
+    // decision (what you meet them with, who stands with you, home or out) a press away)
+    const warned = events.find(e => e.type === 'sixes' && e.what === 'raidWarned');
+    // (titles first: the notice; the card is its button, Y or the chip on your numbers)
+    if (warned) S.notice = raidUI.word(warned);
     // (save-1: COUSIN EARL'S GOING, the morning his stretch is over: said on the top line that day, not as a loss)
     const gone = events.find(e => e.type === 'guard' && !e.on && e.why === 'done');
     if (gone) S.earl = { day: state.day, text: gone.text, who: gone.who?.name ?? null };
@@ -769,12 +956,15 @@ export function mountRun(host, opts = {}) {
     // A REGULAR WAS AT THE DOOR: given, or refused (shut on him, walked out past him, slept past him), and the fight
     // or the grudge that follows. Played at the door, with him standing at the foot of the step while it lasts
     const atDoor = events.filter(e => DOOR_TYPES.has(e.type));
-    const doorWho = before.door ? { id: before.door.id } : null;
-    if (choice.do === 'buy' || choice.do === 'wear' || choice.do === 'unwear') {
+    // (styles-1: somebody sent stands there for whoever sent him)
+    const doorWho = before.door ? { id: before.door.sent ? SENT : before.door.id } : null;
+    // (raid-1: what you hold at your door is set on the card: nothing to play, as a purchase at the crib)
+    if (choice.do === 'buy' || choice.do === 'wear' || choice.do === 'unwear' || choice.do === 'holdWith') {
       // (bought at the crib, or something put on or taken off there: nothing to play; the figure is dressed after)
     } else if (choice.do === 'sleep') {
       // (the door shut on him on the way to bed: that first, at the door)
-      if (atDoor.length && opts.scenes !== false) await playOn(lineOf({ ...hourOf(before), place: 'crib', staged: actedOf(atDoor), verb: 'move' }, doorWho));
+      if (atDoor.length && opts.scenes !== false && atDoor.some(e => e.duel)) await duelHour(atDoor, (evs, last) => lineOf({ ...hourOf(before), place: last ? 'crib' : 'park', staged: actedOf(evs), verb: 'move' }, last ? null : doorWho));
+      else if (atDoor.length && opts.scenes !== false) await playOn(lineOf({ ...hourOf(before), place: 'crib', staged: actedOf(atDoor), verb: 'move' }, doorWho));
       // TO BED: across the room to the bed the room has and onto it (doorway.js, the city's plan of the room); with no
       // plan of it, the sleep is played where they stand
       if (opts.scenes !== false && stage.doorway?.has(`pad:${YOU}`)) {
@@ -795,7 +985,9 @@ export function mountRun(host, opts = {}) {
       // at the door, and then back in (the hour ends at the pad: lineOf). A grudge: he stays out on his porch, to see
       // the regular storm off and the police come round (the state is the crib's: the next choice is made from there)
       const grudge = atDoor.find(e => e.type === 'grudge');
-      await playOn(lineOf({ ...hourOf(state), place: grudge ? 'park' : 'crib', staged: actedOf(atDoor), verb: 'move' }, doorWho && { ...doorWho, calm: choice.do === 'give' }));
+      // (duel-1: he swung, and it is a fight: out on the porch for it, then back in)
+      if (opts.scenes !== false && atDoor.some(e => e.duel)) await duelHour(atDoor, (evs, last) => lineOf({ ...hourOf(state), place: last ? 'crib' : 'park', staged: actedOf(evs), verb: 'move' }, last ? null : doorWho));
+      else await playOn(lineOf({ ...hourOf(state), place: grudge ? 'park' : 'crib', staged: actedOf(atDoor), verb: 'move' }, doorWho && { ...doorWho, calm: choice.do === 'give' }));
       // (and then he storms off home, sour, while the player watches from the porch. The police coming round is the
       // place's heat: the bar and the line's stops say it)
       if (grudge && !S.dead && opts.scenes !== false) await playOn(lineOf({ ...hourOf(state), place: 'park', staged: actedOf([{ type: 'stormed', place: 'park', day: state.day, hour: state.hour }]), verb: 'move' }));
@@ -815,21 +1007,31 @@ export function mountRun(host, opts = {}) {
       const staged = actedOf(events);
       // (the hour you leave the market is still an hour there: what it brought is played THERE, and then the ride.
       // As one hour the stage played the scenes, then started the player's walk home and waited on it, then the ride)
-      const there = home ? actedOf(events.filter(e => e.place === 'market')) : staged;
+      const there = home ? actedOf(events.filter(e => e.place === before.place)) : staged;
       // (home-1: home in time for whoever is at the door, or home after an attempt you were not there for: homeArrival)
       const arrival = home ? homeArrival(events) : null;
       const indoors = arrival?.staged ?? null;
       // (the ride home lands a little up the lane from the trailer: landing())
       if (home) S.homeward = true;
       if (choice.do === 'subway' && !taken && there?.events.length) {
-        await playOn(lineOf({ ...hourOf(before), place: before.place, staged: there, verb: 'move' }));
-        if (!S.dead) await playOn(lineOf({ ...hourOf(state), place: arrival?.park ? 'park' : state.place, staged: indoors, verb: 'move' }, null, arrival?.at ?? []));
+        // (styles-1: jumped on the hour you leave, the fight plays there first)
+        const evThere = events.filter(e => e.place === before.place);
+        if (opts.scenes !== false && evThere.some(e => e.duel?.jumped)) await duelHour(evThere, evs => lineOf({ ...hourOf(before), place: before.place, staged: actedOf(evs), verb: 'move' }));
+        else await playOn(lineOf({ ...hourOf(before), place: before.place, staged: there, verb: 'move' }));
+        // (second pass: stopped on the kerb by Dutch, you stay there with her for the answer: no ride, no walk back)
+        const stopped = state.place === before.place && events.some(e => e.type === 'sixes' && e.what === 'tax');
+        if (!S.dead && !stopped) await playOn(lineOf({ ...hourOf(state), place: arrival?.park ? 'park' : state.place, staged: indoors, verb: 'move' }, null, arrival?.at ?? []));
       } else {
         // (home-1: THE NOTICE ON A RIDE OUT is taken once there, its own short hour: a scene at the far end of a trip
         // is at a place not yet loaded when the hour starts, and the stage left it unplayed, measured 2026-11-16)
         const ride = choice.do === 'subway' && !home && !taken && staged?.events.some(e => e.kind === 'run:alarm');
         const trip = ride ? actedOf(events.filter(e => e.type !== 'alarm')) : staged;
-        await playOn(lineOf({ ...hourOf(state), place: arrival?.park ? 'park' : state.place, taken: taken ? endOf(before.place).block : null, staged: home ? indoors : trip, verb: WORKS.has(choice.do) ? 'work' : 'move' }, choice.do === 'out' && atDoor.length ? doorWho : null, arrival?.at ?? []));
+        // (duel-1: a job gone wrong to their face, or the regular walked out past who swings: a fight in the hour)
+        // (styles-1: and getting jumped, which is a fight now: on the way home too, where it ends in the clinic)
+        const fought = opts.scenes !== false && events.some(e => e.duel) && ((!home && !ride) || events.some(e => e.duel?.jumped));
+        if (fought) {
+          await duelHour(events, (evs, last) => lineOf({ ...hourOf(state), place: last ? (arrival?.park ? 'park' : state.place) : taken ? before.place : state.place, taken: last && taken ? endOf(before.place).block : null, staged: actedOf(evs), verb: WORKS.has(choice.do) ? 'work' : 'move' }, choice.do === 'out' && atDoor.length && !last ? doorWho : null, arrival?.at ?? []));
+        } else await playOn(lineOf({ ...hourOf(state), place: arrival?.park ? 'park' : state.place, taken: taken ? endOf(before.place).block : null, staged: home ? indoors : trip, verb: WORKS.has(choice.do) ? 'work' : 'move' }, choice.do === 'out' && atDoor.length ? doorWho : null, arrival?.at ?? []));
         if (ride && !S.dead) await playOn(lineOf({ ...hourOf(state), place: state.place, staged: actedOf(events.filter(e => e.type === 'alarm')), verb: 'move' }));
       }
       S.homeward = false;
@@ -847,6 +1049,15 @@ export function mountRun(host, opts = {}) {
         S.taken = null;
       }
     }
+    // (second pass: a notice held back for the hour's scene, now it has played)
+    if (S.noticeAfter && !S.dead) {
+      S.notice = S.noticeAfter;
+      S.noticeAfter = null;
+      paint();
+    }
+    // (raid-1: THE SIXES AT YOUR DOOR IN THE NIGHT, seen first, as it happened, then the night's report)
+    const raidE = events.find(e => e.type === 'raid' && e.kind === 'sixes');
+    if (dayOver && raidE && !S.dead) await raidNight(before, state, raidE);
     if (dayOver) {
       S.phase = 'report';
       paint();
@@ -878,6 +1089,7 @@ export function mountRun(host, opts = {}) {
       // (out of the jail or the clinic, the cut home was a played hour under the report: he has asked already)
       if (state.door && events.some(e => e.type === 'door') && !S.dead && (before.place === 'crib' || choice.do === 'rough')) await doorAt(state, events.find(e => e.type === 'door'));
     }
+    S.raidKeep = false;
     if (events.some(e => e.type === 'done')) {
       S.phase = 'done';
       paint();
@@ -897,7 +1109,10 @@ export function mountRun(host, opts = {}) {
     const way = before.route?.way ?? (choice.do === 'skate' ? 'board' : 'foot');
     const ride = cfg.ways[way]?.scene?.ride ?? 'foot';
     const there = actedOf(events.filter(e => e.place === before.place));
-    if (there?.events.length) await playOn(lineOf({ ...hourOf(before), place: before.place, staged: there, verb: 'move' }));
+    // (styles-1: jumped setting out, the fight plays there first)
+    const evThere = events.filter(e => e.place === before.place);
+    if (there?.events.length && opts.scenes !== false && evThere.some(e => e.duel?.jumped)) await duelHour(evThere, evs => lineOf({ ...hourOf(before), place: before.place, staged: actedOf(evs), verb: 'move' }));
+    else if (there?.events.length) await playOn(lineOf({ ...hourOf(before), place: before.place, staged: there, verb: 'move' }));
     if (S.dead) return;
     // (home-1: home in time for whoever is at the door, or home after an attempt you were not there for: homeArrival)
     const arrival = home ? homeArrival(events) : null;
@@ -1007,7 +1222,8 @@ export function mountRun(host, opts = {}) {
   function homeFront(state, events = []) {
     if (opts.scenes === false || state.place !== 'crib') return null;
     const door = !!state.door;
-    const night = events.find(e => e.type === 'raid' && e.night);
+    // (raid-1: the Sixes' night is its own scene, played before the report: raidNight)
+    const night = events.find(e => e.type === 'raid' && e.night && e.kind !== 'sixes');
     if (night && metAtDoor(night)) return { kind: 'night', event: night, at: night.guard ? [...guardAt(), ...raiderAt(night.who, 'waitEast')] : raiderAt(night.who, 'step') };
     const casing = events.find(e => e.type === 'casing');
     // (at the foot of your step, looking your door over, as a regular stands there to ask: face to face with you as you
@@ -1033,9 +1249,93 @@ export function mountRun(host, opts = {}) {
       keepInShot(null);
     }
     if (S.dead) return;
+    // (sixes-1: A CREW AT YOUR DOOR IN THE NIGHT: the door fight you watch, the two of them and you, Earl beside you if
+    // he is on; then what it came to)
+    if (front.kind === 'night' && e.duel) {
+      await crewFight(e);
+      if (S.dead) return;
+      await crewCard(e);
+    }
     if (front.kind === 'casing') await warningCard(e);
     if (!state.door && !S.dead) await playOn(lineOf({ ...hourOf(state), place: 'crib', staged: front.kind === 'after' && e.taken ? actedOf([{ type: 'homeMissing' }]) : null, verb: 'move' }));
     if (front.kind === 'after' && !S.dead) await afterCard(e);
+  }
+  /**
+   * (raid-1) THE SIXES AT YOUR DOOR IN THE NIGHT (RUN.md "The raid on your home", "On the page"). Home: under the
+   * black you are put out on your porch, and the raid is played at your door by the fight page's scene
+   * (demo/run/raidfight.js: the rules' own raid, the event's `duel`, stepped tick for tick and drawn; the crew's bodies
+   * are its own, made and taken off under the black; every loadout, a gun or bare hands, Earl or not). It ends under the
+   * black; the night's card, each thing it cost, is read over it; beaten, the cut to the clinic; then the black lifts.
+   * Out: said at once (the notice) and seen when you next come home (S.after), as any attempt you were not there for.
+   */
+  async function raidNight(before, state, e) {
+    const rec = { day: e.day, crew: e.crew, size: e.size, n: e.n, home: !!e.home, outcome: e.outcome, how: null, why: null, fight: null, card: null };
+    raidLog.push(rec);
+    S.raidOpen = false;
+    S.worthOpen = false;
+    if (!e.home) return;
+    const D = e.duel;
+    rec.how = raidUI.staging(D).kind;
+    // (THE REVEAL WAITS FOR THE SCENE: while it plays, your numbers, the journal and the row are the evening's)
+    S.hold = { v: view(cfg, before), state: before, doing: `The Sixes are at your door: ${e.n} of them.` };
+    const fade = stage.travel?.fade ?? null;
+    if (opts.scenes !== false) {
+      S.phase = 'playing';
+      paint();
+      try {
+        // (under the black: out on your porch, at the hour you went to bed; the scene takes the black over from here)
+        if (fade && !fade.dark) await fade.out();
+        await playOn(lineOf({ ...hourOf(before), place: 'park', staged: actedOf([{ type: 'porch' }]), verb: 'move' }), { instant: true });
+        if (!S.dead) rec.fight = await raidFight.play({ raid: D, you: YOU, ally: D.earl ? GUARD : null, pad: YOU, dark: true });
+      } catch (err) {
+        rec.why = String(err?.message ?? err);
+        console.warn('[run] the Sixes\' night did not play:', err);
+      }
+      if (S.dead) return;
+    }
+    rec.card = true;
+    S.hold = null;
+    // (what it cost, on your numbers behind the card as it is read)
+    paint();
+    await overlay(raidUI.resultEl(e, state, () => S.onPress?.()), 900);
+    // (beaten at your door: you wake in the clinic (the rules have you out of it and home by the morning): the cut there,
+    // under the night's report, then home)
+    if (e.home && e.outcome === 'beaten' && opts.scenes !== false && !S.dead) {
+      await stage.take(YOU, 'clinic').catch(err => console.warn('[run] the stage did not take the player there:', err));
+      rec.clinic = true;
+    }
+    // (the black the scene left: lifted, on the door or the clinic)
+    if (fade?.dark) fade.in();
+    // (the truce, said where it lives: a notice until it ends, and on the Sixes' meter)
+    if (e.truce) S.notice = { head: 'A week\'s truce', day: state.day, until: e.truce, who: null, sixes: true, text: `You held your door: the Sixes leave you be through day ${e.truce}. No tax, nobody on the kerb, no raid.` };
+  }
+  /**
+   * (sixes-1) THE DOOR FIGHT WITH A CREW: duel.js plays the rules' own fight (the event's `duel`) with whoever cased it
+   * and a friend (the stage's Lyle Dunn), Cousin Earl beside you when he is in it; the same Skip, the same bar.
+   */
+  async function crewFight(e) {
+    const them = [homeWho(e.who?.id) ?? 'npc:caser', CREW_FRIEND];
+    try {
+      keepInShot(null);
+      await duel.play({ duel: e.duel, you: YOU, them, ally: e.duel.earl ? GUARD : null, youName: e.duel.earl ? 'You and Earl' : 'You', themName: 'A crew of two' });
+    } catch (err) {
+      console.warn('[run] the door fight did not play:', err);
+    }
+  }
+  /** (sixes-1) What the door fight came to: won or lost, what it cost, Earl, what was taken (the event's own words). */
+  function crewCard(e) {
+    paint();
+    const won = e.duel.result === 'won';
+    const D = e.duel;
+    const plate = h('div', { class: 'hk-screen' }, h('div', { class: 'hk-plate rn-report rn-home-card rn-crew-card' },
+      h('header', null, h('span', { class: 'hk-kicker' }, `Last night (day ${e.day}), at your door`),
+        h('h1', null, won ? 'You held the door' : `They got in: ${money(e.taken)} gone`),
+        h('p', null, e.text),
+        h('p', { class: `rn-night${won ? ' is-door' : ' is-bad'}` }, won ? `They ran. Energy −${e.energyLost} this morning.` : `Energy −${e.energyLost} this morning. Banked now: ${money(S.state.banked)}.`),
+        D.earl ? h('p', { class: `rn-night${D.earl.down ? ' is-bad' : ' is-door'}` }, D.earl.down ? `Cousin Earl went down (told: ${D.earl.name}). He is off tomorrow and back on your step the day after; his stretch goes on.` : `Cousin Earl stood with you (told: ${D.earl.name}).`) : null,
+        h('p', { class: 'hk-fine' }, `The fight: ${D.you.why.join(' · ')}. ${cap(D.chance.text)}${D.chance.earlDown != null ? `, Earl down about ${Math.round(D.chance.earlDown / 10)} in 10` : ''}.`)),
+      h('div', { class: 'hk-night-foot' }, h('button', { class: 'k-btn is-primary hk-go', onclick: () => S.onPress?.() }, 'Go on', kbd('Enter')))));
+    return overlay(plate, 900);
   }
   /** THE WARNING'S CARD (home-1): who was seen, why them, what is at stake, and what you could do (the event's own list). */
   function warningCard(e) {
@@ -1043,13 +1343,47 @@ export function mountRun(host, opts = {}) {
     const could = (e.could ?? []).filter(c => !c.owned && !c.on && c.available !== false);
     const plate = h('div', { class: 'hk-screen' }, h('div', { class: 'hk-plate rn-report rn-home-card' },
       h('header', null, h('span', { class: 'hk-kicker' }, `Day ${e.day} · seen at your trailer`),
-        h('h1', null, `${cap(e.who.name)} was casing your crib`),
-        h('p', null, `${WHO_WHY[e.why] ?? ''} Hanging round your door, looking it over: they will try it tomorrow, while you are out.`),
-        h('p', { class: 'rn-night is-bad' }, `At stake: ${money(e.stake.takes)} of the ${money(e.stake.banked)} you have banked (${e.stake.share}%).`)),
+        h('h1', null, e.kind === 'crew' ? `${cap(e.who.name)} and a friend: a crew` : `${cap(e.who.name)} was casing your crib`),
+        h('p', null, e.kind === 'crew' ? `${WHO_WHY[e.why] ?? ''} Two heavies looking your door over. They come ${e.lead > 1 ? `on the night of day ${e.raidDay} (the camera caught them a day early)` : 'tomorrow night'}, after dark: home, it is a fight at your door; out, they kick it in.`
+          : `${WHO_WHY[e.why] ?? ''} Hanging round your door, looking it over: they will try it ${e.lead > 1 ? `on day ${e.raidDay} (the camera caught them a day early)` : 'tomorrow'}, while you are out.`),
+        h('p', { class: 'rn-night is-bad' }, e.kind === 'crew' && e.stake.home ? `At stake: ${money(e.stake.home.takes)} of the ${money(e.stake.banked)} you have banked (${e.stake.home.share}%) if they beat you at your door${e.stake.share < e.stake.home.share ? `; ${money(e.stake.takes)} (${e.stake.share}%) if you are out` : ''}.`
+          : `At stake: ${money(e.stake.takes)} of the ${money(e.stake.banked)} you have banked (${e.stake.share}%).`),
+        // (sixes-1: the door fight, as the card of a fight says it: its odds now, and what would change them)
+        e.kind === 'crew' ? crewOddsEl() : null),
       h('div', { class: 'rn-could' }, h('b', null, 'You could'), h('ul', null, could.map(c => h('li', null, cap(c.text))))),
-      h('p', { class: 'hk-fine' }, `Pressure at home ${e.pressure.value} of ${e.pressure.max}: L shows what holds it up.`),
+      h('p', { class: 'hk-fine' }, `Pressure at home ${e.pressure.value} of ${e.pressure.max}: K shows what holds it up.`),
       h('div', { class: 'hk-night-foot' }, h('button', { class: 'k-btn is-primary hk-go', onclick: () => S.onPress?.() }, 'Got it', kbd('Enter')))));
     return overlay(plate, 900);
+  }
+  /**
+   * (sixes-1) THE DOOR FIGHT'S ODDS, AS A FIGHT CARD SAYS THEM: now (what you fight with, after a night's sleep, the
+   * door bar, Earl and how he is told), and the same fight with each thing that changes it: what else you fight with,
+   * Earl told each other way (pressable: it tells him), the door bar, Earl hired.
+   */
+  function crewOddsEl(pressable = false) {
+    const o = S.v?.home?.crew?.odds;
+    if (!o) return null;
+    const bits = [];
+    for (const [a, p] of Object.entries(o.byArm ?? {})) if (a !== o.you.arm) bits.push(`with ${cfg.duel.you[a]?.label ?? a}: ${Math.round(p / 10)} in 10`);
+    if (o.withBar != null) bits.push(`with the door bar ($${cfg.things.doorbar.price}, from Mr. Haines on the docks): ${Math.round(o.withBar / 10)} in 10`);
+    if (o.withEarl != null) bits.push(`with Cousin Earl beside you: ${Math.round(o.withEarl / 10)} in 10`);
+    const ways = S.v?.earl?.on ? S.v.earl.ways : [];
+    return h('div', { class: 'rn-crew-odds' },
+      h('p', { class: 'rn-night is-door' }, `At your door: ${o.text} (${o.you.why.join(' · ')}).`),
+      bits.length ? h('p', { class: 'hk-fine' }, `${cap(bits.join('; '))}.`) : null,
+      ways.length ? earlWaysEl(ways, pressable && S.phase === 'choose' && !S.hold) : null);
+  }
+  /** (sixes-1) TELL EARL HOW TO FIGHT: a button a way, with what it does and the door fight's odds with it. */
+  // (`pressable`: while you choose, a press tells him; on a card over the picture it only says them: K tells him)
+  function earlWaysEl(ways, pressable = true) {
+    return h('div', { class: 'rn-earl-ways' }, h('b', null, pressable ? 'Tell Earl:' : 'Earl told (K to change it):'), ...ways.map(w => h(pressable ? 'button' : 'span', { type: pressable ? 'button' : null, class: `k-btn rn-earlway${w.chosen ? ' is-on' : ''}`, 'data-way': w.way, title: `${w.word}: ${w.says}. At your door you win about ${Math.round((w.win ?? 0) / 10)} in 10 with him told this.`,
+      onclick: ev => { ev.stopPropagation(); tellEarl(w.way); } }, `${w.word} · ${w.win == null ? '' : `${Math.round(w.win / 10)} in 10`}`)));
+  }
+  /** (sixes-1) Tell Earl how to fight at your door: the rules' choice, no hour (as what you fight with is set). */
+  function tellEarl(way) {
+    const c = S.v?.choices?.find(x => x.choice.do === 'earlWay' && x.choice.way === way);
+    if (!c?.available) return;
+    fromPanel(c.key, true);
   }
   /** HOME AFTER AN ATTEMPT YOU WERE NOT THERE FOR (home-1): what it left, once you have seen the door and the floorboard. */
   function afterCard(raid) {
@@ -1057,6 +1391,8 @@ export function mountRun(host, opts = {}) {
     S.raidNote = null;
     S.hold = null;
     paint();
+    // (raid-1: the Sixes came while you were out: the night's own card)
+    if (raid.kind === 'sixes') return overlay(raidUI.resultEl(raid, S.state, () => S.onPress?.()), 900);
     const guard = raid.how === 'guard';
     const title = guard ? `${cap(raid.guard?.who?.name ?? 'Your guard')} saw them off` : raid.taken ? `They got in: ${money(raid.taken)} gone` : raid.gotIn ? 'They got in, and found nothing' : 'The door held';
     const plate = h('div', { class: 'hk-screen' }, h('div', { class: 'hk-plate rn-report rn-home-card' },
@@ -1068,7 +1404,7 @@ export function mountRun(host, opts = {}) {
       h('div', { class: 'hk-night-foot' }, h('button', { class: 'k-btn is-primary hk-go', onclick: () => S.onPress?.() }, 'Go on', kbd('Enter')))));
     return overlay(plate, 900);
   }
-  const doorEvent = (state, events = []) => events.find(e => e.type === 'door') ?? { type: 'door', place: 'crib', day: state.day, hour: state.hour, who: { id: state.door.id, name: state.door.name, role: state.door.role } };
+  const doorEvent = (state, events = []) => events.find(e => e.type === 'door') ?? { type: 'door', place: 'crib', day: state.day, hour: state.hour, who: { id: state.door.id, name: state.door.name, role: state.door.role }, ...(state.door.kind === 'due' ? { due: true } : {}), ...(state.door.sent ? { sent: state.door.sent } : {}) };
   /** A regular at the door this morning (the view's `door`): seen, he shakes and asks the player on his porch. */
   async function doorAt(state, event) {
     await playOn(lineOf({ ...hourOf(state), place: 'park', staged: actedOf([event ?? doorEvent(state)]), verb: 'move' }, state.door));
@@ -1107,7 +1443,7 @@ export function mountRun(host, opts = {}) {
       const who = choice.who ? o?.targets?.find(t => t.id === choice.who)?.name : null;
       return `${who ? `${cfg.jobs[v0.place]?.[choice.id]?.label ?? o?.label}: ${who}` : o?.label ?? 'Working'}…`;
     }
-    if (choice.do === 'subway') return `${choice.to === 'park' ? 'Heading home' : `To ${cfg.places.market.label}`}${choice.hop ? ', over the turnstile' : ''}…`;
+    if (choice.do === 'subway') return `${choice.to === 'park' ? 'Heading home' : `To ${cfg.places[choice.to]?.label ?? cfg.places.market.label}`}${choice.hop ? ', over the turnstile' : ''}…`;
     // (routes-1: on foot or on the board, toward the stop or on from it; a card of the stop's hand)
     if (choice.do === 'walk' || choice.do === 'skate') {
       const m = v0.moves.find(x => x.choice.do === choice.do && x.choice.to === choice.to);
@@ -1137,7 +1473,8 @@ export function mountRun(host, opts = {}) {
     }
     if (choice.do === 'rough') return `Lying down for the night ${cfg.places[v0.place]?.where ?? 'here'}…`;
     if (choice.do === 'give') return `Paying ${v0.door?.name ?? 'them'} at the door…`;
-    if (choice.do === 'refuse') return `Shutting the door on ${v0.door?.name ?? 'them'}…`;
+    if (choice.do === 'refuse') return v0.door?.due ? `Fighting ${v0.door.name} at your door…` : `Shutting the door on ${v0.door?.name ?? 'them'}…`;
+    if (choice.do === 'tax') return choice.pay ? `Paying ${v0.sixes?.tax ? money(v0.sixes.tax.wants) : 'Dutch'}…` : 'Telling Dutch no…';
     if (choice.do === 'guard') {
       const g = v0.home?.defences?.guard;
       return g?.on ? `Keeping ${g?.who?.name ?? 'him'} on ${g.days} more days…` : `Hiring ${g?.who?.name ?? 'him'} for your step…`;
@@ -1167,7 +1504,7 @@ export function mountRun(host, opts = {}) {
     const lines = events.filter(e => !['ride', 'released', 'done', 'witness', 'drift'].includes(e.type) && (e.type !== 'morning' || e.night === 'street') && !(e.type === 'onward' && arrived) && e.text).map(e => ({
       text: wayLine(e) ?? e.text,
       bad: BAD.has(e.type) && !(e.type === 'fight' && !e.energyLost) && !(e.type === 'robbed' && !e.taken) || e.outcome === 'fail' || (e.type === 'hop' && e.caught) || (e.type === 'raid' && e.taken > 0),
-      good: e.outcome === 'win' || (e.type === 'raid' && !e.taken) || e.type === 'calledOff', pay: (e.type === 'job' || e.type === 'rob' || e.type === 'card') && e.outcome === 'win' ? e.pay : e.type === 'bins' && e.pay ? e.pay : null,
+      good: e.outcome === 'win' || e.duel?.result === 'won' || (e.type === 'raid' && !e.taken) || e.type === 'calledOff', pay: (e.type === 'job' || e.type === 'rob' || e.type === 'card') && (e.outcome === 'win' || (e.duel?.result === 'won' && e.pay)) ? e.pay : e.type === 'bins' && e.pay ? e.pay : null,
       // (trust-1: said again by a plate and the dice when there is trust news: a job that moved its person's trust, a
       // door shut; then the row gives its room to the plates, the line's words stay in the tooltip)
       covered: (e.type === 'job' && !!e.trust) || e.type === 'refused' || PLATED.has(e.type) || ((e.type === 'jumped' || e.type === 'robbed') && hasGoods(e.goodsTaken)) || (e.type === 'stopped' && hasGoods(e.goodsSeized)),
@@ -1205,6 +1542,15 @@ export function mountRun(host, opts = {}) {
     // (goods-1: what it did with your goods comes first, the losses before the rest; then what it did to people)
     const goods = events.map(goodsChip).filter(Boolean).sort((a, b) => Number(b.tone === 'bad') - Number(a.tone === 'bad'));
     for (const e of events) {
+      // (duel-1) THE FIGHT, and what it cost: first of the plates, the most of what happened
+      if (e.duel?.jumped) {
+        // (styles-1: jumped, a fight you watched)
+        chips.push({ tone: e.outcome === 'fail' ? 'luck' : 'bad', rank: 8, title: `${e.text} (${e.duel.chance?.text ?? ''}; with ${e.duel.you?.label ?? 'bare hands'})`, text: e.outcome === 'clean' ? 'jumped: they beat you' : e.outcome === 'messy' ? 'jumped: a scrape, half gone' : 'jumped: you saw them off' });
+      } else if (e.duel) {
+        const won = e.duel.result === 'won';
+        const cost = e.energyLost ? ` · energy −${e.energyLost}` : '';
+        chips.push({ tone: won ? 'luck' : 'bad', rank: 8, title: `${e.text} (${e.duel.chance?.text ?? ''})`, text: e.type === 'fight' ? (won ? `a fight: you saw ${personShort(e.who?.name ?? 'them')} off` : `a fight: ${personShort(e.who?.name ?? 'they')} beat you${cost}`) : won ? `a fight: you won${e.pay ? `, +${money(e.pay)}` : ''}${cost}` : `a fight: you lost${cost}` });
+      }
       if (e.trust) chips.push(trustChip(e.trust));
       if (e.type === 'bins' && e.lookedAway && e.seen) chips.push({ tone: 'luck', text: `${cap(e.seen.name)} looked away: with you`, title: e.text });
       if (e.type === 'drift') for (const c of e.changes ?? []) if (c.band !== c.bandWas) chips.push(trustChip(c));
@@ -1229,14 +1575,15 @@ export function mountRun(host, opts = {}) {
   function wayLine(e) {
     if (e.type === 'stop') return `${cap(labelOf(e.stop))}: ${e.hand?.length ? `${e.hand.length} to play, or go on` : 'nothing for you here today'}.`;
     if (e.type === 'onward') return `You went on toward ${labelOf(e.next)}.`;
-    if (e.type === 'card' && e.outcome === 'win') return `${cardName(e.card)}: +$${e.pay}${e.heat ? `, heat +${e.heat}` : ''}.`;
+    // (batch-1: a card may pay nothing and cool you, the barber: "heat −1", no "+$0")
+    if (e.type === 'card' && e.outcome === 'win') return `${cardName(e.card)}: ${[e.pay ? `+$${e.pay}` : null, e.heat ? `heat ${e.heat > 0 ? '+' : '−'}${Math.abs(e.heat)}` : null].filter(Boolean).join(', ') || 'done'}.`;
     if (e.type === 'card') return `${cardName(e.card)}: it went wrong${e.heat ? ` (heat +${e.heat})` : ''}${e.goods ? `, the ${e.goods.label} lost` : ''}.`;
     return null;
   }
   /** A place's or a stop's label, as the rules have it. */
   const labelOf = id => cfg.places[id]?.label ?? cfg.stops?.[id]?.label ?? id;
   /** A stop's card by its short name for the bar (its whole label in the tooltip): the rules' label when it has none. */
-  const CARD_NAME = { errand: 'Crates for the barkeeper', lookout: 'Lookout at the alley', tipsy: 'Walk a drunk to the stairs', sell: 'Sell a smoke', dumpster: 'Dig the dumpster' };
+  const CARD_NAME = { errand: 'Crates for the barkeeper', lookout: 'Lookout at the alley', tipsy: 'Walk a drunk to the stairs', sell: 'Sell a smoke', dumpster: 'Dig the dumpster', barber: 'A cut at FRESH CUTZ', drop: 'Lift a pair at DROP' };
   const cardName = id => CARD_NAME[id] ?? Object.values(cfg.stops ?? {}).map(st => st.cards?.[id]).find(Boolean)?.label ?? id;
   /** The events whose line a goods plate says again, shorter (the line stays in the row's tooltip). */
   const PLATED = new Set(['pack', 'thing', 'wear', 'unwear', 'shop']);
@@ -1305,6 +1652,11 @@ export function mountRun(host, opts = {}) {
     paintBar(v);
     paintSheet(v);
     paintHomePrint(v);
+    paintSixesPrint(v);
+    // (raid-1: the WORTH slip and the card of the one decision)
+    raidUI.paintWorth(el.worthPrint, v, !!S.worthOpen && !S.homeOpen && !S.sixesOpen);
+    // (the card is up only while you choose, or while a choice made on it plays: never over a scene)
+    raidUI.paintCard(el.raidPrint, v, !!S.raidOpen && (S.phase === 'choose' || !!S.raidKeep) && !S.worthOpen && !S.homeOpen && !S.sixesOpen);
     paintResult();
     paintTrying();
     fitFrame();
@@ -1343,6 +1695,7 @@ export function mountRun(host, opts = {}) {
       return;
     }
     el.notice.classList.remove('is-saved', 'is-refused');
+    el.notice.classList.toggle('is-raid', !!S.notice?.raid);
     const n = S.notice && (S.notice.day === S.state.day || (S.notice.until ?? 0) >= S.state.day) ? S.notice : null;
     el.notice.hidden = !n;
     if (!n) return fill(el.notice);
@@ -1352,6 +1705,8 @@ export function mountRun(host, opts = {}) {
       h('b', { class: 'rn-notice-h' }, n.head ?? (n.hot ? 'Police called' : 'Called in')),
       h('span', { class: 'rn-notice-text', title: n.text }, `${n.who ? `${cap(n.who)} called the police on ${cfg.places[n.place]?.label ?? n.place}. ` : ''}${words}`),
       n.suggest?.text ? h('span', { class: 'rn-suggest' }, cap(n.suggest.text)) : null,
+      // (raid-1: the word that the Sixes are coming: the card of the one decision, from here)
+      n.raid && (S.hold?.v ?? S.v)?.raid?.due ? h('button', { type: 'button', class: 'k-btn rn-notice-go', title: `What you meet them with, who stands with you, home or out (${RAID_KEY})`, onclick: () => toggleRaid('raid', true) }, 'Your door', kbd(RAID_KEY)) : null,
       h('button', { type: 'button', class: 'k-btn rn-notice-x', 'aria-label': 'Put the notice away', title: 'Put it away', onclick: () => { S.notice = null; paint(); } }, '×'));
   }
   /**
@@ -1414,6 +1769,14 @@ export function mountRun(host, opts = {}) {
       return;
     }
     const r = a.r;
+    // (raid-1: the Sixes came while you were out)
+    if (r.kind === 'sixes') {
+      fill(el.alert, pickedEl(),
+        h('div', { class: 'rn-alert-head' }, h('b', null, r.how === 'guard' ? 'Earl saw the Sixes off' : r.gotIn ? `The Sixes got in${r.taken ? `: ${money(r.taken)} gone` : ''}` : 'Your door held against the Sixes'), h('span', { class: 'rn-alert-clock' }, `${r.n} of them · last night`),
+          h('button', { type: 'button', class: 'k-btn rn-notice-x', 'aria-label': 'Put the notice away', title: 'Put it away (you will see it when you get home)', onclick: () => { S.raidNote = null; paint(); } }, '×')),
+        h('p', { class: 'rn-alert-text' }, r.text));
+      return;
+    }
     const head = r.how === 'guard' ? `${cap(r.guard?.who?.name ?? 'Your guard')} saw them off` : r.taken ? `They got in: ${money(r.taken)} gone` : r.gotIn ? 'They got in, and found nothing banked' : 'Your door held';
     fill(el.alert, pickedEl(),
       h('div', { class: 'rn-alert-head' }, h('b', null, head), h('span', { class: 'rn-alert-clock' }, `${cap(r.who.name)} · ${String((r.hour ?? 0) % 24).padStart(2, '0')}:00`),
@@ -1433,6 +1796,7 @@ export function mountRun(host, opts = {}) {
   function toggleHome(on = !S.homeOpen) {
     if (!(S.hold?.v ?? S.v)?.pressure) return;
     S.homeOpen = on;
+    if (on) S.sixesOpen = S.worthOpen = S.raidOpen = false;
     if (on && S.sheet) openSheet(null);
     paint();
   }
@@ -1442,10 +1806,82 @@ export function mountRun(host, opts = {}) {
     const n = v.home?.notice;
     if (!w && !n) return null;
     const who = cap(personShort((n ?? w).who.name));
-    const text = n ? (S.phase === 'choose' && !S.hold ? `${who} is at your door: ${n.hoursLeft}h left` : `${who} is at your door`) : w.today ? `${who} will try your crib today while you are out` : `${who} will try your crib tomorrow`;
+    // (sixes-1: a crew comes after dark: tonight, or the night of its day)
+    const crew = w?.kind === 'crew';
+    const when = w ? (w.today ? (crew ? 'tonight' : 'today while you are out') : w.day > S.state.day + 1 ? `on day ${w.day}` : crew ? 'tomorrow night' : 'tomorrow') : '';
+    const text = n ? (S.phase === 'choose' && !S.hold ? `${who} is at your door: ${n.hoursLeft}h left` : `${who} is at your door`) : crew ? `${who} and a friend come for your crib ${when}` : `${who} will try your crib ${when}`;
     // (save-1: its short words, when the top line is full: fitTop)
     const short = n ? (S.phase === 'choose' && !S.hold ? `At your door: ${n.hoursLeft}h left` : 'At your door') : w.today ? 'They try your crib today' : 'They try your crib tomorrow';
     return h('button', { type: 'button', class: `rn-warn${n || w.today ? ' is-now' : ''}`, title: `${(n ?? w).text} (K: home pressure)`, onclick: () => toggleHome(true) }, h('i', { 'aria-hidden': 'true' }), h('span', { 'data-short': short }, text));
+  }
+  /**
+   * (sixes-1) THE SIXES' METER, beside HOME on your numbers: 0 to 10, the steps built marked (3 a word, 5 the tax, 7 two
+   * of them by the steps); shown once they care about you at all, or while something of theirs is due. A press opens
+   * its slip.
+   */
+  function sixesStat(v, stat, upips) {
+    const X = v.sixes;
+    if (!X || (X.value <= 0 && !X.jump && !X.tax)) return null;
+    // (raid-1: a week's truce after you held them at your door, said where the meter is)
+    const due = X.truce ? `truce till day ${X.truce.until}` : X.tax ? 'Dutch is waiting' : X.jump ? (X.jump.today ? 'two on the kerb today' : 'two on the kerb tomorrow') : X.value >= cfg.sixes.tax ? 'the tax when you leave' : X.value >= cfg.sixes.word ? 'they know you' : 'they noticed you';
+    const pips = h('span', { class: 'u-pips is-sixes', 'aria-label': `${X.value} of ${X.max}` }, Array.from({ length: X.max }, (_, k) => h('i', { class: `${k < X.value ? 'is-on' : ''}${X.steps.some(s => s.at - 1 === k) ? ' is-line' : ''}${k >= X.cap ? ' is-later' : ''}` })));
+    return stat(`is-sixes${S.sixesOpen ? ' is-open' : ''}${X.level === 'war' ? ' is-war' : ''}`, 'homerisk', 'Sixes', [String(X.value), h('small', null, `/${X.max}`)],
+      h('span', { class: `u-stat-sub${X.tax || X.jump ? ' u-bad' : ''}` }, pips, ' ', due),
+      { role: 'button', tabindex: '0', 'data-sixes': String(X.value), title: `${X.text} (a press: what holds it up)`, onclick: () => toggleSixes(), onkeydown: e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSixes(); } } });
+  }
+  function toggleSixes(on = !S.sixesOpen) {
+    if (!(S.hold?.v ?? S.v)?.sixes) return;
+    S.sixesOpen = on;
+    if (on) S.homeOpen = false;
+    if (on) S.worthOpen = S.raidOpen = false;
+    if (on && S.sheet) openSheet(null);
+    paint();
+  }
+  /**
+   * (raid-1) THE WORTH SLIP ('worth') and THE CARD OF THE ONE DECISION ('raid'): one open at a time, with the HOME and
+   * SIXES slips; `on` unset toggles. The card is Y, the raid's notice's button, the chip on your numbers.
+   */
+  function toggleRaid(which, on) {
+    const v = S.hold?.v ?? S.v;
+    if (!v?.raid && !v?.worth) return;
+    const k = which === 'worth' ? 'worthOpen' : 'raidOpen';
+    S[k] = on ?? !S[k];
+    if (S[k]) {
+      S.homeOpen = S.sixesOpen = false;
+      if (which === 'worth') S.raidOpen = false;
+      else S.worthOpen = false;
+      if (S.sheet) openSheet(null);
+    }
+    paint();
+  }
+  /** (raid-1) THE RAID DUE, small and steady on your numbers' news while it stands: a press opens the card. */
+  function raidChip(v) {
+    const d = v.raid?.due;
+    if (!d) return null;
+    const when = d.tonight ? 'tonight' : d.day === S.state.day + 1 ? 'tomorrow night' : `on day ${d.day}`;
+    return h('button', { type: 'button', class: `rn-warn rn-raid-chip${d.tonight ? ' is-now' : ''}`, title: `${d.text} (${RAID_KEY}: your door)`, onclick: () => toggleRaid('raid', true) },
+      h('i', { 'aria-hidden': 'true' }), h('span', { 'data-short': `The Sixes: ${when}` }, `The Sixes come ${when}: ${d.n} of them`));
+  }
+  /** (sixes-1) THE SIXES' SLIP: the steps (only those built), what holds it up, what brings it down, what comes next. */
+  function paintSixesPrint(v) {
+    const X = v.sixes;
+    el.sixesPrint.hidden = !(S.sixesOpen && X);
+    if (el.sixesPrint.hidden) return fill(el.sixesPrint);
+    const row = (n, text) => h('li', null, h('b', { class: n > 0 ? 'is-up' : 'is-down' }, signedT(n)), ' ', text.replace(/\s*\([+−-]\d+[^)]*\)$/, ''));
+    fill(el.sixesPrint,
+      h('div', { class: 'rn-print-head' }, h('b', null, `The Sixes ${X.value} of ${X.max}`), h('button', { type: 'button', class: 'k-btn rn-print-x', 'aria-label': 'Fold it', onclick: () => toggleSixes(false) }, '×')),
+      h('p', { class: 'rn-note' }, `A gang that thinks ${X.ground.join(' and ')} is theirs. Dutch watches it for them. What they do to you comes from what you do there, never from what you own.`),
+      X.jump ? h('p', { class: 'rn-hp-warn' }, `${X.jump.text}: stay away that day, or go and win it.`) : X.tax ? h('p', { class: 'rn-hp-warn' }, `Dutch is waiting by the steps for ${money(X.tax.wants)}.`) : null,
+      h('p', { class: 'rn-hp-h' }, 'What comes, and when'),
+      h('ul', { class: 'rn-hp-list' }, X.steps.map(s => h('li', { class: X.value >= s.at ? 'is-reached' : '' }, h('b', { class: X.value >= s.at ? 'is-up' : '' }, `at ${s.at}`), ` ${s.what}`))),
+      h('p', { class: 'rn-hp-h' }, 'What holds it up'),
+      X.reasons.length ? h('ul', { class: 'rn-hp-list' }, X.reasons.map(r => row(r.n, r.text))) : h('p', { class: 'rn-note' }, 'Nothing: they have no reason to care about you.'),
+      h('p', { class: 'rn-hp-h' }, 'What raises it'),
+      h('ul', { class: 'rn-hp-list' }, X.raises.map(r => row(r.n, r.text))),
+      h('p', { class: 'rn-hp-h' }, 'What brings it down'),
+      h('ul', { class: 'rn-hp-list' }, X.eases.map(r => row(r.n, r.text))),
+      X.fear.length ? h('p', { class: 'rn-note' }, 'The two you saw off keep off you while they are scared: nobody waits for you on the kerb.') : null,
+      h('p', { class: 'hk-fine' }, X.capNote));
   }
   /** THE METER'S SLIP: what holds it up (the view's reasons), what brings it down, what it leads to; the defences and how an attempt would go now. */
   function paintHomePrint(v) {
@@ -1456,7 +1892,11 @@ export function mountRun(host, opts = {}) {
     const row = (n, text) => h('li', null, h('b', { class: n > 0 ? 'is-up' : 'is-down' }, signedT(n)), ' ', text.replace(/\s*\([+−-]\d+\)$/, ''));
     const o = H?.odds;
     const d = H?.defences;
-    const thing = t => h('li', null, h('b', { class: t.owned ? 'is-down' : '' }, t.owned ? 'yours' : money(t.price)), ` ${cap(thingWord(t.label))}: ${t.does.toLowerCase()}${t.owned ? '' : ` (${cap(t.keeper?.name ?? '')}, ${t.atLabel})`}.`);
+    // (sixes-1: each piece's one job, against whom, and where it is sold)
+    // (raid-1: a piece the Sixes knocked out says so, and until when: it does nothing till it is mended)
+    const outOf = item => (v.raid?.out ?? []).find(o => o.item === item);
+    const thing = t => outOf(t.item) ? h('li', { 'data-thing': t.item, class: 'is-out' }, h('b', { class: 'is-up' }, 'smashed'), ` ${cap(thingWord(t.label))}: smashed by the Sixes, no use until day ${outOf(t.item).until + 1}.`) : h('li', { 'data-thing': t.item }, h('b', { class: t.owned ? 'is-down' : '' }, t.owned ? 'yours' : money(t.price)), ` ${cap(thingWord(t.label))}${t.against ? ` (against ${t.against.map(a => (a === 'crew' ? 'a crew' : 'a sneak')).join(' and ')})` : ''}: ${(t.job ?? t.does).replace(/^./, c => c.toLowerCase())}${t.owned ? '' : ` (${cap(t.keeper?.name ?? '')}, ${t.atLabel})`}.`);
+    const C = H?.crew;
     const g = d?.guard;
     fill(el.homePrint,
       h('div', { class: 'rn-print-head' }, h('b', null, `Home pressure ${P.value} of ${P.max}${P.level === 'high' ? ' · high' : P.level === 'calm' ? ' · calm' : ''}`), kbd('K'), h('button', { type: 'button', class: 'k-btn rn-print-x', 'aria-label': 'Fold it', onclick: () => toggleHome(false) }, '×')),
@@ -1471,6 +1911,12 @@ export function mountRun(host, opts = {}) {
       o ? h('ul', { class: 'rn-hp-list' },
         h('li', null, h('b', null, 'out'), ` ${o.away.guard ? `${100 - o.away.guard.beatenPct}% ${cap(g?.who?.name ?? 'your guard')} sees them off; else ` : ''}${o.away.pct}% they get in and take ${money(o.away.takes)}${d.pctBy || d.shareBy ? ` (${[d.pctBy ? 'the deadbolt' : null, d.shareBy ? 'the floor safe' : null].filter(Boolean).join(' and ')} counted)` : ''}.`),
         h('li', null, h('b', null, 'home'), ` you meet them at the door: ${o.door.bands.clean}% they lay into you and get in (${money(o.door.takes)}), ${o.door.bands.messy}% a scuffle (${money(o.door.scuffle)}), else you see them off.`)) : null,
+      // (sixes-1: from 7 it is a crew of two after dark: the door fight's odds and what changes them; out, the kick)
+      C ? h('p', { class: 'rn-hp-h' }, `A crew (from ${C.at})${C.now ? ': that is who comes now' : ''}`) : null,
+      C ? h('ul', { class: 'rn-hp-list rn-hp-crew' },
+        h('li', null, h('b', null, 'home'), ` a fight at your door: ${C.odds.text} (${C.odds.you.why.join(' · ')}). Lost: they make you open it, ${money(C.door.takes)}.`),
+        h('li', null, h('b', null, 'out'), ` ${C.away.guard ? `${100 - C.away.guard.beatenPct}% Earl sees them off; else ` : ''}${C.away.kickPct}% they kick the door in and take ${money(C.away.takes)} (${C.away.share}%).`)) : null,
+      C?.odds ? crewOddsEl(true) : null,
       d ? h('p', { class: 'rn-hp-h' }, 'What defends it') : null,
       d ? h('ul', { class: 'rn-hp-list' }, ...d.things.map(thing),
         g ? h('li', { class: 'rn-hp-guard' }, h('b', { class: g.on ? 'is-down' : '' }, g.on ? `${g.daysLeft}d left` : money(g.price)), ` ${cap(g.who.name)} on your step: whoever tries your door has to get past him (${g.beatenPct}% they beat him). ${g.on ? `He is there through day ${g.until}${g.lastDay ? ': his last day. Keep him three more days at the crib' : ''}.` : g.why ?? `Hire him at the crib: ${money(g.price)} for ${g.days} days, paid up front.`}`) : null) : null);
@@ -1533,19 +1979,25 @@ export function mountRun(host, opts = {}) {
   function openSheet(id = null) {
     const was = S.sheet ?? null;
     if (was === 'library') S.libTop = sheetBits.scroll.scrollTop;
+    if (was === 'ahead') S.aheadTop = sheetBits.scroll.scrollTop;
     S.sheet = id && id !== was ? id : null;
     // (one slip or panel at a time beside the dock: the home pressure slip folds for a panel)
     if (S.sheet) S.homeOpen = false;
     if (was === 'character' && S.sheet !== 'character') face.big.player?.stop();
     if (was === 'map' && S.sheet !== 'map') runMap.close();
+    if (was === 'ahead' && S.sheet !== 'ahead') ahead.stop();
+    // (a link from Ahead keeps its way back only while its panel stays the one open)
+    if (S.back && S.sheet !== 'library' && S.sheet !== 'map') S.back = null;
     if (S.sheet === 'character') showFace(true);
     paint();
-    if (S.sheet && S.sheet !== was && S.sheet !== 'library') sheetBits.scroll.scrollTop = 0;
+    if (S.sheet && S.sheet !== was && S.sheet !== 'library' && S.sheet !== 'ahead') sheetBits.scroll.scrollTop = 0;
+    if (S.sheet === 'ahead' && was !== 'ahead') sheetBits.scroll.scrollTop = S.aheadTop ?? 0;
   }
 
   // ── THE MAP (M): the kit's paper map of the island, fed from the run (demo/run/map.js) ─────────────────────────────
   const mapCtx = () => ({ cfg, v: S.hold?.v ?? S.v, state: S.hold?.state ?? S.state, dayStart: S.dayStart });
-  const BLOCK_OF = { park: 'projects', market: 'market', corner: 'corner', jail: 'jail', clinic: 'clinic' };
+  // (batch-1: every place's block is the config's: a new place is on the map with no new code)
+  const BLOCK_OF = { ...Object.fromEntries(Object.entries(cfg.places).filter(([, p]) => p.block && !p.home).map(([id, p]) => [id, p.block])), jail: 'jail', clinic: 'clinic' };
   /** Where the player is on the island: the stage's own position of them; hidden or on a ride, where the run has them. */
   function youOnMap() {
     const v = S.hold?.v ?? S.v;
@@ -1565,11 +2017,11 @@ export function mountRun(host, opts = {}) {
       const c = mapCtx();
       const at = stopOf(c.v);
       const P = stage.map?.PLACES ?? {};
-      const list = ['park', 'market', 'corner'].filter(id => P[BLOCK_OF[id]]?.at).map(id => {
+      const list = cfg.subwayStops.filter(id => P[BLOCK_OF[id]]?.at).map(id => {
         // (each place's heat and police, the view's: map.js draws them on the stop's flag)
         const pl = (c.v.places ?? []).find(q => q.place === id);
         return {
-          id, name: STOP_NAME[id], flag: stopFlag(c, id), x: P[BLOCK_OF[id]].at[0], z: P[BLOCK_OF[id]].at[1], here: id === at, locked: id === 'corner',
+          id, name: STOP_NAME[id] ?? cap(cfg.places[id]?.label ?? id), flag: stopFlag(c, id), x: P[BLOCK_OF[id]].at[0], z: P[BLOCK_OF[id]].at[1], here: id === at, locked: !!cfg.places[id]?.locked,
           heat: pl ? pl.heat : null, hot: !!pl?.hot, police: !!pl?.police,
           // (trust-1: the heat that just landed there, while what just happened is said)
           rose: pl && resultUp() ? S.rose?.[id] ?? 0 : 0,
@@ -1579,18 +2031,22 @@ export function mountRun(host, opts = {}) {
       list.push({ id: 'tryout', name: 'The dead mall', flag: 'TRY-OUT · nothing counts', x: TRYOUT.at[0], z: TRYOUT.at[1], here: false, locked: false, heat: null, hot: false, police: false, rose: 0, mark: 'tryout', side: true, right: true });
       return list;
     },
-    // THE LINE as the stage rides it: a walk to the park's subway stairs, the ride to the market's, a walk to the stalls;
-    // the corner, locked, a walk on from there
+    // THE LINE as the stage rides it: a walk to the park's subway stairs, a ride to each place's own stairs (the
+    // market's, and since batch-1 LOW TIDE for the docks and 1ST ST for the plaza: every place one ride from home), a
+    // walk on to the place; the corner, locked, a walk on from the market's
     line: () => {
       const P = stage.map?.PLACES ?? {};
       const [pk, mk, cn] = [P.projects, P.market, P.corner];
-      if (!pk || !mk) return { ride: [], walks: [], locked: [], stations: [] };
-      const [a, b] = [pk.ways?.subway, mk.ways?.subway];
+      if (!pk || !mk) return { rides: [], walks: [], locked: [], stations: [] };
+      const a = pk.ways?.subway;
       const xz = s => [s.x, s.z];
+      const ends = cfg.subwayStops.filter(id => id !== 'park' && !cfg.places[id]?.locked).map(id => P[BLOCK_OF[id]]).filter(Boolean);
+      const b = mk.ways?.subway;
+      const stations = [a, ...ends.map(q => q.ways?.subway)].filter(Boolean).filter((s, i, all) => all.findIndex(t => t.name === s.name) === i);
       return {
-        stations: [a, b].filter(Boolean).map(s => ({ x: s.x, z: s.z, name: s.name })),
-        ride: a && b ? [xz(a), xz(b)] : [pk.at, mk.at],
-        walks: a && b ? [[pk.at, xz(a)], [xz(b), mk.at]] : [],
+        stations: stations.map(s => ({ x: s.x, z: s.z, name: s.name })),
+        rides: ends.map(q => (a && q.ways?.subway ? [xz(a), xz(q.ways.subway)] : [pk.at, q.at])),
+        walks: a ? [[pk.at, xz(a)], ...ends.filter(q => q.ways?.subway).map(q => [xz(q.ways.subway), q.at])] : [],
         locked: cn ? [[b ? xz(b) : mk.at, cn.at]] : [],
       };
     },
@@ -1662,8 +2118,9 @@ export function mountRun(host, opts = {}) {
     return { title, slot, key, x, lead, scroll, foot };
   })();
   // the character sheet's own head and tabs (the kit's: the dossier's look), made once and kept
-  const charTabs = kitTabs([{ id: 'stats', label: 'Stats' }, { id: 'wearing', label: 'Wearing' }, { id: 'people', label: 'People' }], {
-    selected: ['wearing', 'people'].includes(kept.get('tab')) ? kept.get('tab') : 'stats',
+  // (styles-1: and Fight: what you fight with, and the punch styles)
+  const charTabs = kitTabs([{ id: 'stats', label: 'Stats' }, { id: 'wearing', label: 'Wearing' }, { id: 'people', label: 'People' }, { id: 'fight', label: 'Fight' }], {
+    selected: ['wearing', 'people', 'fight'].includes(kept.get('tab')) ? kept.get('tab') : 'stats',
     onchange: (id, user) => {
       if (user) kept.set('tab', id);
       if (user) paint();
@@ -1678,6 +2135,35 @@ export function mountRun(host, opts = {}) {
     now: () => ({ v: S.hold?.v ?? S.v, choosing: S.phase === 'choose' && !S.hold, tried: S.tried, compact: compact() }),
     act: { buy: key => fromPanel(key, true), wear: key => fromPanel(key, true), tryOn: key => tryOnKey(key), takeOff: key => takeOff(key), toast: text => toast(text) },
   });
+  // WHAT'S AHEAD (tree-1; ahead.js): its parts stay while it is open; buying or learning from its card is the rules' own
+  // choice (fromPanel); a link to the Library or the Map opens that panel, and Esc (or its Back) comes back here
+  const ahead = createAhead({
+    cfg, tiles, kept, root: () => sheetBits.scroll,
+    now: () => ({ v: S.hold?.v ?? S.v, state: S.hold?.state ?? S.state, choosing: S.phase === 'choose' && !S.hold && !duel.active, keyFor }),
+    act: { go: key => fromPanel(key, true), library: key => linkTo('library', key), map: id => linkTo('map', id), toast: text => toast(text) },
+    // (smooth-1: its fight tables played in the odds workers, as the cards' are)
+    bg: odds,
+  });
+  /** From the Ahead panel to the Library (a piece's card) or the Map (a place's card); Esc or Back comes back to Ahead. */
+  function linkTo(id, what) {
+    openSheet(id);
+    S.back = 'ahead';
+    if (id === 'library') {
+      library.show(what);
+    } else if (id === 'map') {
+      runMap.card(what);
+    }
+    paint();
+  }
+  /** Back to the Ahead panel from a panel its link opened. */
+  function goBack() {
+    const to = S.back;
+    S.back = null;
+    if (S.sheet === 'map') runMap.card(null);
+    openSheet(to);
+    if (S.sheet === 'ahead') ahead.focus();
+  }
+  const backBtn = () => h('button', { type: 'button', class: 'u-btn is-quiet u-ah-back', 'data-back': 'ahead', title: 'Back to Ahead (Esc)', onclick: () => goBack() }, icon('back'), 'Ahead');
   // ── TRYING ON (ui-3, leg 3; the owner: "People should be able to try it on tho without buying it"): any piece to
   // wear, owned or not, shown on the figure where it stands (src/run/library.mjs tryOn → stage.tryOn); nothing of the
   // run changes. Pieces of different slots go on together; another of the same slot takes the place of the first. It
@@ -1738,7 +2224,7 @@ export function mountRun(host, opts = {}) {
     root.classList.toggle('has-sheet', !!def);
     if (!def) return;
     el.sheet.dataset.sheet = def.id;
-    if (def.id !== 'library') fill(sheetBits.slot);
+    if (def.id !== 'library' && def.id !== 'ahead') fill(sheetBits.slot, S.back && def.id === 'map' ? backBtn() : null);
     el.sheet.setAttribute('aria-label', def.title);
     sheetBits.title.textContent = def.title;
     sheetBits.key.textContent = def.key;
@@ -1756,17 +2242,27 @@ export function mountRun(host, opts = {}) {
       const tab = charTabs.selected;
       // (leg 3: the Wearing tab's wardrobe: tiles, Put on and Take off at home, Try on elsewhere, the Library)
       const ward = { tile: (piece, o = {}) => tiles.el(piece, { ...o, root: sheetBits.scroll }), tryOn: k => tryOnKey(k), takeOff: k => takeOff(k), tried: S.tried, library: () => openSheet('library') };
-      fill(sheetBits.scroll, tab === 'people' ? characterPeople(ctx) : tab === 'wearing' ? characterWearing({ ...ctx, ...ward, wearing: face.wearing?.(v.place === 'jail') ?? null, honest: face.honest && dressKey() === '{}' }) : characterStats(ctx));
+      fill(sheetBits.scroll, tab === 'fight' ? characterFight(ctx) : tab === 'people' ? characterPeople(ctx) : tab === 'wearing' ? characterWearing({ ...ctx, ...ward, wearing: face.wearing?.(v.place === 'jail') ?? null, honest: face.honest && dressKey() === '{}' }) : characterStats(ctx));
     } else if (def.id === 'library') {
       // (its parts stay while it is open: redrawn only when what they show has changed, library.js; no foot of its own)
       library.paint();
-      if (sheetBits.slot.firstChild !== library.head) fill(sheetBits.slot, library.head);
+      if (S.back) {
+        if (!sheetBits.slot.querySelector('.u-ah-back')) fill(sheetBits.slot, backBtn(), library.head);
+      } else if (sheetBits.slot.firstChild !== library.head) fill(sheetBits.slot, library.head);
       if (sheetBits.lead.firstChild !== library.lead) fill(sheetBits.lead, library.lead);
       if (sheetBits.scroll.firstChild !== library.grid) {
         fill(sheetBits.scroll, library.grid);
         sheetBits.scroll.scrollTop = S.libTop ?? 0;
       }
       if (library.card.parentNode !== el.sheet) el.sheet.insertBefore(library.card, sheetBits.foot);
+      return;
+    } else if (def.id === 'ahead') {
+      // (tree-1: its parts stay while it is open, drawn again only when what they show changed: ahead.js)
+      ahead.paint();
+      if (sheetBits.slot.firstChild !== ahead.head) fill(sheetBits.slot, ahead.head);
+      if (sheetBits.lead.firstChild !== ahead.lead) fill(sheetBits.lead, ahead.lead);
+      if (sheetBits.scroll.firstChild !== ahead.body) fill(sheetBits.scroll, ahead.body);
+      if (ahead.card.parentNode !== el.sheet) el.sheet.insertBefore(ahead.card, sheetBits.foot);
       return;
     } else if (def.id === 'map') {
       // (the map is one piece that stays while the panel is open: the run's data is handed to it, nothing redrawn here)
@@ -1967,8 +2463,10 @@ export function mountRun(host, opts = {}) {
       showHome ? stat(`is-press${S.homeOpen ? ' is-open' : ''}`, 'homerisk', 'Home risk', [String(P.value), h('small', null, `/${P.max}`)],
         due ? h('span', { class: 'u-stat-sub u-bad' }, due === 'now' ? 'at your door now' : `attempt ${due}`) : upips(P.value, P.max, 'is-press', P.warnAt - 1),
         { role: 'button', tabindex: '0', title: `${P.text} (K: what holds it up)`, onclick: () => toggleHome(), onkeydown: e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleHome(); } } }) : null,
+      sixesStat(v, stat, upips),
+      raidUI.worthStat(v, stat),
       compact() ? null : h('button', { type: 'button', class: 'u-x u-fold', title: folded ? 'Open your numbers (N)' : 'Fold your numbers to one line (N)', 'aria-expanded': String(!folded), onclick: () => toggleDock() }, icon(folded ? 'unfold' : 'fold')));
-    const news = [warnChip(v), earlChip(v)].filter(Boolean);
+    const news = [raidChip(v), warnChip(v), earlChip(v)].filter(Boolean);
     // (the goal: open at home, its next thing only when you are out, unless you open or fold it yourself; compact, one line)
     const goalMini = compact() || isFolded('goal', out);
     const goal = goalCard(v, goalMini);
@@ -2079,6 +2577,8 @@ export function mountRun(host, opts = {}) {
       h('h2', { class: 'u-res-head' }, c.head),
       c.body ? h('p', { class: 'u-res-body', title: c.body }, c.body) : null,
       c.chips.length ? h('div', { class: 'u-res-chips' }, c.chips.map(chipEl)) : null,
+      // (styles-1: after a fight lost, what would have helped, in one line)
+      c.advice ? h('p', { class: 'u-res-advice', title: c.advice }, icon('star'), h('span', null, c.advice)) : null,
       h('div', { class: 'u-res-foot' },
         held ? h('span', { class: 'u-res-next' }, icon('warn'), jail ? 'Continue takes you to the jail.' : 'Continue takes you to the clinic.')
           : c.next ? h('span', { class: 'u-res-next' }, icon('star'), c.next) : h('span', { class: 'u-res-next u-cap' }, 'It stays in the journal'),
@@ -2194,11 +2694,32 @@ export function mountRun(host, opts = {}) {
   const meter = {
     bad: h('i', { class: 'rn-fill is-bad' }), scuffle: h('i', { class: 'rn-fill is-scuffle' }), tried: h('i', { class: 'rn-fill is-tried' }),
     now: h('span', { class: 'rn-now' }), pct: h('b', { class: 'rn-danger-pct' }), word: h('span', { class: 'rn-pct-word' }), last: null,
+    // (batch-1, the owner: "What does 0% safe mean?": the number is always labelled a RISK, the chance something happens
+    // to you in the next hour here; with none, no number: SAFE HERE)
+    tag: h('span', { class: 'rn-pct-word rn-risk-tag' }, 'Risk'),
     // (rules-2: the heat HERE under the number, and the police when they are about, in the same small type)
     heat: h('span', { class: 'rn-pct-heat' }),
   };
   meter.el = h('div', { class: 'rn-meter', 'aria-hidden': 'true' }, meter.bad, meter.scuffle, meter.tried, meter.now);
-  meter.btn = h('button', { type: 'button', class: 'rn-pct', 'aria-label': 'The danger of one more hour here' }, meter.pct, meter.word, meter.heat);
+  meter.btn = h('button', { type: 'button', class: 'rn-pct', 'aria-label': 'The risk of one more hour here' }, meter.tag, meter.pct, meter.word, meter.heat);
+  /**
+   * THE METER'S WORDS (batch-1): the risk of an hour (or a way) as one number, the chance anything acts on you (jumped
+   * or stopped), and what it is: the police where a stop is the likelier, else being jumped. None: SAFE HERE, no number.
+   * → { pct, n, word, police }
+   */
+  function riskWords(jump, stop, { way = false } = {}) {
+    const n = Math.round(100 * (1 - (1 - (jump ?? 0) / 100) * (1 - (stop ?? 0) / 100)));
+    const police = (stop ?? 0) > 0 && stop >= (jump ?? 0);
+    if (!n) return { n: 0, pct: '', word: way ? 'safe on the way' : 'safe here', police: false };
+    return { n, pct: `${n}%`, word: `· ${police ? 'police could stop you' : way ? 'could be jumped on the way' : 'could be jumped'}`, police };
+  }
+  /** Put the words on the meter: RISK n% · what, or SAFE HERE alone. */
+  function riskOn(r) {
+    meter.tag.hidden = !r.n;
+    meter.pct.hidden = !r.n;
+    meter.pct.textContent = r.pct;
+    meter.word.textContent = r.word;
+  }
   const togglePrint = () => {
     if (!S.v.danger.here && !wayPicked(S.v)) return;
     S.dangerOpen = !S.dangerOpen;
@@ -2222,18 +2743,27 @@ export function mountRun(host, opts = {}) {
     const m = v.moves?.find(x => x.key === S.sel && x.danger);
     return m && (m.what === 'route' || m.what === 'onward') ? m : null;
   }
+  /** (smooth-1) Is the meter's split (the bad one, the scuffle) still being worked out? Then it says so: is-odds-wait. */
+  function meterWaits(jump) {
+    const waiting = !!jump && pendingIn([jump.bad, jump.scuffle]);
+    meter.el.classList.toggle('is-odds-wait', waiting);
+    meter.btn.classList.toggle('is-odds-wait', waiting);
+    return waiting;
+  }
   function paintWayDanger(v, m) {
     const d = m.danger;
     const cap = cfg.jump.capPct;
     const w = pct => `${Math.min(100, (pct / cap) * 100)}%`;
-    meter.bad.style.width = w(d.jump.bad);
-    meter.scuffle.style.width = w(d.jump.scuffle);
-    meter.tried.style.width = w(Math.max(0, d.jump.chance - d.jump.bad - d.jump.scuffle));
+    // (smooth-1: its bad one and scuffle still being worked out: the whole chance drawn as the waiting fill, the meter
+    // marked as waiting; never a split it does not have)
+    const waiting = meterWaits(d.jump);
+    meter.bad.style.width = w(waiting ? 0 : d.jump.bad);
+    meter.scuffle.style.width = w(waiting ? 0 : d.jump.scuffle);
+    meter.tried.style.width = w(waiting ? d.jump.chance : Math.max(0, d.jump.chance - d.jump.bad - d.jump.scuffle));
     meter.now.hidden = true;
-    const policeOnly = !d.jump.chance && d.stop.chance > 0;
-    const pct = `${policeOnly ? d.stop.chance : d.jump.chance}%`;
-    meter.pct.textContent = pct;
-    meter.word.textContent = policeOnly ? 'stopped' : 'the way';
+    const risk = riskWords(d.jump.chance, d.stop.chance, { way: true });
+    const pct = risk.pct || '0%';
+    riskOn(risk);
     fill(meter.heat, h('span', null, d.legs.some(l => l.rolls) ? `${d.legs.filter(l => l.rolls).length} of ${d.legs.length} legs roll` : 'nothing rolls'));
     meter.heat.title = d.text;
     const none = !d.jump.chance && !d.stop.chance;
@@ -2254,7 +2784,7 @@ export function mountRun(host, opts = {}) {
     if (el.print.hidden) return fill(el.print);
     const stake = d.atStake;
     fill(el.print,
-      h('div', { class: 'rn-print-head' }, h('b', null, `The way: ${pct} ${policeOnly ? 'stopped' : 'jumped'}`), h('button', { type: 'button', class: 'k-btn rn-print-x', 'aria-label': 'Fold the small print', onclick: togglePrint }, '×')),
+      h('div', { class: 'rn-print-head' }, h('b', null, risk.n ? `The way: risk ${pct}, ${risk.word.replace(/^· /, '')}` : 'The way: safe, nothing acts on you'), h('button', { type: 'button', class: 'k-btn rn-print-x', 'aria-label': 'Fold the small print', onclick: togglePrint }, '×')),
       h('div', { class: 'hk-legend' },
         h('span', { 'data-band': 'disaster' }, h('i'), 'a bad one ', h('b', null, `${d.jump.bad}%`), loses(d.jump.takes?.bad ?? 0, d.jump.takesGoods?.bad, ', wake in the clinic', ' wake in the clinic')),
         h('span', { 'data-band': 'messy' }, h('i'), 'a scuffle ', h('b', null, `${d.jump.scuffle}%`), loses(d.jump.takes?.scuffle ?? 0, d.jump.takesGoods?.scuffle, '', ' nothing to lose'))),
@@ -2277,17 +2807,19 @@ export function mountRun(host, opts = {}) {
     // the meter runs to the most it can be (the jumping's cap), so its fill is the share of the worst
     const cap = cfg.jump.capPct;
     const w = pct => `${Math.min(100, (pct / cap) * 100)}%`;
-    meter.bad.style.width = w(one?.jump.bad ?? 0);
-    meter.scuffle.style.width = w(one?.jump.scuffle ?? 0);
-    meter.tried.style.width = w(one ? Math.max(0, one.jump.chance - one.jump.bad - one.jump.scuffle) : 0);
+    // (smooth-1: its bad one and scuffle still being worked out: as the way's meter, paintWayDanger)
+    const waiting = meterWaits(one?.jump);
+    meter.bad.style.width = w(waiting ? 0 : one?.jump.bad ?? 0);
+    meter.scuffle.style.width = w(waiting ? 0 : one?.jump.scuffle ?? 0);
+    meter.tried.style.width = w(one ? (waiting ? one.jump.chance : Math.max(0, one.jump.chance - one.jump.bad - one.jump.scuffle)) : 0);
     meter.now.style.left = w(now?.jump.chance ?? 0);
     meter.now.hidden = !now;
     meter.now.title = now ? `this hour: ${now.jump.chance}%` : '';
-    // (where nobody jumps you but the police are about, a hot trailer park: the number is the stop's)
-    const policeOnly = !!one && !one.jump.chance && one.stop.chance > 0;
-    const pct = `${policeOnly ? one.stop.chance : one?.jump.chance ?? 0}%`;
-    meter.pct.textContent = pct;
-    meter.word.textContent = policeOnly ? 'stopped' : one ? 'jumped' : 'safe';
+    // (the risk of one more hour here: jumped or stopped, as one number; the word says which is the likelier: where the
+    // police are the danger (a hot trailer park, the plaza at heat 3) it is the police)
+    const risk = riskWords(one?.jump.chance ?? 0, one?.stop.chance ?? 0);
+    const pct = risk.pct || '0%';
+    riskOn(risk);
     // THE HEAT HERE, always: the higher of yours and the place's (the place's own word when it is hot or patrolled)
     const here = (v.places ?? []).find(p => p.here);
     const hot = v.heatHere >= cfg.police.from;
@@ -2298,7 +2830,7 @@ export function mountRun(host, opts = {}) {
     meter.el.classList.toggle('is-zero', !one);
     meter.btn.classList.toggle('is-open', !!one && !!S.dangerOpen);
     meter.btn.setAttribute('aria-expanded', String(!!one && !!S.dangerOpen));
-    meter.btn.title = one ? `One more hour here: ${pct} that you are jumped${one.stop.chance ? `, ${one.stop.chance}% stopped` : ''}. ${S.dangerOpen ? 'Click to fold the small print' : 'Click for the small print: what each would cost'}` : (d.why === 'the day is over' ? 'The day is over.' : `Nobody acts on you here. At ${cfg.places.market.label}, every hour can go wrong.`);
+    meter.btn.title = one ? `Risk of one more hour here: ${pct} (${one.jump.chance}% you are jumped${one.stop.chance ? `, ${one.stop.chance}% the police stop you` : ''}). ${S.dangerOpen ? 'Click to fold the small print' : 'Click for the small print: what each would cost'}` : (d.why === 'the day is over' ? 'The day is over.' : 'Safe here: nobody acts on you. Away from home, every hour can go wrong.');
     // (the number is stamped when it changes)
     if (meter.last !== null && meter.last !== pct) {
       meter.pct.classList.remove('is-new');
@@ -2310,12 +2842,13 @@ export function mountRun(host, opts = {}) {
     el.print.hidden = !(one && S.dangerOpen);
     if (el.print.hidden) return fill(el.print);
     fill(el.print,
-      h('div', { class: 'rn-print-head' }, h('b', null, `One more hour here: ${pct} jumped`), h('button', { type: 'button', class: 'k-btn rn-print-x', 'aria-label': 'Fold the small print', onclick: togglePrint }, '×')),
+      h('div', { class: 'rn-print-head' }, h('b', null, risk.n ? `Risk of one more hour here: ${pct}, ${risk.word.replace(/^· /, '')}` : 'One more hour here: safe'), h('button', { type: 'button', class: 'k-btn rn-print-x', 'aria-label': 'Fold the small print', onclick: togglePrint }, '×')),
       h('div', { class: 'hk-legend' },
         h('span', { 'data-band': 'disaster' }, h('i'), 'a bad one ', h('b', null, `${one.jump.bad}%`), loses(one.jump.takes.bad, one.jump.takesGoods?.bad, ', wake in the clinic', ' wake in the clinic')),
         h('span', { 'data-band': 'messy' }, h('i'), 'a scuffle ', h('b', null, `${one.jump.scuffle}%`), loses(one.jump.takes.scuffle, one.jump.takesGoods?.scuffle, '', ' nothing to lose'))),
       h('div', { class: `rn-police${one.stop.chance ? ' is-on' : ''}` }, h('span', null, 'Police stop'), h('b', null, `${one.stop.chance}%`),
         h('em', null, one.stop.chance ? `all ${money(one.stop.seizes)}${hasGoods(one.stop.seizesGoods) ? ` and ${goodsWords(one.stop.seizesGoods)}` : ''} seized, the night in jail${hasGoods(one.stop.seizesGoods) ? `, heat ${one.stop.heatAfter} after, the connect against you` : ''}` : `none below heat ${cfg.police.from}`)),
+      one.jump.fight ? h('p', { class: 'rn-now-line rn-jump-fight' }, `Jumped is a fight, two at once: with ${one.jump.fight.with} you see them off about ${Math.round(one.jump.fight.seeOff / 10)} in 10${Object.keys(one.jump.fight.byArm ?? {}).length > 1 ? ` (${Object.entries(one.jump.fight.byArm).filter(([a]) => a !== one.jump.fight.arm).map(([a, p]) => `${(v.fight?.arms ?? []).find(x => x.arm === a)?.label ?? a} ${Math.round(p / 10)} in 10`).join(', ')}; E changes it)` : ''}.`) : null,
       h('p', { class: 'rn-now-line' }, `This hour, work or leave: ${now.jump.chance}% jumped${now.stop.chance ? `, ${now.stop.chance}% stopped` : ''}. ${v.hoursThere} hour${v.hoursThere === 1 ? '' : 's'} here, ${money(v.carried)}${hasGoods(v.atRisk?.goods) ? ` and ${goodsWords(v.atRisk.goods)}` : ''} on you.`));
   }
 
@@ -2335,6 +2868,9 @@ export function mountRun(host, opts = {}) {
     // (routes-1: a way picked: its danger in brief, the small print a click away)
     const way = wayPicked(v);
     if (way) return wayHint(way);
+    // (duel-1: a card picked whose going wrong is a fight: that fight, its odds and its costs)
+    const fp = fightPicked(v);
+    if (fp) return fightHint(fp);
     const note = S.phase === 'choose' ? sellNote(v) : null;
     // (where nothing can act on you and it is not hot, the note has the row: the number says SAFE)
     const calm = !v.danger.here && !(v.places ?? []).find(p => p.here && p.place === v.place)?.hot;
@@ -2371,7 +2907,8 @@ export function mountRun(host, opts = {}) {
    */
   function hintEl(v) {
     const d = v.danger;
-    if (v.place === 'crib') return h('p', { class: 'rn-said-line is-quiet' }, v.hour === cfg.start.hour ? `Day ${v.day}. You wake at the crib.` : `Day ${v.day}, ${v.clock}. At the crib.`);
+    // (styles-1: at home, what you fight with, and a press on it (or E) for the next thing you own)
+    if (v.place === 'crib') return h('p', { class: 'rn-said-line is-quiet' }, v.hour === cfg.start.hour ? `Day ${v.day}. You wake at the crib.` : `Day ${v.day}, ${v.clock}. At the crib.`, ' ', fightWithEl(v));
     const here = (v.places ?? []).find(p => p.here && p.place === v.place);
     // (the place's own sentence when it is hot, or quiet with nobody to jump you; a patrolled place's police are the
     // POLICE under the number, and their chance in the danger's brief)
@@ -2386,12 +2923,14 @@ export function mountRun(host, opts = {}) {
         stake ? h('span', { class: 'rn-at-goods', 'data-rank': 9 }, stake) : null,
         one.jump.chance ? h('span', { 'data-band': 'disaster', 'data-rank': 6 }, h('i'), `bad one ${one.jump.bad}%`) : null,
         one.jump.chance ? h('span', { 'data-band': 'messy', 'data-rank': 5 }, h('i'), `scuffle ${one.jump.scuffle}%`) : null,
+        // (styles-1: jumped is a fight: what you would fight them with)
+        one.jump.chance && one.jump.fight ? h('span', { class: 'rn-with-plate', 'data-rank': 4, title: `Jumped, two at once: with ${one.jump.fight.with} you see them off about ${Math.round(one.jump.fight.seeOff / 10)} in 10. E changes what you fight with.` }, `with ${one.jump.fight.with}`) : null,
         h('span', { class: one.stop.chance ? 'is-police' : '', 'data-rank': one.stop.chance ? 7 : 2 }, `police ${one.stop.chance}%`),
         h('em', { 'data-rank': 1 }, S.dangerOpen ? 'less' : 'more'));
     }
     // (quiet: short, so the row's narrowest room holds it whole)
     if (here) return h('p', { class: `rn-said-line${here.hot ? ' rn-dry' : ' is-quiet'}`, title: `${here.text} Nobody jumps you here.` }, here.hot || here.heat ? `${here.hot ? `Hot today (heat ${here.heat}): police about` : `Heat ${here.heat} here`}. Nobody jumps you here.` : 'Quiet. Safe here.');
-    return h('p', { class: 'rn-said-line is-quiet' }, d.why === 'the day is over' ? 'The day is over.' : v.place === 'jail' || v.place === 'clinic' ? 'Your day is over.' : `Nobody acts on you here. At ${cfg.places.market.label}, every hour can go wrong.`);
+    return h('p', { class: 'rn-said-line is-quiet' }, d.why === 'the day is over' ? 'The day is over.' : v.place === 'jail' || v.place === 'clinic' ? 'Your day is over.' : 'Safe here: nobody acts on you. Away from home, every hour can go wrong.');
   }
   /**
    * THE WAY'S DANGER IN BRIEF (routes-1), on the row while a way is picked: what is at stake, the bad one and the
@@ -2499,23 +3038,39 @@ export function mountRun(host, opts = {}) {
     picked();
     paint();
   }
+  /** (batch-1) The day's one count of food and drink, every place's together, as a line says it: " · 1 of 2 food today". */
+  function foodDay(it, sep = ' · ') {
+    const f = S.v.food;
+    if (!it?.food || f?.perDay == null) return '';
+    return f.full ? `${sep}${cfg.food.full}` : `${sep}${f.eaten} of ${f.perDay} food today`;
+  }
   /** A tile's words: [name, what it does and risks, its price]. */
   function tileWords(m) {
     const c = m.choice;
     const R = cfg.regulars;
     if (c.do === 'shop') {
       const it = S.v.shopHere.find(s => s.item === c.item);
-      return [`Buy ${it.label.toLowerCase()}`, `${it.does}${it.left !== null ? ` · ${it.left} left today` : ''}`, money(it.price)];
+      return [`Buy ${it.label.toLowerCase()}`, it.food && S.v.food?.full ? cfg.food.full : `${it.does}${it.left !== null ? ` · ${it.left} left today` : ''}${foodDay(it)}`, money(it.price)];
     }
     if (c.do === 'rough') return [cap(m.label), `${m.robbedPct}% they rob you in your sleep (asleep, you are easier); you wake here at noon, energy ${m.morningEnergy}, your heat not cooled`, null];
     // (home-1: what each answer does to the pressure at home, as the options show it)
     const atHome = (n, sep = '; ') => (S.v.pressure && n ? `${sep}home ${signedT(n)}` : '');
+    // (memory-1: somebody who feared you, come for another go: pay them off, or the fight, them rested and ready)
+    // (styles-1: somebody sent: him, the one at the door, and his style)
+    const sent = S.v.door?.sent ?? null;
+    if (m.due && c.do === 'give') return [sent ? `Pay him off (${S.v.door?.name ?? 'they'} sent him)` : `Pay ${S.v.door?.name ?? 'them'} off`, `from banked (${money(S.v.banked)}): it is called square, no fight, nobody marked`, money(m.amount)];
+    if (m.due && c.do === 'refuse') {
+      const H = cfg.regulars.hurt;
+      return [sent ? `Fight him (${sent.says})` : `Fight ${S.v.door?.name ?? 'them'}`, `${m.fight ? m.fight.text : 'a fight'}, ${sent ? 'he is' : `${S.v.door?.name ?? 'they'}`} rested and ready (+${S.v.door?.tougher ?? 0} tough). Won: ${cfg.memory.days} more days of fear; lost: energy −${H.messy} to −${H.clean} and every fear at home ends`, null];
+    }
     if (c.do === 'give') return [`Give ${S.v.door?.name ?? 'them'} what they ask`, `from banked (${money(S.v.banked)}); they go, friendly (trust ${signedT(cfg.trust.give)}), and they will be back${atHome(cfg.pressure?.give)}`, money(m.amount)];
     if (c.do === 'refuse') {
       // (trust-1: refusing is trust −4. From with you at +3 that is only neutral: sore, no grudge, no police)
       const d = S.v.door;
       const sore = d && trustBand(cfg, trustAfter(cfg, S.state, d.id, cfg.trust.refuse)) !== 'against';
-      return [`Shut the door on ${d?.name ?? 'them'}`, `${R.fightPct}% they swing at you (energy −${R.hurt.messy} to −${R.hurt.clean}); ${sore ? 'else they go off sore: you go back far enough, no grudge, no police' : `else a grudge: no sales ${R.grudgeDays} days, police round the park (heat +${R.grudgeHeat} there)`}${atHome(cfg.pressure?.refuse)}`, null];
+      // (duel-1: a swing is a fight, its odds said as a card's)
+      const swing = m.fight ? `${R.fightPct}% they swing: ${m.fight.text} (lost: energy −${R.hurt.messy} to −${R.hurt.clean})` : `${R.fightPct}% they swing at you (energy −${R.hurt.messy} to −${R.hurt.clean})`;
+      return [`Shut the door on ${d?.name ?? 'them'}`, `${swing}; ${sore ? 'else they go off sore: you go back far enough, no grudge, no police' : `else a grudge: no sales ${R.grudgeDays} days, police round the park (heat +${R.grudgeHeat} there)`}${atHome(cfg.pressure?.refuse)}`, null];
     }
     const w = moveWords(m);
     return [w[0], w[1], null];
@@ -2558,8 +3113,8 @@ export function mountRun(host, opts = {}) {
     // (routes-1: at a stop with nothing of its hand to play, the way on)
     if (v.route) return (v.hand ?? []).some(c => c.available) ? null : v.moves.find(m => m.what === 'onward')?.key ?? null;
     if (!v.dry) return null;
-    const c = v.dry.to === 'market'
-      ? v.choices.find(x => x.available && x.choice.do === 'subway' && x.choice.to === 'market' && !x.choice.hop) ?? v.choices.find(x => x.available && x.choice.do === 'subway' && x.choice.to === 'market') ?? v.choices.find(x => x.available && x.choice.do === 'inside')
+    const c = v.dry.to && v.dry.to !== 'park'
+      ? v.choices.find(x => x.available && x.choice.do === 'subway' && x.choice.to === v.dry.to && !x.choice.hop) ?? v.choices.find(x => x.available && x.choice.do === 'subway' && x.choice.to === v.dry.to) ?? v.choices.find(x => x.available && x.choice.do === 'inside')
       : v.choices.find(x => x.available && x.choice.do === 'subway' && x.choice.to === 'park' && !x.choice.hop) ?? v.choices.find(x => x.available && x.choice.do === 'subway' && x.choice.to === 'park') ?? v.choices.find(x => x.available && x.choice.do === 'inside');
     return c?.key ?? null;
   }
@@ -2582,11 +3137,15 @@ export function mountRun(host, opts = {}) {
     const fares = v.banked >= 2 * cfg.subway.fare ? 2 : v.banked >= cfg.subway.fare ? 1 : 0;
     return hasGoods(S.state.stash) && fares ? { take: fares * cfg.subway.fare, for: fares > 1 ? ' fares' : ' fare' } : { take: 0, for: '' };
   }
+  /** (batch-1) The bar's word for a ride to a place one stop from home that is not the market. */
+  const RIDE_TO = { docks: 'To the docks', plaza: 'To the plaza' };
   /** A move's words on the row: [its name, what it costs and risks in brief, more for its tooltip]. */
   function moveWords(m) {
     const c = m.choice;
     if (c.do === 'inside') return ['Go inside', S.v.carried ? `bank ${money(S.v.carried)}` : 'the crib'];
     if (c.do === 'subway' && c.to === 'market') return c.hop ? ['Hop it', `${m.hop.caught}% seen`, `free; heat +${m.hop.heat} if seen`] : ['Subway', money(m.fare), 'the fare, to the market'];
+    // (batch-1: the subway to the other places one ride from home, each named on the row: "To the docks")
+    if (c.do === 'subway' && c.to !== 'park' && RIDE_TO[c.to]) return c.hop ? [`Hop: ${RIDE_TO[c.to].toLowerCase()}`, `${m.hop.caught}% seen`, `free; heat +${m.hop.heat} if seen; to ${cfg.places[c.to].label}`] : [RIDE_TO[c.to], money(m.fare), `the fare, to ${cfg.places[c.to].label}`];
     if (c.do === 'subway' && c.to === 'park') return c.hop ? ['Hop home', `${m.hop.caught}% seen`, `free; heat +${m.hop.heat} if seen; this hour still counts here`] : ['Head home', money(m.fare), 'the fare; this hour still counts here'];
     if (c.do === 'out') {
       const goods = hasGoods(S.goodsTake) ? goodsWords(S.goodsTake) : '';
@@ -2619,7 +3178,7 @@ export function mountRun(host, opts = {}) {
     if (c.do === 'shop') {
       const it = S.v.shopHere.find(s => s.item === c.item);
       const gives = Object.entries(it?.gives ?? {}).map(([k, n]) => `${k} +${n}`).join(', ');
-      return [`${cap(shortName(it?.label ?? m.label))} ${money(m.price)}`, gives || it?.does || '', `${it?.does ?? ''}${it?.left !== null && it?.left !== undefined ? `; ${it.left} left today` : ''}; no hour`];
+      return [`${cap(shortName(it?.label ?? m.label))} ${money(m.price)}`, it?.food && S.v.food?.full ? 'eaten all you can today' : gives || it?.does || '', `${it?.does ?? ''}${it?.left !== null && it?.left !== undefined ? `; ${it.left} left today` : ''}${foodDay(it, '; ')}; no hour`];
     }
     if (c.do === 'rough') return ['Sleep rough', `${m.robbedPct}% robbed · wake at ${m.morningEnergy}`, 'the day ends here; you wake here at noon, your own heat not cooled'];
     // (goods-1: the connect's pack, P; the place's things, K, one on the row at a time; what you wear, at the crib)
@@ -2632,7 +3191,7 @@ export function mountRun(host, opts = {}) {
       const word = thingWord(thingOf(cfg, c.item)?.label).split(' ').pop();
       // (home-1: a thing that defends your home says so on the row: what it does, in the tooltip)
       const defends = !!thingOf(cfg, c.item)?.defends;
-      return [`${cap(defends ? thingWord(thingOf(cfg, c.item).label) : word)} ${money(m.price)}`, defends ? 'defends your crib' : all.length > 1 ? `${all.indexOf(m) + 1}/${all.length}` : '', `${thingWord(thingOf(cfg, c.item)?.label)} from ${e?.keeper?.name ?? 'them'}: ${thingOf(cfg, c.item)?.desc ?? ''}; ${thingOf(cfg, c.item)?.kind === 'ride' || defends ? `${thingOf(cfg, c.item).does}` : 'looks only'}; no hour`];
+      return [`${cap(defends ? thingWord(thingOf(cfg, c.item).label) : word)} ${money(m.price)}`, thingOf(cfg, c.item)?.gun ? 'held at your door' : defends ? 'defends your crib' : all.length > 1 ? `${all.indexOf(m) + 1}/${all.length}` : '', `${thingWord(thingOf(cfg, c.item)?.label)} from ${e?.keeper?.name ?? 'them'}: ${thingOf(cfg, c.item)?.desc ?? ''}; ${thingOf(cfg, c.item)?.kind === 'ride' || defends ? `${thingOf(cfg, c.item).does}` : 'looks only'}; no hour`];
     }
     // (save-1: COUSIN EARL BY THE STRETCH, at the crib: hired for three days, paid up front; on his last day the same
     // move keeps him three more. No taking him off)
@@ -2642,8 +3201,16 @@ export function mountRun(host, opts = {}) {
       return m.on ? [`Keep ${who} ${m.days} more days`, money(m.price), why] : [`Hire ${who}`, `${m.days} days · ${money(m.price)}`, why];
     }
     if (c.do === 'wear' || c.do === 'unwear') return [cap(thingWord(thingOf(cfg, c.item)?.label)), c.do === 'wear' ? 'put on' : 'take off'];
+    // (memory-1: somebody come for another go: paid off, or fought)
+    if (c.do === 'tax') return c.pay ? [`Pay Dutch ${money(m.amount)}`, `the Sixes ${m.sixes?.from}→${m.sixes?.to}`] : ['Refuse Dutch', `the Sixes ${m.sixes?.from}→${m.sixes?.to}`];
+    if (c.do === 'earlWay') return [`Tell Earl: ${m.name}`, m.says];
+    // (raid-1: a box of rounds for a gun you own; what you hold at your door when the Sixes come)
+    if (c.do === 'ammo') return [`${cap(String(thingOf(cfg, c.item)?.ammo?.label ?? 'rounds').replace(/^an? /, ''))} ${money(m.price)}`, `${m.rounds} now · +${m.n}`, `${m.n} rounds for ${thingOf(cfg, c.item)?.label} from ${m.keeperName ?? 'them'}; no hour`];
+    if (c.do === 'holdWith') return [`At your door: ${m.label}`, m.gun ? `${m.rounds} rounds` : 'no gun'];
+    if (c.do === 'give' && m.due) return [`Pay off ${money(m.amount)}`, 'from banked: called square'];
+    if (c.do === 'refuse' && m.due) return ['Fight him', m.fight ? `you win ~${m.fight.in10} in 10` : 'a fight'];
     if (c.do === 'give') return [`Give ${money(m.amount)}`, 'from banked'];
-    if (c.do === 'refuse') return ['Shut the door', `${cfg.regulars.fightPct}% he swings`];
+    if (c.do === 'refuse') return ['Shut the door', m.fight ? `${cfg.regulars.fightPct}% he swings: you win ~${m.fight.in10} in 10` : `${cfg.regulars.fightPct}% he swings`];
     return [m.label, ''];
   }
   /** Why a move cannot be made, short enough for the row (the whole of it in its tooltip). */
@@ -2787,9 +3354,13 @@ export function mountRun(host, opts = {}) {
     if (x.do === 'sleep') return `Sleep: day ${S.v.day} ends`;
     if (x.do === 'rough') return 'Sleep rough here';
     if (x.do === 'morning') return 'Morning: out and home';
-    if (x.do === 'give') return `Give ${cap(S.v.door?.name ?? 'them')} ${money(m.amount)}`;
-    if (x.do === 'refuse') return 'Shut the door';
+    if (x.do === 'give') return m.due ? `Pay ${cap(S.v.door?.name ?? 'them')} off · ${money(m.amount)}` : `Give ${cap(S.v.door?.name ?? 'them')} ${money(m.amount)}`;
+    if (x.do === 'refuse') return m.due ? `Fight ${cap(S.v.door?.name ?? 'them')}` : 'Shut the door';
     if (x.do === 'guard') return `${m.on ? 'Keep' : 'Hire'} ${String(m.who?.name ?? 'him').replace(/^Cousin /, '')} · ${m.days} days · ${money(m.price)}`;
+    if (x.do === 'tax') return x.pay ? `Pay Dutch · ${money(m.amount)}` : 'Refuse Dutch';
+    if (x.do === 'earlWay') return `Tell Earl: ${m.name}`;
+    if (x.do === 'ammo') return `Buy ${String(thingOf(cfg, x.item)?.ammo?.label ?? 'rounds').replace(/^an? /, 'a ')} · ${money(m.price)}`;
+    if (x.do === 'holdWith') return `At your door: ${m.label}`;
     if (x.do === 'shop' || x.do === 'pack' || x.do === 'get') return `Buy ${moveWords(m)[0].replace(/ \$\d+$/, '')} · ${money(m.price)}`;
     return cap(c.label);
   }
@@ -2799,6 +3370,20 @@ export function mountRun(host, opts = {}) {
   /** The picker on a card's second line (who it is done to, the cash): ‹ … ›, its ↑ ↓ said in its tooltip. */
   const picker = (label, title, fn) => h('span', { class: 'u-pick', role: 'button', tabindex: '-1', title, onclick: ev => { ev.stopPropagation(); fn(); } }, h('i', null, '‹'), label, h('i', null, '›'));
   const oddsEl = (pct, sure) => (sure ? h('span', { class: 'u-pill is-gain' }, 'sure') : h('span', { class: 'u-odds', title: `${pct} in 100 it works` }, h('span', { class: 'u-odds-bar' }, h('i', { style: `width:${pct}%` })), `${pct}%`));
+  /**
+   * (raid-1) DUTCH'S CUT, on a job at the Sixes' market while they tax you: what it is today (a fifth the first day
+   * they stop you, 10 points more each day running, at most half: the view's sixes.push) and that a day away starts it
+   * again. Said on the card you choose to work there with.
+   */
+  function cutTag(v) {
+    const X6 = v.sixes;
+    const P = X6?.push;
+    if (!P || X6.truce || X6.value < cfg.sixes.tax || !(cfg.sixes.ground ?? []).includes(v.place)) return null;
+    const more = P.pct > P.base;
+    return h('span', { class: `u-pill rn-cut${more ? ' is-up' : ''}`, 'data-cut': String(P.pct),
+      title: `Leave with money made here and Dutch takes ${P.pct}% of it (at least $${cfg.sixes.taxMin}). ${P.streak > 1 ? `${P.streak} days running you've worked here` : 'The first day running'}: ${P.perDay} points more each day you keep at it, up to ${P.max}%. A day away and it is ${P.base}% again.` },
+    `Dutch's cut ${P.pct}%${more ? ` · a day away: ${P.base}%` : ` · +${P.perDay} each day running`}`);
+  }
   /** One of the three in front of you. */
   function dockCard(slot, compact) {
     const n = slot.n;
@@ -2831,13 +3416,20 @@ export function mountRun(host, opts = {}) {
       sub = [
         who ? (many ? picker(whoName, `Who: ${o.targets.map(t => t.name).join(' · ')} (↑ ↓ or a click: the next)`, () => { S.sel = key; adjust(1); }) : h('span', { class: 'u-who', title: tw ? trustTitle({ ...tw, name: who.name }) : null }, whoName)) : null,
         oddsEl(o.odds, o.sure),
-        o.sure ? null : h('span', { class: 'u-pill is-risk', title: `If it fails: ${o.ifFail}` }, `fail: ${o.ifFail}`),
+        ...(o.sure ? [] : (who?.fight ?? o.fight) ? fightPill(o, who) : [h('span', { class: 'u-pill is-risk', title: `If it fails: ${o.ifFail}` }, `fail: ${o.ifFail}`)]),
+        // (memory-1: done to somebody who fears you, the card says so: "fears you: pays up", or just "fears you")
+        (() => {
+          const scared = who && (who.id === o.who?.id ? o.fear : who.fears ? { text: 'fears you' } : null);
+          const m = scared ? (S.v.marks ?? []).find(x => x.who.id === who.id) : null;
+          return scared ? h('span', { class: 'u-pill rn-fear-tag', title: m ? `${cap(who.name)}: ${m.text}` : scared.text }, scared.text) : null;
+        })(),
         pressTag(o.pressure),
         trustMark(tw, { pay: tw?.withPay ?? 0, short: true }),
         reg ? h('span', { class: `rn-hooked${reg.hooked ? ' is-hooked' : ''}`, title: hookedText(cfg, reg) }, hookedShort(cfg, reg)) : null,
         tellEl(o.tellRisk, { short: true }),
+        cutTag(S.v),
         usesEl(o),
-        o.oddsWhy?.length ? h('span', { class: 'u-dim' }, o.oddsWhy.join(', ')) : null,
+        o.oddsWhy?.filter(w => !/^fears you/.test(w)).length ? h('span', { class: 'u-dim' }, o.oddsWhy.filter(w => !/^fears you/.test(w)).join(', ')) : null,
       ];
       title = `${name}${who ? ` · ${who.name}` : ''}${o.tellRisk?.text ? `. ${cap(o.tellRisk.text)}` : ''}`;
       ic = o.sure ? 'check' : 'cash';
@@ -2846,10 +3438,13 @@ export function mountRun(host, opts = {}) {
       const bins = k.street === 'bins';
       const best = bins ? k.finds[k.finds.length - 1] : null;
       name = cardName(k.id);
-      pay = bins ? range([0, best.pay[1]]) : range(k.pay);
+      // (batch-1: a card that pays nothing and cools you, the barber, shows what it does: "heat −1", not "$0")
+      pay = bins ? range([0, best.pay[1]]) : !k.pay?.[1] && k.winHeat < 0 ? `heat −${-k.winHeat}` : range(k.pay);
       sub = [k.with ? h('span', { class: 'u-who' }, cap(k.with)) : null, bins ? h('span', { class: 'u-dim' }, `${best.pct}% a find · ${k.left} left`) : oddsEl(k.odds, k.sure),
-        bins || k.sure ? null : h('span', { class: 'u-pill is-risk' }, `fail: ${k.ifFail}`), k.uses ? h('span', { class: 'u-dim' }, `uses 1 · ${k.uses.left} left`) : null];
-      title = k.label;
+        bins || k.sure ? null : h('span', { class: 'u-pill is-risk' }, `fail: ${k.ifFail}`), k.uses ? h('span', { class: 'u-dim' }, `uses 1 · ${k.uses.left} left`) : null,
+        // (a shop on the walk, beside the hand: always here when it can be used, never one of the three dealt)
+        k.beside ? h('span', { class: 'u-dim' }, 'a shop · always here') : null];
+      title = k.beside ? `${k.label}. A shop on the walk: it is here whenever you can use it, and takes no place in the hand.` : k.label;
     } else if (x.do === 'out') {
       name = 'Step out';
       ic = 'walk';
@@ -2890,6 +3485,16 @@ export function mountRun(host, opts = {}) {
       pay = cost;
       sub = [h('span', { class: 'u-dim', title: small }, small)];
       title = `${t}: ${small}`;
+    } else if (x.do === 'tax') {
+      // (sixes-1: Dutch by the steps: pay her a fifth of what you made here today, or refuse; what each does to the meter)
+      const X = S.v.sixes;
+      name = x.pay ? `Pay Dutch ${money(c.amount)}` : 'Refuse Dutch';
+      ic = 'person';
+      pay = x.pay ? money(c.amount) : null;
+      const to = c.sixes?.to;
+      sub = [h('span', { class: `u-pill${x.pay ? ' is-gain' : ' is-risk'} rn-sixes-tag`, title: x.pay ? `The Sixes ${c.sixes.from} → ${to}: paying eases them, and today's selling doesn't count` : `The Sixes ${c.sixes.from} → ${to}${to >= (c.sixes.jumpAt ?? 99) ? `: at ${c.sixes.jumpAt} two of them wait for you on the kerb` : ''}` }, `Sixes ${c.sixes.from}→${to}`),
+        h('span', { class: 'u-dim' }, x.pay ? `a fifth of the ${money(c.made)} you made here today` : to >= (c.sixes.jumpAt ?? 99) ? 'keep it all: they will come for you' : 'keep it all: they will remember')];
+      title = x.pay ? `Pay Dutch ${money(c.amount)} from what you carry: a fifth of the ${money(c.made)} you made at the market today (at least ${money(cfg.sixes.taxMin)}). The Sixes ease off.` : `Refuse Dutch: you keep the ${money(c.amount)}. The Sixes +${cfg.sixes.raise.refuse}${X ? ` (${X.value} now)` : ''}; at ${cfg.sixes.jump}, two of them wait for you on the kerb: win it and you keep the money and they keep off you for a week.`;
     } else if (x.do === 'morning') {
       name = 'Morning';
       ic = 'home';
@@ -2902,7 +3507,8 @@ export function mountRun(host, opts = {}) {
     // (at the door: stepping out past them shuts the door on them too; said in its name, so the Take keeps its room)
     if (x.do === 'out' && S.v.door) {
       name = 'Step out past them';
-      title = `${title}. Stepping out past them shuts the door on them too`;
+      // (memory-1: somebody come for another go is not walked past: it is the fight)
+      title = S.v.door.due ? `${title}. Stepping out past ${S.v.door.name} is the fight` : `${title}. Stepping out past them shuts the door on them too`;
     }
     if (!c.available) sub.push(h('span', { class: 'u-pill is-mute u-why', title: c.why }, shortWhy(c)));
     // (leg 3, part E: a long name, "Collect a debt for the park manager", one size down and without its icon: whole at 1280)
@@ -2912,6 +3518,58 @@ export function mountRun(host, opts = {}) {
       class: `u-card${on ? ' is-on' : ''}${c.available ? '' : ' is-off'}${compact ? ' is-row' : ''}`, role: 'button', tabindex: '0', 'data-key': key, 'data-slot': String(n), title: c.available ? title : `${title}: ${c.why}`,
       onclick: () => pickOrGo(key, c.available),
     }, main, compact ? null : h('span', { class: 'u-card-sub' }, sub.filter(Boolean)));
+  }
+  /**
+   * (duel-1) WHAT GOING WRONG MEANS, ON THE CARD: a fight with whoever it is done to, and how it would go, from the
+   * rules' sample of the very same fight (the view's `fight`, the picked target's own); the heat besides, if any. Its
+   * tooltip says what each side brings and what it costs, won or lost.
+   */
+  function fightPill(o, who) {
+    const f = who?.fight ?? o.fight;
+    // (a job may heat less when the fight is won: the docks' lift, +1 won and +2 lost. Both are said)
+    const two = o.wonHeat !== null && o.wonHeat !== undefined && o.wonHeat !== o.failHeat;
+    const heat = two ? `heat +${o.wonHeat} if you win the fight and +${o.failHeat} if you lose it, ` : o.failHeat ? `heat +${o.failHeat}, ` : '';
+    const title = `If it goes wrong: ${heat}a fight with ${who?.name ?? 'them'}. You: ${f.you.text}. ${cap(who?.name ?? 'them')}: ${f.them.text}. You win ${in10Words(f.in10)} (${f.pct}% of ${f.n} fights like it). Won: the job pays, energy −${f.costs.win}. Lost: energy −${f.costs.lose}.${byArmWords(f)}`;
+    // (short on the card, so it is never cut: the whole of it on the bar's row while the card is picked, fightHint)
+    // (the heat after it, as its own small tag that gives way first when the card is narrow: the fight is what matters)
+    // (styles-1: and their style in a word or two, before you choose: "big man", "quick one")
+    const st = f.them?.style && f.them.style !== 'brawler' ? STYLE_WORD[f.them.style] ?? f.them.style : null;
+    return [h('span', { class: 'u-pill is-risk rn-fight-pill', title, 'data-style': f.them?.style ?? null }, st ? `fails: ${/^[aeiou]/.test(st) ? 'an' : 'a'} ${st}, ${in10Short(f.in10)}` : `fails: a fight, ${in10Short(f.in10)}`), o.failHeat ? h('span', { class: 'hk-tag is-down', title }, two ? `heat +${o.wonHeat} or +${o.failHeat}` : `heat +${o.failHeat}`) : null];
+  }
+  /** "about 4 in 10", and at the ends, where a rounded 0 or 10 would say never or always: "under 1 in 10", "over 9 in 10". */
+  const in10Words = n => (n <= 0 ? 'under 1 in 10' : n >= 10 ? 'over 9 in 10' : `about ${n} in 10`);
+  const in10Short = n => (n <= 0 ? 'under 1 in 10' : n >= 10 ? 'over 9 in 10' : `~${n} in 10`);
+  const in10Plain = n => (n <= 0 ? 'under 1 in 10' : n >= 10 ? 'over 9 in 10' : `${n} in 10`);
+  /** (styles-1) WHAT YOU FIGHT WITH, as a button: a press (or E) sets the next thing you own; alone, bare hands, it only says so. */
+  function fightWithEl(v) {
+    const F = v.fight;
+    if (!F) return null;
+    const many = F.arms.length > 1;
+    const next = many ? F.arms[(F.arms.findIndex(a => a.chosen) + 1) % F.arms.length] : null;
+    return h('button', { type: 'button', class: 'u-pill rn-fightwith-pill', 'data-arm': F.arm, disabled: many ? null : true,
+      title: many ? `You fight with ${F.label}, one-on-one and jumped. Press (or E) to fight with ${next.label}. All of it: You (C), Fight.` : 'Bare hands is all you have to fight with: learn a punch style, or buy the box cutter (L, Fight, says where).',
+      onclick: () => (next?.key && S.phase === 'choose' && !S.hold ? fromPanel(next.key, true) : null) }, `fight with: ${F.label}`, many ? h('kbd', { class: 'u-key' }, 'E') : null);
+  }
+  /** (styles-1) A style in a word or two, for a card: the plain brawler says nothing more than "brawler". */
+  const STYLE_WORD = { brawler: 'brawler', bigman: 'big man', quick: 'quick one', knife: 'blade', grabber: 'grabber' };
+  /** (styles-1) The same fight with each other thing you own: " With the throw: 6 in 10." (nothing when you own one thing) */
+  function byArmWords(f) {
+    const others = Object.entries(f.byArm ?? {}).filter(([a]) => a !== f.you?.arm);
+    return others.length ? ` ${others.map(([a, pct]) => `With ${S.v.fight?.arms.find(x => x.arm === a)?.label ?? a}: ${in10Plain(Math.round(pct / 10))}`).join('. ')} (E changes what you fight with).` : '';
+  }
+  /** The picked card, when going wrong with it is a fight (duel-1): { o, who, f }, or null. */
+  function fightPicked(v) {
+    const o = S.phase === 'choose' ? (v.options ?? []).find(x => x.key === S.sel) : null;
+    const who = o ? targetOf(o) : null;
+    const f = who?.fight ?? o?.fight ?? null;
+    return o && f && !o.sure ? { o, who, f } : null;
+  }
+  /** (duel-1) THE PICKED CARD'S FIGHT, ON THE BAR'S ROW: what going wrong means, its odds, what each brings and costs. */
+  function fightHint({ o, who, f }) {
+    const name = cap(who?.name ?? 'them');
+    const two = o.wonHeat !== null && o.wonHeat !== undefined && o.wonHeat !== o.failHeat;
+    const text = `If it goes wrong${two ? ` (heat +${o.wonHeat} if you win the fight, +${o.failHeat} if you lose)` : o.failHeat ? ` (heat +${o.failHeat})` : ''}, a fight with ${name} (${f.them.says ?? 'a plain brawler'}): you win ${in10Words(f.in10)} with ${f.you.weapon}.${byArmWords(f)} ${personShort(name)}: ${f.them.tough}. You: ${f.you.text}. Won: it pays, energy −${f.costs.win}; lost: energy −${f.costs.lose}.`;
+    return h('p', { class: 'rn-said-line rn-dry rn-fight-said', title: text }, text);
   }
   /** A verb's small line: what it would do here, or why it cannot. */
   // (leg 3, part E: a verb's small line has the room of about fifteen letters at 1280 wide: what it would do in the
@@ -2928,6 +3586,13 @@ export function mountRun(host, opts = {}) {
         const s = S.v.shop.find(q => q.item === one.choice.item);
         return `${thingWord(s?.label ?? '').split(' ').pop()} ${money(s?.price ?? 0)}`;
       }
+      // (a shop on the walk, beside the stop's hand: what it does, "cut · heat −1")
+      if (one.choice.do === 'card') {
+        const k = (S.v.hand ?? []).find(q => q.key === one.key);
+        return k?.winHeat < 0 ? `${one.choice.id === 'barber' ? 'cut · ' : ''}heat −${-k.winHeat}` : cardName(one.choice.id).toLowerCase();
+      }
+      // (sixes-1: a lesson by its own short name and price, "the throw $50": two words of "Learn the throw…" were "learn the")
+      if (one.choice.do === 'learn') return `${cfg.styles?.[one.choice.style]?.label ?? one.choice.style} ${money(one.price ?? cfg.styles?.[one.choice.style]?.price ?? 0)}`;
       return one.choice.do === 'guard' ? `Earl ${money(one.price)}` : `${moveWords(one)[0].split(' ').slice(0, 2).join(' ').toLowerCase()}`;
     }
     if (verb.id === 'travel') {
@@ -2988,14 +3653,23 @@ export function mountRun(host, opts = {}) {
         const t = thingOf(cfg, x.item) ?? {};
         const e = (S.v.errands ?? []).find(q => q.here && q.item === x.item);
         name = thingWord(t.label ?? x.item);
-        small = [t.defends || t.kind === 'ride' ? t.does : t.desc, t.defends ? 'defends your crib' : t.kind === 'ride' ? null : 'looks only', e?.keeper ? cap(e.keeper.name) : null].filter(Boolean).join(' · ');
+        small = [t.defends || t.kind === 'ride' ? t.does : t.desc, t.gun ? 'held at your door' : t.defends ? 'defends your crib' : t.kind === 'ride' ? null : 'looks only', e?.keeper ? cap(e.keeper.name) : null].filter(Boolean).join(' · ');
+      } else if (x.do === 'ammo') {
+        const t = thingOf(cfg, x.item) ?? {};
+        name = String(t.ammo?.label ?? 'rounds').replace(/^an? /, '');
+        small = `for ${String(t.label).replace(/^an? /, 'your ')} · ${c.rounds} rounds now · ${cap(c.keeperName ?? '')}`;
       } else if (x.do === 'pack') {
         name = `${cap(packWord(x.good))} of ${goodWord(x.good, 2)}`;
         small = `${c.sales} sales · ${cap(c.who?.name ?? '')}${c.left !== null && c.left !== undefined ? ` · ${c.left} left today` : ''}${c.off ? ` · ${money(c.off)} off: with you` : ''}`;
       } else if (x.do === 'shop') {
         const it = S.v.shopHere.find(q => q.item === x.item);
         name = thingWord(it?.label ?? x.item);
-        small = `${it?.does ?? ''}${it?.left !== null && it?.left !== undefined ? ` · ${it.left} left today` : ''}`;
+        small = it?.food && S.v.food?.full ? cfg.food.full : `${it?.does ?? ''}${it?.left !== null && it?.left !== undefined ? ` · ${it.left} left today` : ''}${foodDay(it)}`;
+      } else if (x.do === 'card') {
+        // (a shop on the walk, beside the stop's hand: who, what it does, what it takes; it pays nothing and costs none)
+        const k = (S.v.hand ?? []).find(q => q.key === key);
+        name = cardName(x.id);
+        small = [k?.with ? cap(k.with) : null, k?.winHeat < 0 ? `your heat −${-k.winHeat}` : null, `1 hour · ${k?.energy ?? cfg.energy.perHour} energy`, 'once a day'].filter(Boolean).join(' · ');
       } else {
         const w = moveWords(c);
         small = w[1] ?? '';
@@ -3032,7 +3706,7 @@ export function mountRun(host, opts = {}) {
       const name = p ? pieceName(p) : cap(thingWord(t.label ?? item));
       const tier = p?.tier ?? t.tier ?? 0;
       const tried = p?.kind === 'wear' && S.tried?.[p.slot] === item;
-      const does = t.defends ? 'defends your crib' : t.kind === 'ride' ? 'a ride' : null;
+      const does = t.gun ? 'held at your door' : t.defends ? 'defends your crib' : t.kind === 'ride' ? 'a ride' : null;
       return h('div', { class: `u-shelf-cell${S.sel === key ? ' is-on' : ''}${c.available ? '' : ' is-off'}`, 'data-key': key },
         h('button', { type: 'button', class: 'u-shelf-pick', title: c.available ? `${name} · ${tierWord(tier)} · ${money(c.price ?? p?.price)}${does ? ` · ${does}` : ''}: Enter buys, from what you carry` : `${name}: ${c.why}`, onclick: () => pickOrGo(key, c.available) },
           h('span', { class: 'u-lib-pic' }, tiles.el(p?.piece ?? t.piece ?? item, { root: box, label: name })),
@@ -3151,6 +3825,9 @@ export function mountRun(host, opts = {}) {
     const c = S.v.choices.find(x => x.key === S.sel);
     if (!c) return;
     if (!c.available) return toast(c.why);
+    // (smooth-1: a choice whose odds are still being worked out, its own or the hour's here that it would spend, waits
+    // for them: it is never taken on a "…")
+    if (oddsWait(c)) return toast('Still working out the odds: a moment.');
     // (an option done to another of its targets than the one dealt names them: { do: 'job', id, who })
     const o = c.choice.do === 'job' ? S.v.options.find(x => x.key === c.key) : null;
     const who = o && targetIndex(o) ? targetOf(o)?.id : null;
@@ -3191,7 +3868,7 @@ export function mountRun(host, opts = {}) {
    * THE KEYS (ui-3, leg 2), one meaning each, everywhere in the run:
    *   1 2 3 the things in front of you · B Shop · R Rob · X Bins · T Travel · H Home · Z Sleep (each picks; Enter does)
    *   ← → along the dock · ↑ ↓ what the picked thing is set to (Shift: ten dollars) · Enter does it · Esc closes · Space skips a scene
-   *   C You · L Library · G Guide · O Stuff · M Map · V Arrange (at home) · K Home risk · J the journal · I the interface's size · F the dock to one row
+   *   C You · L Library · U Ahead · G Guide · O Stuff · M Map · V Arrange (at home) · K Home risk · J the journal · I the interface's size · F the dock to one row
    *   · N your numbers to one line
    *   W A S D are never the run's: they are kept for moving.
    */
@@ -3209,6 +3886,7 @@ export function mountRun(host, opts = {}) {
       openSheet(sheet.id);
       // (the Library opened from the keyboard: the arrows walk its grid, Enter keeps a piece on its card)
       if (S.sheet === 'library') library.focus();
+      if (S.sheet === 'ahead') ahead.focus();
       return true;
     }
     if (K === 'F') {
@@ -3222,6 +3900,17 @@ export function mountRun(host, opts = {}) {
       toggleDock();
       return true;
     }
+    // (styles-1) E: FIGHT WITH the next thing you own (one-on-one and jumped), no hour; never in a fight
+    if (K === 'E') {
+      e.preventDefault();
+      if (S.phase !== 'choose' || S.hold || duel.active) return toast('Change what you fight with when this hour is over'), true;
+      const arms = S.v.fight?.arms ?? [];
+      if (arms.length < 2) return toast('Bare hands is all you have to fight with'), true;
+      const i = arms.findIndex(a => a.chosen);
+      const next = arms[(i + 1) % arms.length];
+      if (next?.key) fromPanel(next.key, true);
+      return true;
+    }
     if (K === 'I') {
       e.preventDefault();
       cycleSize();
@@ -3230,6 +3919,12 @@ export function mountRun(host, opts = {}) {
     if (K === 'J') {
       e.preventDefault();
       toggleJournal();
+      return true;
+    }
+    // (raid-1) Y: YOUR DOOR, the card of the one decision (the raid due, or what is at your door when nothing is)
+    if (K === RAID_KEY && (S.hold?.v ?? S.v)?.raid) {
+      e.preventDefault();
+      toggleRaid('raid');
       return true;
     }
     if (K === 'K' && (S.hold?.v ?? S.v)?.pressure) {
@@ -3249,10 +3944,19 @@ export function mountRun(host, opts = {}) {
         return true;
       }
       if (S.sheet) {
-        if (!(S.sheet === 'map' && runMap.closeOne())) openSheet(null);
+        // (tree-1: the Ahead panel's card goes first, then the panel)
+        if (S.sheet === 'ahead' && ahead.closeCard()) return true;
+        if (!(S.sheet === 'map' && runMap.closeOne())) {
+          // (tree-1: opened by a link of Ahead's, Esc goes back there first)
+          if (S.back && (S.sheet === 'library' || S.sheet === 'map')) goBack();
+          else openSheet(null);
+        }
         return true;
       }
       if (S.homeOpen) return toggleHome(false), true;
+      if (S.sixesOpen) return toggleSixes(false), true;
+      if (S.raidOpen) return toggleRaid('raid', false), true;
+      if (S.worthOpen) return toggleRaid('worth', false), true;
       if (S.dangerOpen && (S.v.danger.here || wayPicked(S.v))) {
         S.dangerOpen = false;
         paint();
@@ -3265,6 +3969,18 @@ export function mountRun(host, opts = {}) {
         return true;
       }
       return false;
+    }
+    // (duel-1) A FIGHT ON: Space or Enter skips it, to the same result
+    if (duel.active && (k === ' ' || k === 'Enter')) {
+      e.preventDefault();
+      duel.skip();
+      return true;
+    }
+    // (raid-1) THE RAID AT YOUR DOOR ON: Space or Enter skips it, to the rules' result
+    if (raidFight.active && (k === ' ' || k === 'Enter')) {
+      e.preventDefault();
+      raidFight.skip();
+      return true;
     }
     // ENTER: the card that holds the game (the night's report, Continue to the jail), or the picked thing
     if (S.onPress && k === 'Enter') {
@@ -3293,6 +4009,10 @@ export function mountRun(host, opts = {}) {
     // (the map panel's own arrows pan it; in the Library's grid they move along it: dock.js arrowsTo)
     const owner = ARROWS.has(k) || k === 'Home' || k === 'End' ? arrowsTo({ sheet: S.sheet, phase: S.phase, hold: !!S.hold }) : null;
     if (ARROWS.has(k) && owner === 'map') return false;
+    if (owner === 'ahead') {
+      e.preventDefault();
+      return ahead.arrow(k);
+    }
     if (owner === 'library') {
       // (join-1: the grid keeps them whenever the Library is open and the game is choosing: with the focus in it, its
       // own keys move; with the focus gone (a scene ended under it, the grid drawn again), into it and on)
@@ -3352,6 +4072,8 @@ export function mountRun(host, opts = {}) {
     // Somebody seen casing it is the morning's own scene and card, after this)
     // (save-1: Earl's last day and his going, by their own words; his going is the end of what was paid for, not a loss)
     const home = events.filter(e => (e.type === 'raid' && e.night) || e.type === 'calledOff' || e.type === 'guard').map(e => ({ text: e.text, bad: e.type === 'raid' && e.taken > 0, quiet: e.type === 'guard' }));
+    // (memory-1: the night's word from people: who is coming tomorrow, a week's mark gone, who waits a day for the door)
+    home.push(...events.filter(e => e.type === 'coming' || e.type === 'markEnd').map(e => ({ text: e.text, quiet: e.type === 'markEnd' && e.kind !== 'beat' && e.kind !== 'robbed' })));
     return {
       day, where, banked: state.banked, night, door, drift, rough, carried: state.carried, home,
       rows: [
@@ -3403,6 +4125,21 @@ export function mountRun(host, opts = {}) {
     get steps() {
       return S.steps;
     },
+    /**
+     * For the tools (smooth-1, odds.js): the fight odds worked out in the background. `busy` counts asked and not yet
+     * kept; `pending` whether what the player sees has a figure still "…" (the view, or the advice after a loss).
+     */
+    get odds() {
+      return { busy: odds.busy(), workers: odds.workers(), pending: pendingIn(S.hold?.v ?? S.v) || pendingIn(S.advice), errors: odds.errors.slice() };
+    },
+    /** For the tools only (smooth-1, run-odds.mjs): holds the odds workers (nothing more is worked out) or lets them go. */
+    oddsHold: on => odds.hold(on),
+    /** For the tools (smooth-1): resolves once no figure the player sees is still being worked out (and none is asked). */
+    async oddsReady(limitMs = 60000) {
+      const t0 = performance.now();
+      while ((odds.busy() || pendingIn(S.hold?.v ?? S.v) || pendingIn(S.advice)) && performance.now() - t0 < limitMs) await new Promise(r => setTimeout(r, 50));
+      return !(odds.busy() || pendingIn(S.hold?.v ?? S.v) || pendingIn(S.advice));
+    },
     skip,
     root,
     /** For the tools (save-1): whether this page saves, as of when (null: not yet; false: the browser refused), picked up or refused, the line said, the log's length. */
@@ -3426,6 +4163,8 @@ export function mountRun(host, opts = {}) {
       S.after = null;
       S.raidNote = null;
       S.pageNote = null;
+      // (raid-1: the raid's slips are the old state's: folded)
+      S.raidOpen = S.worthOpen = false;
       S.arrangeTries = 0;
       S.sel = wayOnKey(S.v);
       S.targets = {};
@@ -3439,6 +4178,12 @@ export function mountRun(host, opts = {}) {
       // (a regular at the door of the state loaded: the player comes out to him, as on a morning)
       if (state.place === 'crib' && state.door) await doorAt(state);
       paint();
+      // (smooth-1: the tools read its odds next: they are worked out first, in the background, and drawn)
+      await odds.settle(() => view(cfg, state));
+      if (S.state === state && pendingIn(S.v)) {
+        S.v = view(cfg, state);
+        paint();
+      }
       return true;
     },
     /** For the tools: the picked option's next target, as T would. */
@@ -3504,6 +4249,10 @@ export function mountRun(host, opts = {}) {
     get face() {
       return { honest: face.honest, asked: face.asked, small: face.small.dataset.state ?? null, big: face.big.canvas.dataset.state ?? null, playing: !!face.big.player?.playing };
     },
+    /** For the tools (tree-1): the Ahead panel (ahead.js: data, selected, oddsLeft, select). */
+    get ahead() {
+      return ahead;
+    },
     /** For the tools (ui-3, leg 3): the Library (library.js: filter, set, shown, onCard, pin, focus). */
     get library() {
       return library;
@@ -3554,6 +4303,28 @@ export function mountRun(host, opts = {}) {
     stop() {
       S.dead = true;
       removeEventListener('keydown', onKey, true);
+      // (raidfight-5: a raid up when the run stops: ended at once, the stage's light put back)
+      raidFight.leave();
+    },
+    /**
+     * For the tools (raid-1): the card of the one decision and the WORTH slip, open or not; every night of the Sixes
+     * played (how it was shown and why: raid.js staging); whether the gun fight's seam is filled.
+     */
+    get raid() {
+      return { open: !!S.raidOpen, worthOpen: !!S.worthOpen, log: raidLog.map(r => ({ ...r })), active: raidFight.active, state: raidFight.state ?? null };
+    },
+    /** For the tools (raid-1): opens ('raid' or 'worth') or folds (null) the raid's slips, as Y or a press on WORTH would. */
+    raidSlip(which = null) {
+      if (which) toggleRaid(which, true);
+      else {
+        S.raidOpen = S.worthOpen = false;
+        paint();
+      }
+      return which;
+    },
+    /** For the tools (duel-1): the fight on now (its phase, clock, blows), and every fight played (duel.js log). */
+    get duel() {
+      return { active: duel.active, state: duel.state, log: duel.log.slice(), advice: S.advice ? { ...S.advice } : null };
     },
     /** For the tools (join-1): the try-out stop's side trip (trip.js: go, back, active, busy, fight, log). */
     get trip() {

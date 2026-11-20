@@ -2,11 +2,15 @@
 // "what if"). A policy reads the fight and returns the move for this tick, { x, y } in the arena's frame.
 //
 //   still   stands where they came up, and lets the weapon do it
-//   kite    BACKS AWAY WHILE FIRING: with a gun, keeps the ones who hit out of reach (further while reloading) and
-//           stands to shoot when they are far; with fists or a blade, steps in to strike and out while the next
+//   kite    BACKS AWAY WHILE FIRING: with a gun, keeps the ones who hit out of reach (further while reloading; a gun's
+//           own distances where it has them, data.mjs `stand`) and stands to shoot when they are far; with fists or a blade, steps in to strike and out while the next
 //           blow comes up. Either way it walks over what is dropped when nobody is close, and never onto the stairs.
+//   brawl   A ONE-ON-ONE'S (the run's fights: duel.mjs): steps in to throw the blow it has ready, gives ground and
+//           circles while it waits on the next, as the one it fights does (brawl.mjs). Not one of POLICIES: the stop's
+//           table plays the two above
 import { BODY, WEAPONS } from './data.mjs';
-import { you } from './sim.mjs';
+import { you, foes } from './sim.mjs';
+import { brawlMove } from './brawl.mjs';
 
 export const still = () => ({ x: 0, y: 0 });
 
@@ -67,8 +71,17 @@ function kite0(F) {
     return { x: (L.x - me.x) / d, y: (L.y - me.y) / d };
   };
   if (gun) {
-    const safe = me.reload > 0 || me.mag <= 1 ? 7 : 4.2;
+    // (a gun's own `stand`, fight-3: the Doorman keeps them close, the Long-eye far. Nearly empty: the last round of a
+    // magazine of more than two; the Doorman's when both shells are spent)
+    const S = W.stand ?? [4.2, 7];
+    const safe = me.reload > 0 || me.mag <= (W.mag > 2 ? 1 : 0) ? S[1] : S[0];
     if (near < safe) return away();
+    // (a gun with its own stand and none of them in its range walks to the nearest who is: the Doorman goes to them)
+    if (W.stand && me.reload <= 0) {
+      const t = them.filter(p => p.in).sort((a, b) => Math.hypot(a.x - me.x, a.y - me.y) - Math.hypot(b.x - me.x, b.y - me.y))[0];
+      const dt = t ? Math.hypot(t.x - me.x, t.y - me.y) : 0;
+      if (t && dt > W.range - 0.5) return { x: (t.x - me.x) / dt, y: (t.y - me.y) / dt };
+    }
     return (near > safe + 2.5 && loot()) || { x: 0, y: 0 };
   }
   // fists or a blade: in to strike, out while the next blow comes up
@@ -85,5 +98,14 @@ function kite0(F) {
 }
 
 const reachOf = W => W.reach + 2 * BODY;
+
+export function brawl(F) {
+  const me = you(F);
+  // (styles-1: with several of them, the nearest one up; with one, him)
+  const up = foes(F).filter(f => !f.down);
+  const q = up.length > 1 ? up.reduce((a, b) => (Math.hypot(b.x - me.x, b.y - me.y) < Math.hypot(a.x - me.x, a.y - me.y) ? b : a)) : up[0] ?? null;
+  const [x, y] = brawlMove(F, me, q, F.duel?.brawl);
+  return { x, y };
+}
 
 export const POLICIES = { still, kite };

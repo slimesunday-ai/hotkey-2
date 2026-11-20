@@ -67,11 +67,22 @@
 #k .fg .u-dock-row .u-btn.u-go { max-width: calc(250 * var(--k-px)); min-width: 0; }
 #k .fg .u-card.is-row .u-card-t { font-size: var(--u-fs-s); }
 /* (build your own, over its button: the run's list) */
-#k .fg .fg-build { width: calc(400 * var(--k-px)); }
+#k .fg .fg-build { width: calc(640 * var(--k-px)); max-height: 64vh; }
+#k .fg .fg-build .fg-build-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8px; align-items: start; }
+#k .fg .fg-build .fg-job { color: var(--u-ink); font-weight: 700; }
 #k .fg .fg-build .fg-build-sub { margin: 7px 4px 2px; }
 #k .fg .fg-build .u-li.is-at { box-shadow: inset 0 0 0 1.5px var(--u-line); }
 #k .fg .fg-build .fg-li-mark { flex: none; font: 700 var(--u-fs-s)/1 var(--u-ui); color: var(--u-mute); text-transform: uppercase; letter-spacing: .03em; }
 #k .fg .fg-build .u-li.is-on .fg-li-mark { color: var(--u-you-ink); }
+/* (fight-3: how Earl fights, his three ways in a row under him; each a chip with its card words under its name) */
+#k .fg .fg-build .fg-ways { margin: 2px 4px 4px calc(10 * var(--k-px)); padding-left: 8px; box-shadow: inset 2px 0 0 var(--u-trust); }
+#k .fg .fg-build .fg-ways-cap { display: block; margin: 2px 0 4px; }
+#k .fg .fg-build .fg-ways-row { display: grid; gap: 3px; }
+#k .fg .fg-build .fg-way { width: 100%; min-width: 0; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; padding: 4px 8px; white-space: normal; text-align: left; border-radius: calc(8 * var(--k-px)); }
+#k .fg .fg-build .fg-way small { white-space: normal; line-height: 1.15; }
+#k .fg .fg-build .fg-way.is-at { box-shadow: inset 0 0 0 1.5px var(--u-line); }
+#k .fg .fg-build .fg-way.is-on { background: var(--u-trust); color: var(--u-trust-on); }
+#k .fg .fg-build .fg-way.is-on small { color: var(--u-trust-on); }
 
 /* ── THE METERS while a round is on: one slim strip in the run's number style, one quiet line of keys under it ─── */
 #k .rn.fg .fg-dock.is-playing { width: max-content; max-width: calc(100% - 2 * var(--u-m)); padding: calc(4 * var(--k-px)) calc(4 * var(--k-px)) calc(4 * var(--k-px)); }
@@ -113,3 +124,9 @@
 
 /* (the black of the side trip says where it is going: the run's own words in the middle of it, demo/run/trip.js) */
 #k .rn.fg-trip { z-index: 2; }
+/* (anim-1) one-on-one, to look at: its two rows of choices side by side, and its button */
+#k .fg .fg-build .fg-duel { margin: 8px 4px 4px calc(10 * var(--k-px)); padding-left: 8px; box-shadow: inset 2px 0 0 var(--u-you); }
+#k .fg .fg-build .fg-duel-cap { display: block; margin: 2px 0 4px; }
+#k .fg .fg-build .fg-raid-head { appearance: none; background: none; border: 0; padding: 2px 0; color: inherit; font: inherit; text-align: left; cursor: pointer; width: 100%; }
+#k .fg .fg-build .fg-raid-head:hover, #k .fg .fg-build .fg-raid-head:focus-visible { text-decoration: underline; }
+#k .fg .fg-build .fg-duel-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }

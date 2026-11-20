@@ -50,10 +50,29 @@ if (GAME) document.body.classList.add('game');
 // city/vendor/three/. The city's build workers cannot use an import map: the city sends them its sources as text and
 // rewrites a bare `three` to a CDN address fixed in its own code. So the text is rewritten here first, on its way
 // from the server to the city: a bare `three` becomes our vendored file's full address, which the city leaves alone.
+// THE WORLD'S FILE, ONCE (smooth-1, docs/perf/2026-11-18-audit.md fix 9): world.json (1 MB) is asked for by the city's
+// people (simstate/movement.js), the stage's rides (stage/rides/index.js) and the stage's walks (stage/actors.js
+// travel): the first ask goes to the server, every later one in this page gets the same bytes, a Response of its own.
+// One that failed is not kept.
 const fetch0 = window.fetch.bind(window);
+const ONCE = /\/city\/from-trunk\/world\/export\/world\.json$/;
+const once = new Map();
+function fetchOnce(url, input, init) {
+  let got = once.get(url);
+  if (!got) {
+    got = fetch0(input, init).then(async r => ({ ok: r.ok, status: r.status, statusText: r.statusText, headers: [...r.headers], body: await r.arrayBuffer() }));
+    once.set(url, got);
+    got.then(k => k.ok || once.delete(url), () => once.delete(url));
+  }
+  return got.then(k => new Response(k.body.slice(0), { status: k.status, statusText: k.statusText, headers: k.headers }));
+}
 window.fetch = async (input, init) => {
-  const res = await fetch0(input, init);
   const url = typeof input === 'string' ? input : input?.url ?? String(input);
+  if (url.includes('world.json')) {
+    const abs = new URL(url, location.href).href;
+    if (ONCE.test(abs) && (init?.method ?? input?.method ?? 'GET').toUpperCase() === 'GET') return fetchOnce(abs, input, init);
+  }
+  const res = await fetch0(input, init);
   if (!res.ok || !/\/city\/from-trunk\/[^?]*\.js(\?|$)/.test(url)) return res;
   const text = (await res.text())
     .replace(/(\bfrom\s*)(['"])three\2/g, `$1$2${VENDOR}build/three.module.js$2`)
@@ -115,6 +134,9 @@ if (SMALL) {
     city.stream.setUniverse(blocks.map(([i, j]) => [i, j, buildsBlock(i, j)]), 'section');
     // the haze: everything past the ring is gone into it
     city.R.draw = map.PITCH * (loader.ring + 2.2);
+    // (smooth-1, docs/perf/2026-11-18-audit.md fix 4) and the crowd lives as far as the zone draws, not the preset's 330 m:
+    // nobody past the haze is simulated (2,450 → 970 at the market); the walkers in view are the same (demo/tools/crowd-range.mjs)
+    city.R.charFar = city.R.draw;
     const { pos, tgt, fov } = map.viewOf(zone0);
     city.VIEWS.hk2 = { pos, tgt, fov, sh: [(pos[0] + tgt[0]) / 2, (pos[2] + tgt[2]) / 2, Math.max(16, Math.hypot(pos[0] - tgt[0], pos[2] - tgt[2]) * 0.8)] };
     city.cam?.toOrbit({ instant: true });

@@ -18,9 +18,10 @@
 //     root() → the sheet's scrolling box (the tiles are drawn as they come into it)
 //   lib.lead · lib.grid · lib.card    the three parts, placed by the page
 //   lib.paint()   again from now() (cheap when nothing changed) · lib.owns(el) · lib.focus() · lib.filter · lib.set(f)
+//   lib.show(key) one piece from elsewhere (the Ahead panel): its kind, kept on the card, in sight
 import { h, fill } from '../hud/dom.js';
 import { icon } from './icons.js';
-import { KINDS, SLOTS, SHOWS, SORTS, FILTER0, ON_WALL, pick, order, countLine, catsOf, buyOf, wearOf, soldLine, fitLine, marksOf, marksWords, money, nameOf, tierWord } from './catalog.js';
+import { KINDS, SLOTS, SHOWS, SORTS, FILTER0, ON_WALL, pick, order, countLine, catsOf, buyOf, wearOf, soldLine, fitLine, jobLine, marksOf, marksWords, money, nameOf, tierWord, fightWays } from './catalog.js';
 
 const KEPT = 'lib';
 const TIERS = [0, 1, 2, 3];
@@ -65,8 +66,16 @@ export function createLibrary({ cfg, tiles, now, act, kept, root }) {
     type: 'button', class: `u-chip${it.id === on ? ' is-on' : ''}${it.cls ? ` ${it.cls}` : ''}`, 'aria-pressed': String(it.id === on), title: it.title ?? null,
     onclick: () => pickIt(it.id),
   }, it.dot ?? null, it.label, it.n !== undefined && it.n !== null ? h('small', null, String(it.n)) : null)));
-  function paintLead({ compact }) {
-    const counts = { wear: pieces.filter(p => p.kind === 'wear').length, home: pieces.filter(p => p.kind === 'home').length, ride: pieces.filter(p => p.kind === 'ride').length };
+  function paintLead({ compact, v }) {
+    const counts = { wear: pieces.filter(p => p.kind === 'wear').length, home: pieces.filter(p => p.kind === 'home').length, ride: pieces.filter(p => p.kind === 'ride').length, fight: fightWays(v).length };
+    if (f.kind === 'fight') {
+      // (styles-1: the ways to fight are a short list: no filters)
+      const sig = JSON.stringify([f.kind, counts, compact]);
+      if (sig === leadSig) return;
+      leadSig = sig;
+      fill(head, seg(KINDS.map(k => ({ ...k, n: counts[k.id] })), f.kind, kind => set({ kind }), 'is-kinds'), h('span', { class: 'u-lib-count' }, `${counts.fight} ways`));
+      return fill(lead, h('p', { class: 'u-lib-said rn-note' }, 'What you can fight with, one-on-one and when you are jumped. Each is had at one place. You choose what you fight with in You (C), Fight.'));
+    }
     const sig = JSON.stringify([f, counts, shown.length, compact, foldLead]);
     if (sig === leadSig) return;
     leadSig = sig;
@@ -279,14 +288,42 @@ export function createLibrary({ cfg, tiles, now, act, kept, root }) {
       h('div', { class: 'u-lib-card-body' },
         h('div', { class: 'u-lib-card-head' }, h('b', { class: 'u-lib-card-name' }, name), foldBtn),
         h('div', { class: 'u-lib-card-meta' }, h('span', { class: `u-tier is-t${p.tier}` }, tierWord(p.tier)), h('span', { class: 'u-lib-card-price' }, money(p.price)), h('span', { class: 'u-lib-card-kind' }, fitLine(p))),
+        // (sixes-1: a piece that defends your crib: its one job, before where it is had)
+        jobLine(p) ? h('p', { class: 'u-lib-card-job' }, jobLine(p)) : null,
         h('p', { class: 'u-lib-card-sold' }, soldLine(p, { cfg, v })),
         tryNote,
         h('div', { class: 'u-lib-card-acts' }, tryBtn, wearBtn, buyBtn)));
   }
 
+  /** (styles-1) The Fight kind: the ways to fight, one row each, with what it does and where it is had; Learn when taught here. */
+  function paintFight(v, choosing) {
+    const ways = fightWays(v);
+    const sig = JSON.stringify([ways, choosing]);
+    if (sig === gridSig) return;
+    gridSig = sig;
+    byKey.clear();
+    fill(grid, h('ul', { class: 'u-lib-fight' }, ways.map(w => h('li', { class: `u-lib-fightway${w.owned ? ' is-owned' : ''}${w.chosen ? ' is-chosen' : ''}`, 'data-key': w.key },
+      h('div', { class: 'u-lib-fight-top' }, h('b', { class: 'u-lib-name' }, w.name), h('span', { class: 'u-lib-price' }, money(w.price)),
+        w.chosen ? h('span', { class: 'u-pill is-go' }, 'you fight with it') : w.owned ? h('span', { class: 'u-pill' }, icon('check'), 'yours') : null),
+      h('p', { class: 'u-lib-fight-does' }, w.does),
+      h('p', { class: 'u-lib-fight-where' }, icon('map'), w.where),
+      w.learn ? h('button', {
+        type: 'button', class: `u-btn u-lib-buy${w.learn.can && choosing ? ' is-go' : ' is-no'}`, 'aria-disabled': w.learn.can && choosing ? null : 'true', 'data-learn': w.key,
+        title: w.learn.can ? `Learn ${w.name}: from what you carry, no hour` : `Learn ${w.name}: ${w.learn.why}`,
+        onclick: () => (w.learn.can && choosing ? act.buy(w.learn.key) : act.toast(`${w.name}: ${w.learn.why ?? 'not now'}`)),
+      }, h('span', { class: 'u-lib-buy-t' }, h('b', null, `Learn it · ${money(w.price)}`), w.learn.can ? null : h('small', null, w.learn.why))) : null))));
+    fill(card, h('p', { class: 'u-lib-none' }, 'Against a big man, the throw; a grabber, the haymaker; a quick one, quick hands; a knife, the box cutter. Every fight card says what you win with what you have.'));
+    cardSig = null;
+  }
+
   function paint() {
     const n = now();
     pieces = n.v?.library?.pieces ?? [];
+    if (f.kind === 'fight') {
+      shown = [];
+      paintLead(n);
+      return paintFight(n.v, n.choosing);
+    }
     shown = order(pick(pieces, f), f.sort);
     paintLead(n);
     paintGrid(n.v, n.choosing);
@@ -323,6 +360,18 @@ export function createLibrary({ cfg, tiles, now, act, kept, root }) {
       return hover ?? pinned ?? shown[0]?.key ?? null;
     },
     pin,
+    /**
+     * (tree-1) One piece shown from elsewhere (the Ahead panel's link): the filters opened up to its kind, the piece kept
+     * on the card and its cell scrolled into sight. → whether it is there.
+     */
+    show(key) {
+      const p = (now().v?.library?.pieces ?? []).find(x => x.key === key);
+      if (!p) return false;
+      set({ kind: p.kind, slot: 'all', cat: 'all', tier: 'all', show: 'all' });
+      pin(key);
+      byKey.get(key)?.scrollIntoView({ block: 'center' });
+      return true;
+    },
     /** The card again whatever its last state (a try-on began or ended outside it). */
     repaintCard() {
       cardSig = null;

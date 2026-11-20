@@ -35,6 +35,11 @@ export const ACTS = [
   { id: 'fall-you', at: [7.6, 6.8], clip: 'fall_back', every: 5, says: 'Going down (you, Earl): the city\'s fall_back, then lying hurt (lie_hurt)', kind: 'the city\'s own' },
   { id: 'fall-them', at: [4.6, 11], clip: 'death_collapse', every: 5, says: 'Going down (them): the city\'s death_collapse, then lying still (lie_still)', kind: 'the city\'s own' },
   { id: 'run', at: [9, -2.6], clip: 'run_getaway', walk: 5, speed: 4.3, says: 'Running in (a runner): the city\'s run_getaway', kind: 'the city\'s own' },
+  // (fight-3: the long guns in both hands, clips/long.js; a row of their own past the lot's far edge)
+  { id: 'doorman-ready', at: [1, 15.2], clip: 'fight_doorman', up: 0, walk: 3, gun: 'doorman', says: 'The Doorman held ready, walking: low across the body, both hands on it', kind: 'new' },
+  { id: 'doorman-fire', at: [6.5, 15.2], clip: 'fight_doorman_fire', every: 1.2, base: 'fight_doorman', up: 1, to: 2.6, react: 'fight_flinch', on: 0, shot: 'blast', gun: 'doorman', says: 'The Doorman\'s shell: a hard kick, a spread through its cone, a big flash; they flinch', kind: 'new' },
+  { id: 'longeye-aim', at: [10.5, 15.2], clip: 'fight_longeye', up: 1, to: 4, gun: 'longeye', says: 'The Long-eye up and on them, at the shoulder', kind: 'new' },
+  { id: 'longeye-fire', at: [14.5, 15.2], clip: 'fight_longeye_fire', every: 1.4, base: 'fight_longeye', up: 1, to: 6, react: 'fight_flinch', on: 0, shot: 'long', gun: 'longeye', says: 'The Long-eye\'s shot: a slow, long kick and one long hard line', kind: 'new' },
 ];
 
 export async function mountLab(host, { stage, demo = window.__demo } = {}) {
@@ -45,7 +50,7 @@ export async function mountLab(host, { stage, demo = window.__demo } = {}) {
   const SITE = siteOf(new URLSearchParams(location.search).get('site'));
   const A = arenaOn(SITE, ARENA);
   await actors.until(() => !!city.peds?.anim?.batch || !city.peds);
-  installClips({ CLIPS, mats: [city.peds?.anim?.mat, city.peds?.anim?.batch?.customDepthMaterial] });
+  installClips({ CLIPS, mats: [city.peds?.anim?.mat, city.peds?.anim?.batch?.customDepthMaterial], THREE: city.THREE });
   const fx = createFx({ city });
   const W = (x, y, up = 0) => {
     const [wx, wz] = A.world(x, y);
@@ -130,7 +135,9 @@ export async function mountLab(host, { stage, demo = window.__demo } = {}) {
           const to = P.target ? actors.get(P.target.id) : null;
           const miss = act.miss && Math.floor(T / act.every) % 2 === 0;
           const dest = to ? (miss ? [to.x + 1.2, to.y + 0.05, to.z - 1.4] : [to.x, to.y + 1.0, to.z]) : W(x + 6, P.y, 1);
-          fx.shot(muzzleOf(B, lookFor(bear, 1)), dest, !miss, 'you');
+          const from = muzzleOf(B, lookFor(bear, 1), act.gun ?? null);
+          if (act.shot === 'blast') fx.blast(from, [-3, -2, -1, 0, 1, 2, 3].map(k => W(x + act.to + 0.8, P.y + k * 0.42, 0.75)), [dest], 'you');
+          else fx.shot(from, dest, !miss, 'you', act.shot === 'long' ? 'long' : null);
         }
         if (act.vest) fx.vest([B.x, B.y + 1.05, B.z], 4);
       }

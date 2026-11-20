@@ -41,11 +41,19 @@ const FIELDS = {
   grudges: isObj,
   trust: isObj,
   door: x => x === null || isObj(x),
+  marks: isObj,
+  visits: Array.isArray,
   today: isObj,
   goods: isObj,
   stash: isObj,
   things: isObj,
   worn: isObj,
+  styles: isObj,
+  fightWith: x => x === null || typeof x === 'string',
+  sixes: x => isObj(x) && Array.isArray(x.marks),
+  earlWay: x => x === null || typeof x === 'string',
+  ammo: x => isObj(x) && Object.values(x).every(n => isInt(n) && n >= 0),
+  holdWith: x => x === null || typeof x === 'string',
   route: x => x === null || (isObj(x) && Array.isArray(x.stops) && Array.isArray(x.hand)),
   home: x => isObj(x) && Array.isArray(x.marks) && Array.isArray(x.raids) && (x.raid === null || isObj(x.raid)) && (x.guard === null || isObj(x.guard)),
   books: x => isObj(x) && Object.values(x).every(n => isInt(n)),
@@ -79,7 +87,31 @@ export function loadRun(text, cfg = RUN_CONFIG) {
       return no('broken', 'Not a saved run: the text is not JSON.');
     }
     if (!isObj(data) || data.kind !== SAVE_KIND || !isObj(data.state)) return no('broken', 'Not a saved run.');
-    const found = data.state.v;
+    let found = data.state.v;
+    // (memory-1: a version-8 save is read: nobody marked, nobody coming to your door; its shape is otherwise this one's)
+    if (found === 8 && data.v === 8) {
+      data.state = { ...data.state, v: 9, marks: {}, visits: [] };
+      data.v = found = 9;
+    }
+    // (styles-1: a version-9 save is read: no punch style learned, what you fight with unset; its shape is otherwise this one's)
+    if (found === 9 && data.v === 9) {
+      data.state = { ...data.state, v: 10, styles: {}, fightWith: null };
+      data.v = found = 10;
+    }
+    // (sixes-1: a version-10 save is read: the Sixes have never heard of you, Earl is told nothing, no dog, nothing paid)
+    if (found === 10 && data.v === 10) {
+      data.state = { ...data.state, v: 11, sixes: { marks: [], did: null, word: null, made: 0, madeDay: null, taxDay: null, tax: null, jump: null, jumps: [] }, earlWay: null,
+        books: { dog: 0, sixes: 0, ...(data.state.books ?? {}) } };
+      data.v = found = 11;
+    }
+    // (raid-1: a version-11 save is read: no rounds, nothing chosen to hold, the Sixes' push and raids not begun)
+    if (found === 11 && data.v === 11) {
+      const sx = data.state.sixes ?? {};
+      data.state = { ...data.state, v: RUN_STATE_VERSION, ammo: {}, holdWith: null,
+        sixes: { ...sx, streak: 0, streakDay: null, raid: null, raids: [], truce: null, raidLast: null },
+        books: { ammo: 0, ...(data.state.books ?? {}) } };
+      data.v = found = RUN_STATE_VERSION;
+    }
     if (found !== RUN_STATE_VERSION || data.v !== found) {
       return no('version', `A run saved by another version of the game (state version ${found ?? data.v ?? 'none'}; this one reads ${RUN_STATE_VERSION}).`, { found: found ?? data.v ?? null, wants: RUN_STATE_VERSION });
     }

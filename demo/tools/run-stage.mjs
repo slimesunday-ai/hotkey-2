@@ -2,7 +2,7 @@
 // Plays THE RUN over the real stage in headless Chrome, with the stage's audit on, and says how it went.
 // The server must be running: node demo/serve.mjs --port 5507
 //
-//   node demo/tools/run-stage.mjs [--policy market|park|rough|drink|bins|lean|refuse|mixed|neighbour|burner|dealer|walker|skater|homefirst|guard|racer]
+//   node demo/tools/run-stage.mjs [--policy market|park|rough|drink|bins|lean|refuse|mixed|neighbour|burner|dealer|walker|skater|homefirst|guard|racer|docks|plaza|plazablind]
 //                                 [--seed 3] [--days 6] [--speed 1|2|4] [--skip K] [--kit pocket,cutter,bed,board] [--port 5470] [--json out.json]
 // (routes-1: the walker goes to the market on foot both ways by Fit Street and plays the stop's cards; the skater on the
 // board: give it --kit board. Their line `routes:` says the ways set out on, the legs, the cards played)
@@ -28,7 +28,9 @@
 // (somebody of ours standing or walking outdoors more than 3 cm under or 5 cm over the ground as it is drawn, for
 // more than a quarter of a second: demo/stage/surface.js) or any `heads` (two of ours standing, not in a contact step
 // with each other, whose heads overlap in the picture for more than half a second of the game's own clock:
-// actors.js auditHeads, demo/stage/heads.js).
+// actors.js auditHeads, demo/stage/heads.js) or any `offLine` (somebody of ours whose walk ended with a step aside still on
+// them, more than 5 cm beside their mark), or any time the player's door's leaf, or what is mounted on it, met a body of
+// ours (`door:`, demo/stage/doorway.js swept).
 import { writeFileSync, readFileSync } from 'node:fs';
 import { launch } from './chrome.mjs';
 
@@ -45,7 +47,7 @@ if (reloadAt) params.set('save', '1');
 const url = `http://127.0.0.1:${opt('--port', 5470)}/demo/?${params}${opt('--query', '') ? '&' + opt('--query', '') : ''}`;
 // (the first load starts the run fresh and replaces any save; the reload is the same link without it)
 const firstUrl = reloadAt ? `${url}&new=1` : url;
-const COUNTS = ['scenes', 'walks', 'overlaps', 'furniture', 'vanish', 'feet', 'heads', 'unseated', 'slides', 'pushes', 'seams', 'jumps', 'pops', 'close', 'through', 'flips', 'speedSteps', 'headingSnaps', 'inRoad', 'squeezes'];
+const COUNTS = ['scenes', 'walks', 'overlaps', 'furniture', 'vanish', 'feet', 'heads', 'unseated', 'slides', 'pushes', 'seams', 'jumps', 'pops', 'close', 'through', 'flips', 'speedSteps', 'headingSnaps', 'inRoad', 'squeezes', 'offLine'];
 
 const browser = await launch();
 let ok = false;
@@ -120,8 +122,10 @@ try {
   const bad = page.logs.filter(l => l.startsWith('[error]') || l.startsWith('[exception]'));
   const audit = { ...(R?.audit ?? {}) };
   for (const [k, n] of Object.entries(cut?.audit ?? {})) if (typeof audit[k] === 'number') audit[k] += n;
-  ok = title === 'run-ok' && !bad.length && (audit.overlaps ?? 1) === 0 && (audit.furniture ?? 1) === 0 && (audit.vanish ?? 1) === 0 && (audit.feet ?? 1) === 0 && (audit.heads ?? 1) === 0;
-  const verdict = ok ? 'run-ok' : `run-fail: ${title.startsWith('run-fail') ? title.slice(10) : bad.length ? `${bad.length} page errors` : (audit.overlaps ?? 0) > 0 ? `${audit.overlaps} overlaps` : (audit.furniture ?? 0) > 0 ? `${audit.furniture} in furniture` : (audit.vanish ?? 0) > 0 ? `${audit.vanish} came on or went off in the picture` : (audit.feet ?? 0) > 0 ? `${audit.feet} with their feet off the ground` : (audit.heads ?? 0) > 0 ? `${audit.heads} heads over each other` : title || 'no verdict'}`;
+  // (notes-1: the player's door, doorway.js swept(): a leaf, or what is mounted on it, never meets a body of ours)
+  const door = await page.evaluate('window.__demo.stage.doorway?.swept?.() ?? null', 10000).catch(() => null);
+  ok = title === 'run-ok' && !bad.length && (audit.overlaps ?? 1) === 0 && (audit.furniture ?? 1) === 0 && (audit.vanish ?? 1) === 0 && (audit.feet ?? 1) === 0 && (audit.heads ?? 1) === 0 && (audit.offLine ?? 1) === 0 && !(door?.through > 0);
+  const verdict = ok ? 'run-ok' : `run-fail: ${title.startsWith('run-fail') ? title.slice(10) : bad.length ? `${bad.length} page errors` : door?.through > 0 ? `${door.through} times a door's leaf met a body` : (audit.overlaps ?? 0) > 0 ? `${audit.overlaps} overlaps` : (audit.furniture ?? 0) > 0 ? `${audit.furniture} in furniture` : (audit.vanish ?? 0) > 0 ? `${audit.vanish} came on or went off in the picture` : (audit.feet ?? 0) > 0 ? `${audit.feet} with their feet off the ground` : (audit.heads ?? 0) > 0 ? `${audit.heads} heads over each other` : (audit.offLine ?? 0) > 0 ? `${audit.offLine} arrived off their mark` : title || 'no verdict'}`;
   if (R) {
     const perDay = R.daySeconds ?? [];
     const lengths = (R.lengths ?? []).slice().sort((a, b) => a - b);
@@ -149,8 +153,9 @@ try {
     if (T) console.log(`trust: witnesses called ${T.called}, kept quiet ${T.quiet}; turned against you ${T.against.length}${T.against.length ? ` (${T.against.join(', ')})` : ''}; won over ${T.with.length}${T.with.length ? ` (${T.with.join(', ')})` : ''}; looked away ${T.lookedAway}; sore ${T.sore}; notices ${T.notices}; at the end ${T.end?.length ? T.end.join(', ') : 'everyone neutral'}`);
   }
   console.log(`page errors ${bad.length} · ${COUNTS.map(k => `${k} ${audit[k] ?? '-'}`).join(' · ')}`);
+  if (door) console.log(`door: leaves used ${door.walks}, nearest to a body's edge outside ${door.nearest.out?.gap ?? '-'} m, inside ${door.nearest.in?.gap ?? '-'} m; met a body ${door.through}${door.examples.length ? ` (${door.examples.join('; ')})` : ''}`);
   if (bad.length) console.log(`  ${[...new Set(bad)].slice(0, 8).join('\n  ').slice(0, 2500)}`);
-  const seen = (audit.examples ?? []).filter(e => /^(vanish|furniture|overlap|feet|heads) /.test(e));
+  const seen = (audit.examples ?? []).filter(e => /^(vanish|furniture|overlap|feet|heads|offLine) /.test(e));
   if (seen.length) console.log(`  ${seen.slice(0, 10).join('\n  ')}`);
   // (the longest spells of heads over each other, noted or not: seconds of the game and of the wall, actors.js auditHeads)
   const spells = audit.spells ?? [];

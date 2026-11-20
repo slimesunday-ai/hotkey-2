@@ -4,7 +4,8 @@
 //
 //   CHOOSING   the WHERE card top left: the place's own name and the TRY-OUT mark, "nothing here counts". THE DOCK at
 //              the bottom: the five loadouts on 1 to 5 (name, what is in it, how it did last time at this level), how
-//              hard as a three-way choice (↑ ↓), Build your own (B: weapon, gear and help, folded until asked) and the
+//              hard as a four-way choice (↑ ↓), Build your own (B: weapon, gear and help, folded until asked; with
+//              Cousin Earl, his three ways as a row of choices, fight-3) and the
 //              results side by side (J, folded to their last line until asked), and the main button saying exactly what
 //              Enter does. ← → go along the loadouts.
 //   A ROUND    the picture is the fight's: the frame compact by itself, a slim strip of meters (health, the vest, ammo,
@@ -17,8 +18,9 @@
 // it always was, whatever is up. Nothing here moves anybody: the page's keys do (index.js).
 import { h, fill, makeRoot, ensureStyles } from '../hud/dom.js';
 import { icon } from '../run/icons.js';
-import { WEAPONS, GEAR, ALLY, ARMS, LEVELS } from '../../src/fight/data.mjs';
-import { dockOf, metersOf, cardOf, tableOf, contentsOf, LEVEL_WORD, levelName } from './dock.js';
+import { WEAPONS, GEAR, ALLY, ARMS, RIVALS, levelOf } from '../../src/fight/data.mjs';
+import { dockOf, metersOf, cardOf, tableOf, contentsOf, weaponWords, earlRows, LEVEL_WORD, levelName } from './dock.js';
+import { RAID_HOLDS, RAID_CREWS } from '../run/raidcase.js';
 
 const RUN = new URL('../run/', import.meta.url).href;
 const FIGHT_CSS = new URL('./ui.css', import.meta.url).href;
@@ -39,6 +41,8 @@ const kept = {
 };
 export const SIZES = ['full', 'compact', 'hidden'];
 const ROUND = new Set(['arrive', 'fight']);
+/** (anim-1) One-on-one, to look at: what you may fight with there (the run's own five), in the run's words. */
+const DUEL_ARMS = [['hands', 'Bare hands'], ['cutter', 'Box cutter'], ['jab', 'Quick hands'], ['haymaker', 'The haymaker'], ['throw', 'The throw']];
 
 /** The run's own stylesheets, once (the same marks the run's page uses: loaded once whichever page loads them first). */
 function linkStyles() {
@@ -85,7 +89,11 @@ export function createPanels({ host, site, tryout = null, now, act }) {
   /** While a round is on the frame is compact by itself; hidden stays hidden. */
   const sizeNow = () => (sizeChosen() === 'hidden' ? 'hidden' : ROUND.has(now().phase) ? 'compact' : sizeChosen());
   /** Folded or not: the player's own choice, kept; else the results start folded and everything else open. */
-  const folded = k => kept.get(k) === 'fold' || (kept.get(k) !== 'open' && k === 'results');
+  // (raidfight-3: the raid's rows start folded under their title too, the owner's rule for a crowded screen: "can just
+  // be the title, then once you click it, it brings up the info"; at 1280 by 800 the build list ran under the dock.
+  // Open when the address picks a raid)
+  const RAID_ADDR = (q => q.has('raid') || q.has('night'))(new URLSearchParams(location.search));
+  const folded = k => (k === 'raid' && RAID_ADDR && kept.get(k) !== 'fold' ? false : kept.get(k) === 'fold' || (kept.get(k) !== 'open' && (k === 'results' || k === 'raid')));
   function fold(k, on = !folded(k)) {
     kept.set(k, on ? 'fold' : 'open');
     paint();
@@ -115,7 +123,7 @@ export function createPanels({ host, site, tryout = null, now, act }) {
       sizeNow() === 'full' ? h('button', { type: 'button', class: 'u-x u-where-fold', title: small ? 'Open where you are' : 'Fold it to one line', 'aria-expanded': String(!small), onclick: () => fold('where', !small) }, icon(small ? 'unfold' : 'fold')) : null,
       h('div', { class: 'fg-where-mark' }, h('span', { class: 'u-pill u-trying', title: 'A try-out: whatever happens here, nothing carries back' }, 'Try-out'), h('span', { class: 'fg-where-not' }, 'nothing here counts')),
       h('b', { class: `u-where-name${site.name.length > 17 ? ' is-long' : ''}`, title: site.place ?? site.name }, site.name),
-      h('div', { class: 'u-where-when' }, icon('crowd'), h('b', null, LEVEL_WORD[level]), h('span', { class: 'fg-where-lvl', title: LEVELS[level]?.says }, levelName(site, level))),
+      h('div', { class: 'u-where-when' }, icon('crowd'), h('b', null, LEVEL_WORD[level]), h('span', { class: 'fg-where-lvl', title: levelOf(level)?.says }, levelName(site, level))),
       h('div', { class: 'u-where-foot' },
         tryout ? h('button', { type: 'button', class: 'u-btn is-quiet', title: `${tryout.back} (Esc)`, onclick: () => act.back() }, icon('back'), tryout.back, ukey('Esc'))
           : h('span', { class: 'u-saved' }, 'the fight on its own: ?mode=fight'),
@@ -152,7 +160,7 @@ export function createPanels({ host, site, tryout = null, now, act }) {
     if (round) return paintMeters(s);
     const small = sizeNow() !== 'full' || folded('dock');
     const d = dockOf({ pick: s.pick, results: s.results, site, again: s.phase === 'over' && !S.cardGone });
-    const sig = JSON.stringify([small, d, S.build, S.buildAt, s.phase, sizeNow(), folded('results')]);
+    const sig = JSON.stringify([small, d, S.build, S.buildAt, s.phase, sizeNow(), folded('results'), folded('raid'), s.duel ?? null, s.raid ?? null]);
     if (S.sig.dock === sig) return;
     S.sig.dock = sig;
     S.sig.meters = null;
@@ -191,29 +199,71 @@ export function createPanels({ host, site, tryout = null, now, act }) {
       const r = at.getBoundingClientRect();
       const box = el.dock.getBoundingClientRect();
       list.style.left = `${Math.max(0, Math.min(box.width - list.offsetWidth, r.left - box.left))}px`;
+      // (anim-1: as tall as the room over the dock allows, so the one-on-one and every row are in sight without a scroll)
+      list.style.maxHeight = `${Math.max(240, Math.round(box.top - 14))}px`;
     }
   }
 
   // ── BUILD YOUR OWN (B): weapon, gear and help, over its button; ↑ ↓ along it, Enter takes or drops, B or Esc shut ──
-  const statOf = id => {
-    const X = WEAPONS[id];
-    return X.kind === 'gun' ? `${X.dmg[0]}–${X.dmg[1]} a shot · ${X.mag} in it · reload ${X.reload} s · +${X.rounds}` : `${X.dmg[0]}–${X.dmg[1]} a blow · ${X.rate} a second`;
-  };
+  // (fight-3: each weapon says its job first; with Cousin Earl, how he fights: his three ways in a row under him, each
+  // a stop of ↑ ↓ like any row, one at most; none, and he fights at your side as in the loadouts)
   function buildRows(pick) {
     return [
-      ...ARMS.map(id => ({ kind: 'weapon', id, name: WEAPONS[id].name, small: statOf(id), on: pick.weapon === id, fn: () => act.weapon(id) })),
+      ...ARMS.map(id => {
+        const w = weaponWords(id);
+        return { kind: 'weapon', id, name: WEAPONS[id].name, job: w.job, small: w.stats, on: pick.weapon === id, fn: () => act.weapon(id) };
+      }),
       ...Object.entries(GEAR).map(([id, G]) => ({ kind: 'gear', id, name: G.name, small: G.says, on: pick.gear.includes(id), fn: () => act.gear(id) })),
       { kind: 'ally', id: 'earl', name: ALLY.name, small: `fights beside you: ${ALLY.hp} health, a ${WEAPONS[ALLY.weapon].name}`, on: pick.ally, fn: () => act.ally() },
+      ...earlRows(pick).map(w => ({ kind: 'way', id: w.id, name: w.word, small: w.says, on: w.on, fn: () => act.earl(w.id) })),
     ];
   }
   function buildList(s) {
     const rows = buildRows(s.pick);
     const li = (r, i) => h('li', null, h('button', { type: 'button', class: `u-li${r.on ? ' is-on' : ''}${i === S.buildAt ? ' is-at' : ''}`, 'data-row': `${r.kind}:${r.id}`, 'aria-pressed': String(r.on), onclick: () => { S.buildAt = i; r.fn(); } },
-      h('span', { class: 'u-li-t' }, h('b', null, r.name[0].toUpperCase() + r.name.slice(1)), h('small', null, r.small)), h('span', { class: 'fg-li-mark' }, r.on ? (r.kind === 'weapon' ? 'in hand' : 'taken') : r.kind === 'weapon' ? '' : 'add')));
+      h('span', { class: 'u-li-t' }, h('b', null, r.name[0].toUpperCase() + r.name.slice(1)), r.job ? h('small', { class: 'fg-job' }, r.job) : null, h('small', null, r.small)), h('span', { class: 'fg-li-mark' }, r.on ? (r.kind === 'weapon' ? 'in hand' : 'taken') : r.kind === 'weapon' ? '' : 'add')));
+    const ways = rows.filter(r => r.kind === 'way');
+    const way = (r, i) => h('button', { type: 'button', role: 'radio', class: `u-chip fg-way${r.on ? ' is-on' : ''}${i === S.buildAt ? ' is-at' : ''}`, 'data-row': `way:${r.id}`, 'aria-checked': String(r.on), title: `${r.name}: ${r.small}`, onclick: () => { S.buildAt = i; r.fn(); } },
+      h('b', null, r.name), h('small', null, r.small));
     return h('div', { class: 'u-list u-panel fg-build', role: 'listbox', 'aria-label': 'Build your own' },
       h('div', { class: 'u-list-head' }, icon('goods'), h('span', { class: 'u-cap' }, 'Build your own'), h('span', { class: 'u-dim u-list-keys' }, '↑ ↓ · Enter · B or Esc')),
-      h('p', { class: 'fg-build-sub u-cap' }, 'Weapon: one'), h('ul', null, rows.filter(r => r.kind === 'weapon').map(r => li(r, rows.indexOf(r)))),
-      h('p', { class: 'fg-build-sub u-cap' }, 'Gear and help: any'), h('ul', null, rows.filter(r => r.kind !== 'weapon').map(r => li(r, rows.indexOf(r)))));
+      // (two columns, fight-3: the weapons, each with its job; the gear and help, and Earl's ways under him)
+      // (anim-1) ONE-ON-ONE, TO LOOK AT (first in the panel: at the list's foot it was under the fold, its last row and its button out of sight): the run's own fight, played by itself here; no rule changed, no result kept
+      (() => {
+        const D = s.duel ?? { arm: 'hands', foe: 'brawler' };
+        // (classes of its own: Earl's ways are `fg-ways`, and what looks for them must not find these)
+        const chip = (on, label, title, fn, row) => h('button', { type: 'button', role: 'radio', class: `u-chip fg-duel-chip${on ? ' is-on' : ''}`, 'data-row': row, 'aria-checked': String(on), title, onclick: fn }, h('b', null, label));
+        return h('div', { class: 'fg-duel', role: 'group', 'aria-label': 'One-on-one, to look at' },
+          h('span', { class: 'u-cap fg-duel-cap' }, 'One-on-one, to look at: it plays itself, as in the run'),
+          h('div', { class: 'fg-duel-row', role: 'radiogroup', 'aria-label': 'You fight with' }, DUEL_ARMS.map(([id, label]) => chip(D.arm === id, label, `You fight with ${label.toLowerCase()}`, () => act.duelArm(id), `duel-arm:${id}`))),
+          h('div', { class: 'fg-duel-row', role: 'radiogroup', 'aria-label': 'Against' }, Object.entries(RIVALS).map(([id, R]) => chip(D.foe === id, R.name, `Against ${R.name}: ${R.says}`, () => act.duelFoe(id), `duel-foe:${id}`))),
+          h('div', { class: 'fg-duel-row' }, h('button', { type: 'button', class: 'u-btn', 'data-row': 'duel:go', title: 'Watch this one-on-one play itself on the lot (Space or Enter skips it)', onclick: () => act.duel() }, 'Watch it')));
+      })(),
+      // (raidfight-1) THE RAID ON YOUR HOME, TO LOOK AT: the run's own raid, played by itself at your trailer's door
+      (() => {
+        const R = s.raid ?? { crew: 'rush', size: 1, hold: 'doorman', earl: false, night: true };
+        const chip = (on, label, title, fn, row) => h('button', { type: 'button', role: 'radio', class: `u-chip fg-duel-chip${on ? ' is-on' : ''}`, 'data-row': row, 'aria-checked': String(on), title, onclick: fn }, h('b', null, label));
+        const CREW = { rush: 'A rush', runners: 'The quick ones', shooters: 'Shooters', bigmen: 'Big men' };
+        const shut = folded('raid');
+        const HOLD = Object.fromEntries(RAID_HOLDS);
+        const head = h('button', { type: 'button', class: 'u-cap fg-duel-cap fg-raid-head', 'data-row': 'raid:open', 'aria-expanded': String(!shut), title: shut ? 'Open the raid\'s choices' : 'Fold the raid\'s choices away', onclick: () => fold('raid') },
+          `${shut ? '▸' : '▾'} The raid on your home, to look at${shut ? `: ${(CREW[R.crew] ?? R.crew).toLowerCase()}, ${(HOLD[R.hold] ?? R.hold).toLowerCase()}, ${R.night === false ? 'by day' : 'at night'}` : ': it plays itself at your door'}`);
+        if (shut) return h('div', { class: 'fg-duel fg-raid is-shut', role: 'group', 'aria-label': 'The raid on your home, to look at' }, head);
+        return h('div', { class: 'fg-duel fg-raid', role: 'group', 'aria-label': 'The raid on your home, to look at' },
+          head,
+          h('div', { class: 'fg-duel-row', role: 'radiogroup', 'aria-label': 'Who comes' }, RAID_CREWS.map(id => chip(R.crew === id, CREW[id] ?? id, `They send ${CREW[id] ?? id}`, () => act.raidCrew(id), `raid-crew:${id}`))),
+          h('div', { class: 'fg-duel-row', role: 'radiogroup', 'aria-label': 'How many' }, ['Small', 'Bigger', 'Biggest'].map((label, k) => chip(R.size === k, label, `The ${label.toLowerCase()} crew`, () => act.raidSize(k), `raid-size:${k}`))),
+          h('div', { class: 'fg-duel-row', role: 'radiogroup', 'aria-label': 'In your hands' }, RAID_HOLDS.map(([id, label]) => chip(R.hold === id, label, `In your hands: ${label.toLowerCase()}`, () => act.raidHold(id), `raid-hold:${id}`))),
+          h('div', { class: 'fg-duel-row', role: 'radiogroup', 'aria-label': 'When' }, chip(R.night !== false, 'Night', 'At night, as the game always has it: the raid in its pool of light', () => act.raidNight(true), 'raid-time:night'), chip(R.night === false, 'Day', 'By day, to compare', () => act.raidNight(false), 'raid-time:day')),
+          h('div', { class: 'fg-duel-row' }, chip(!!R.earl, 'Cousin Earl beside you', 'Cousin Earl stands with you at the door', () => act.raidEarl(), 'raid-earl'),
+            h('button', { type: 'button', class: 'u-btn', 'data-row': 'raid:go', title: 'Watch the raid play itself at your trailer\'s door (Space or Enter skips it)', onclick: () => act.raid() }, 'Watch the raid')));
+      })(),
+      h('div', { class: 'fg-build-cols' },
+        h('div', null, h('p', { class: 'fg-build-sub u-cap' }, 'Weapon: one'), h('ul', null, rows.filter(r => r.kind === 'weapon').map(r => li(r, rows.indexOf(r))))),
+        h('div', null, h('p', { class: 'fg-build-sub u-cap' }, 'Gear and help: any'), h('ul', null, rows.filter(r => r.kind !== 'weapon' && r.kind !== 'way').map(r => li(r, rows.indexOf(r)))),
+          ways.length ? h('div', { class: 'fg-ways', role: 'radiogroup', 'aria-label': `How ${ALLY.name} fights` },
+            h('span', { class: 'u-cap fg-ways-cap' }, ways.some(r => r.on) ? 'How Earl fights' : 'How Earl fights: at your side, or'),
+            h('div', { class: 'fg-ways-row' }, ways.map(r => way(r, rows.indexOf(r))))) : null)));
   }
   function toggleBuild(on = !S.build) {
     const s = now();

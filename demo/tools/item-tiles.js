@@ -37,13 +37,16 @@ let KIT = null;
 export async function kit() {
   if (KIT) return KIT;
   const t0 = now();
-  const [CH, FRESH, HO, STORE, V, G, SB, CFG, LIB, PROPS] = await Promise.all([
+  const [CH, FRESH, HO, STORE, V, G, SB, CFG, LIB, PROPS, RIDE, VEH, STRIP, DOG] = await Promise.all([
     import(`${CITY}cast.js`), import(`${ROOT}city/from-trunk/world/cast/fresh/index.js`), import(`${CITY}interiors/home/index.js`),
     import(`${CITY}interiors/store/index.js`), import(`${CITY}vox.js`), import(`${CITY}glue.js`),
     import(`${CITY}anim/cast/clips/skate-board.js`), import(`${ROOT}src/run/config.mjs`), import(`${ROOT}src/run/library.mjs`),
     import(`${ROOT}demo/stage/props/goods.js`),
+    // (assets-1: the city's own scooter, van and market stall drawn alone, the guard dog's poses)
+    import(`${CITY}anim/cast/clips/ride-props.js`), import(`${CITY}vehicles/index.js`), import(`${CITY}districts/strip/props.js`),
+    import(`${ROOT}demo/stage/props/dog.js`),
   ]);
-  KIT = { CH, FRESH, HO, STORE, V, G, SB, LIB, PROPS, cfg: CFG.RUN_CONFIG, importMs: now() - t0 };
+  KIT = { CH, FRESH, HO, STORE, V, G, SB, LIB, PROPS, RIDE, VEH, STRIP, DOG, cfg: CFG.RUN_CONFIG, importMs: now() - t0 };
   return KIT;
 }
 
@@ -61,11 +64,30 @@ export function modelOf(K, piece) {
   const [kind, id] = [piece.slice(0, piece.indexOf(':')), piece.slice(piece.indexOf(':') + 1)];
   if (kind === 'kit') { const o = K.HO.byId.get(id); return o ? { type: 'kit', id, name: o.name, cat: o.cat, place: o.place } : null; }
   if (kind === 'board') return { type: 'board', id, name: `skate-board.js boardGeometry (${id})` };
+  // (assets-1) the city's own vehicles and stall alone, the guard dog in a pose, a person of the run in their own look
+  if (kind === 'city') return CITY_THINGS[id] ? { type: 'city', id, name: CITY_THINGS[id] } : null;
+  if (kind === 'dog') return K.DOG.MODES.includes(id) ? { type: 'dog', id, name: `demo/stage/props/dog.js (${id})` } : null;
+  if (kind === 'person') return PEOPLE[id] ? { type: 'person', id, name: PEOPLE[id].name } : null;
   if (kind === 'prop') return K.PROPS.PROPS.includes(id) ? { type: 'prop', id, name: `demo/stage/props/goods.js ${id}` } : null;
   const slot = kind;
   const c = inCast(K, slot, id);
   return c.exists && !c.killed ? { type: 'cast', slot, id, name: c.name, pool: c.pool } : null;
 }
+/** (assets-1) The city's own things that could not be drawn alone: each from the city's geometry, not redrawn. */
+const CITY_THINGS = { scooter: 'anim/cast/clips/ride-props.js scooterGeometry (the rental scooter)', van: "vehicles/index.js vehicleProp('van')", stall: "districts/strip/props.js stall (the night market's stall)" };
+/**
+ * (assets-1) THE RUN'S PEOPLE, each in the look the run gives them (demo/fight/index.js LOOKS: the ally, the runner): the city's own cast
+ * rolled from their seed, the named pieces over it. (Second art pass, 2026-11-17: the owner, "the muscle and lookout portraits borrow
+ * their looks from the fight's enemies". Each now has a look of their own from the city's cast, worn by nobody else in the run: the
+ * lookout, a corner watcher in a grey skully and an olive snorkel parka with a two-way beeper; the muscle, a wine silk durag, wraparound
+ * shades, a white ribbed tank and the four-finger ring.)
+ */
+export const PEOPLE = {
+  lookout: { name: 'a lookout', seed: 'run:lookout:2', pool: 'agent', wear: { top: 'old_opus_snorkel', hat: 'commissary_skully', acc: 'beeper' } },
+  runner: { name: 'a runner', seed: 'fight:runner:1', pool: 'agent', wear: { top: 'old_hoodie', hat: 'old_bandana' } },
+  muscle: { name: 'muscle', seed: 'run:muscle', pool: 'agent', wear: { top: 'ribbed_tank', hat: 'silk_durag', eyewear: 'getaway_wraps', acc: 'nameplate_ring', bottom: 'blackout_cargo' } },
+  earl: { name: 'Cousin Earl', seed: 'npc:Cousin Earl', pool: 'agent', wear: { top: 'dock_vest', hat: 'dockhand_beanie' } },
+};
 /** The run slot's body band for a worn picture. */
 const PART = { head: 'head', eyewear: 'head', top: 'top', bottom: 'legs', feet: 'feet', acc: 'top' };
 
@@ -168,13 +190,21 @@ const KIT_MATS = () => [
   new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }),
 ];
 let kitMats = null;
-/** A home-kit piece as stage/set/arrange.js pieceGroup builds it (variant 0, as starter.js THINGS puts every one). */
-function kitGroup(K, id, { variant = 0, seed = 1 } = {}) {
+/** A home-kit piece as stage/set/arrange.js pieceGroup builds it (variant 0, as starter.js THINGS puts every one; a sheet may ask for a variant and a state). */
+function kitGroup(K, id, { variant = 0, seed = 1, state } = {}) {
   kitMats ??= KIT_MATS();
-  const V = K.HO.buildObject(K.HO.byId.get(id), { variant, seed });
+  const V = K.HO.buildObject(K.HO.byId.get(id), { variant, seed, state });
   const b = new K.V.Bank(true);
   K.V.meshVol(V, b);
   const grp = new THREE.Group();
+  b.L.forEach((O, li) => { if (O.v) grp.add(new THREE.Mesh(K.G.geoOf(O), kitMats[li] ?? kitMats[0])); });
+  return grp;
+}
+function cityGroup(K, id) {
+  kitMats ??= KIT_MATS();
+  const grp = new THREE.Group();
+  if (id === 'scooter') { grp.add(new THREE.Mesh(K.RIDE.scooterGeometry(THREE, 'cyan'), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6 }))); return grp; }
+  const b = id === 'van' ? K.VEH.vehicleProp('van', { variant: 0 }) : K.STRIP.stall(3, 0xe8232a, 'discs');
   b.L.forEach((O, li) => { if (O.v) grp.add(new THREE.Mesh(K.G.geoOf(O), kitMats[li] ?? kitMats[0])); });
   return grp;
 }
@@ -207,6 +237,12 @@ function propGroup(K, id) {
  * the rest of the head's pieces are seen from LOW_EL down, the same 34° round. The tile camera only: the game's stays.
  */
 export const LOW_EL = 12 * Math.PI / 180;
+/**
+ * THE HIGHER CAMERA (second art pass, 2026-11-17): a kit piece that lies flat on its side (a gun, knuckles, a box cutter, a tire
+ * iron: the piece says `view: 'top'`, interiors FORMAT.md) is seen from HIGH_EL down, the same 34° round: from 30° its profile, drawn
+ * on its top, came out at half its height. The tile camera only: the game's stays.
+ */
+export const HIGH_EL = 58 * Math.PI / 180;
 const lowFor = model => model?.type === 'cast' && ['hat', 'top', 'eyewear'].includes(model.slot);
 function dispose(grp, { keepGeo = false } = {}) { if (!keepGeo) grp.traverse(n => n.geometry?.dispose?.()); }
 
@@ -225,9 +261,17 @@ export function alone(K, model) {
     return { group: castGroup(K, G), band: null, voxels: n, el: lowFor(model) ? LOW_EL : null };
   }
   if (model.type === 'prop') return { group: propGroup(K, model.id), band: null, keepGeo: true };
-  if (model.type === 'kit') return { group: kitGroup(K, model.id, model), band: null };
+  if (model.type === 'kit') return { group: kitGroup(K, model.id, model), band: null, el: K.HO.byId.get(model.id)?.view === 'top' ? HIGH_EL : null };
   if (model.type === 'store') return { group: storeGroup(K, model.id), band: null };
   if (model.type === 'board') return { group: boardGroup(K, model.id), band: null, keepGeo: true };
+  if (model.type === 'city') return { group: cityGroup(K, model.id), band: null, keepGeo: model.id === 'scooter' };
+  if (model.type === 'dog') { const d = K.DOG.createDog(THREE, K.V, K.G, { mode: model.id }); d.settle(); return { group: d.root, band: null }; }
+  if (model.type === 'person') {
+    const p = PEOPLE[model.id], o = K.CH.build(K.CH.wear(K.CH.rollLook(fnv(p.seed) & 0xffffff, { pool: p.pool }), p.wear));
+    if (o.userData.open) { o.userData.open.visible = true; o.userData.shut.visible = false; }
+    K.CH.pose(o, 0, 0);
+    return { group: o, band: [9 * K.CH.S, 40 * K.CH.S], el: LOW_EL };
+  }
   return null;
 }
 export function worn(K, model, part) {

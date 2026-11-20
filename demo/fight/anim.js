@@ -3,7 +3,9 @@
 //
 //   a gun      held ready, raised on whoever is in range (fight_gun, the look slot's up), the kick of each shot on the
 //              tick the rules fire it (fight_fire), and the shot itself on the same frame (fx.js: a flash at the
-//              muzzle, a tracer, a puff where it lands)
+//              muzzle, a tracer, a puff where it lands). The long guns in both hands (fight-3: fight_doorman,
+//              fight_longeye and their _fire; clips/long.js): the Doorman's shell a spread through its cone, the
+//              Long-eye's one long hard line
 //   close up   a blow whose wind-up starts BEFORE the rules swing: the page looks LOOK ticks ahead (a copy of the fight
 //              stepped with the keys held now: the rules are seeded, so the copy swings when the fight will), and starts
 //              the clip CONTACT s before that tick, so the blow lands on the frame the rules apply the damage. A swing
@@ -17,25 +19,35 @@
 import { step, TICK, WEAPONS, FOES } from '../../src/fight/index.mjs';
 import { CONTACT } from './clips/index.js';
 import { FIRE_D, lookFor, gunMuzzle } from './clips/gun.js';
+import { LONG_FIRE_D, longMuzzle } from './clips/long.js';
 
 /** Ticks the page looks ahead for blows (the longest wind-up, and a tick to spare). */
 export const LOOK = Math.ceil(Math.max(...Object.values(CONTACT)) / TICK) + 2;
 /** The blow each close-up weapon throws. */
-export const BLOW = Object.freeze({ hands: 'fight_hook', fists: 'fight_hook', knuckles: 'fight_hook', blade: 'fight_hook', pipe: 'fight_hook', shiv: 'fight_stab' });
-const DUR = { fight_hook: 0.5, fight_stab: 0.34, fight_fire: FIRE_D, fight_flinch: 0.42, fight_vest: 0.36 };
+export const BLOW = Object.freeze({
+  hands: 'fight_hook', fists: 'fight_hook', knuckles: 'fight_hook', blade: 'fight_hook', pipe: 'fight_hook', shiv: 'fight_stab',
+  // (fight-3: the punch styles and the run's opponents' styles; quick hands and quick fists jab straight, the grab reaches)
+  jab: 'fight_stab', haymaker: 'fight_hook', throw: 'fight_hook', mauler: 'fight_hook', quickfists: 'fight_stab', grab: 'fight_stab',
+});
+const DUR = { fight_hook: 0.5, fight_stab: 0.34, fight_fire: FIRE_D, fight_flinch: 0.42, fight_vest: 0.36, fight_doorman_fire: LONG_FIRE_D.doorman, fight_longeye_fire: LONG_FIRE_D.longeye };
+/** The gun held and its shot, by the gun (fight-3: the long guns in both hands, clips/long.js; every other gun the pistol). */
+export const GUN_CLIPS = Object.freeze({ doorman: ['fight_doorman', 'fight_doorman_fire'], longeye: ['fight_longeye', 'fight_longeye_fire'] });
+const clipsOf = gun => GUN_CLIPS[gun] ?? ['fight_gun', 'fight_fire'];
+const FIRE_OF = Object.fromEntries([['fight_gun', 'fight_fire'], ...Object.values(GUN_CLIPS)]);
 /** A body this fast or more runs (the city's run over the walk): index.js RUN_V. */
 const RUN_V = 2.9;
 
 /**
  * The blows of the next `ticks` ticks if the keys stay as they are: [{ id, to, t, hit }] (t: the tick the rules swing,
- * the damage moment). A copy of the fight is stepped; the fight itself is not touched.
+ * the damage moment). A copy of the fight is stepped; the fight itself is not touched. `move` may be a policy (a
+ * function of the fight: the run's one-on-ones, where nobody steers), stepped with the copy as the fight will be.
  */
 export function predictBlows(F, move, ticks = LOOK) {
   if (F.over) return [];
   const G = structuredClone({ ...F, events: [] });
   const out = [];
   for (let k = 0; k < ticks && !G.over; k++) {
-    step(G, move);
+    step(G, typeof move === 'function' ? move(G) : move);
     for (const e of G.events) if (e.type === 'swing') out.push({ id: e.id, to: e.to, t: G.t, hit: e.hit });
     G.events.length = 0;
   }
@@ -51,15 +63,22 @@ export function windAt(tHit, now, contact) {
   return Math.max(0, contact - lead);
 }
 
-/** The muzzle of the gun in a body's hand, in the world (the clip's own pose of it: clips/gun.js), for a look slot. */
-export function muzzleOf(A, look) {
-  const m = gunMuzzle(look, 0, A.w.g?.py ?? 0.5);
+/**
+ * The muzzle of the gun in a body's hand, in the world (the clip's own pose of it: clips/gun.js; a long gun's,
+ * clips/long.js), for a look slot.
+ */
+export function muzzleOf(A, look, gun = null) {
+  const m = GUN_CLIPS[gun] ? longMuzzle(gun, look, 0, A.w.g?.py ?? 0.5) : gunMuzzle(look, 0, A.w.g?.py ?? 0.5);
   const yaw = A.w.yawS ?? A.ry;
   const [c, s] = [Math.cos(yaw), Math.sin(yaw)];
   return [A.w.p[0] + m.p[0] * c + m.p[2] * s, A.w.p[1] + m.p[1], A.w.p[2] - m.p[0] * s + m.p[2] * c];
 }
 
-export function createAnimator({ actors, CLIPS, fx, W }) {
+/**
+ * `falls`: the clip each side goes down in ({ you, ally, foe }), when not the stop's (the run's one-on-ones: nobody is
+ * killed there, both fall on their back and get up after).
+ */
+export function createAnimator({ actors, CLIPS, fx, W, falls = null }) {
   /** sim id → { aid, cur, up, wind, lastHit, target, face } */
   const S = new Map();
   let pred = new Map();
@@ -106,7 +125,7 @@ export function createAnimator({ actors, CLIPS, fx, W }) {
       return;
     }
     // (out of the shot's kick the gun pose is the same: straight on, no blend)
-    if (g && now === 'fight_fire' && name === 'fight_gun') {
+    if (g && FIRE_OF[name] && now === FIRE_OF[name]) {
       const W0 = { name, loop: true, t: 0, after: 0, began: actors.clock, walk: true };
       CLIPS.playClip(g, name, { t: 0, loop: true });
       A.want = A.asked = W0;
@@ -170,13 +189,26 @@ export function createAnimator({ actors, CLIPS, fx, W }) {
         B.up = 1;
         stats.shots += 1;
         look(B, F, a);
-        play(B, 'fight_fire', 0);
+        play(B, clipsOf(a.gun)[1], 0);
         // the shot made visible: a flash at the muzzle, a short tracer to where it went, a puff there (fx.js)
         const A = actors.get(B.aid);
         const b = P(F, e.to);
-        const from = muzzleOf(A, A.w.g?.look ?? lookFor(B.bear ?? 0, 1));
+        const from = muzzleOf(A, A.w.g?.look ?? lookFor(B.bear ?? 0, 1), a.gun);
         const to = e.hit ? W(b.x, b.y, 1.0) : W(e.at[0], e.at[1], 0.05);
-        fx.shot(from, to, e.hit, a.side);
+        if (e.spread) {
+          // THE DOORMAN'S SHELL (fight-3): a spread of short tracers through its cone, a heavier flash, a puff on
+          // each one it hit (they are thrown back by the rules: fx.js draws their skid)
+          const aim = Math.atan2(b.y - a.y, b.x - a.x);
+          const reach = Math.min(WEAPONS[a.gun].range, Math.hypot(b.x - a.x, b.y - a.y) + 1.2);
+          const ends = [];
+          for (let k = 0; k < 7; k++) {
+            const off = ((k / 6) * 2 - 1) * (e.cone * Math.PI) / 180;
+            const r = reach * (0.8 + 0.2 * Math.cos(k * 2.3));
+            ends.push(W(a.x + Math.cos(aim + off) * r, a.y + Math.sin(aim + off) * r, 0.7 + 0.25 * Math.sin(k * 1.7)));
+          }
+          const struck = e.spread.map(id => P(F, id)).filter(Boolean).map(q => W(q.x, q.y, 1.0));
+          fx.blast(from, ends, struck, a.side);
+        } else fx.shot(from, to, e.hit, a.side, a.gun === 'longeye' ? 'long' : null);
       } else if (e.type === 'swing') {
         const a = P(F, e.id);
         const B = stateOf(a, aidOf(e.id));
@@ -223,7 +255,7 @@ export function createAnimator({ actors, CLIPS, fx, W }) {
         B.up = 0;
         stats.falls += 1;
         if (actors.has(B.aid)) actors.get(B.aid).w.g && (actors.get(B.aid).w.g.look = 0);
-        play(B, q.side === 'foe' ? 'death_collapse' : 'fall_back', 0);
+        play(B, falls?.[q.side] ?? (q.side === 'foe' ? 'death_collapse' : 'fall_back'), 0);
       }
     },
     /**
@@ -280,7 +312,7 @@ export function createAnimator({ actors, CLIPS, fx, W }) {
         } else B.face = v >= 0.4 ? Math.atan2(p.vy, p.vx) : null;
         // THE BASE: once a one-shot is done, the gun held, the run, or the walk
         if (busy(B)) continue;
-        if (gun) hold(B, 'fight_gun');
+        if (gun) hold(B, clipsOf(p.gun)[0]);
         else if (v >= RUN_V) hold(B, 'run_getaway');
         else if (B.cur || A.want) hold(B, null);
       }

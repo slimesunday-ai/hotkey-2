@@ -94,6 +94,8 @@ export function stepPlan(step, salt = 0) {
   const out = { actor: step.actor, action: step.action, mode, clips, native: NATIVE.includes(step.action) };
   if (REACTION[step.action]) out.reaction = REACTION[step.action];
   if (step.target) out.target = step.target;
+  // (anim-1: a step that is PERFORMED, not played from a clip: a deal staged on hand-posed bodies, demo/stage/hands/)
+  if (step.perform) out.perform = step.perform;
   if (step.spot) out.spot = step.spot;
   if (step.say) out.say = step.say;
   if (LASTING.has(step.action)) out.lasting = true;

@@ -7,9 +7,11 @@ A change the city needs goes in our own files (`demo/`), or upstream by slime.
 
 | | |
 |---|---|
-| Trunk commit | `8b0b8dfd2e6fa56916cb4dcf566635869233ef93` (`8b0b8df`, committed 2026-11-06) |
-| Copied | 2026-11-11, by `node scripts/bring-city.mjs` |
-| Files | 1,007, 19.6 MB (21 MB on disk) |
+| Trunk commit | `d5a6e641f95df0c1312d3e18a6f54d031ebb4911` (`d5a6e64`, committed 2026-11-19: `e04d2bf` plus the cart man's cart, drawn and approved: `world/named/props/` (`cart.js`, `build.js`), `world/named/index.js` (`PROPS`, `propOf`, `propByKey`), its check, its preview and pictures, and one option of `style/city/studio/audit/chrome.mjs`. Nothing else of the city moved) |
+| Pin before | `e04d2bf31a037c621aa84041230205ee70112e58` (`e04d2bf`, committed 2026-11-18: `c370dfb` plus `world/named/` only, 40 new files: the named cast's own pool, all 34 people drawn by name, each with a `scale`) |
+| Pin before that | `c370dfb94e6ded26faf51c9c4482c8ff5dab7527` (`c370dfb`, committed 2026-11-18: trunk's `8b0b8df` plus the asset passes' lane `lane/H1-homekit`: the home kit's fine pass, its new pieces, the second pass's fine grain for small things and its redraws, and the third pass: the owner's shortlist and thirteen more redrawn shape first, gold that reads as gold, clear case lids, the Doorman and the Long-eye; then the owner's calls after it: the tiger rug back to its drawing from before the third pass, the bust with the chain taken out) |
+| Copied | 2026-11-19, by `node scripts/bring-city.mjs --pin d5a6e641` (trunk at `~/Desktop/ai-city/trunk`) |
+| Files | 1,061, 20.6 MB |
 | Stamp | `city/from-trunk/PIN.json`, written by the script |
 
 The script reads the committed tree only (`git -C <trunk> archive <commit> … | tar -x`). It never reads trunk's
@@ -18,7 +20,7 @@ there.
 
 - `node scripts/bring-city.mjs` replaces `city/from-trunk/` with the pinned commit.
 - `node scripts/bring-city.mjs --check` compares every file on disk with the commit by its git hash. It passes today
-  (1,007 files). Run it before a commit: it proves nobody edited the copy.
+  (1,061 files). Run it before a commit: it proves nobody edited the copy.
 - To move the pin, change `PIN` at the top of the script, run it, then run the proof again (`demo/tools/proof-shots.mjs`).
 
 ## What was copied
@@ -28,7 +30,7 @@ Trunk's layout is kept, so the city's own `../../world/…` imports resolve insi
 | Path | Size | Why |
 |---|---|---|
 | `style/city/` | 16.5 MB on disk, 878 files | The city: `index.html`, `main.js`, the block builders and their worker pool, walkers, traffic, camera, clips, stage, interiors, the record player and its panels. |
-| `world/` | 4.3 MB, 128 files | The character kit (`world/cast/`), the city plan (`world/city.js`) and the exported map (`world/export/world.json`, `travel.mjs`). The city imports all three. |
+| `world/` | 4.4 MB, 168 files | The character kit (`world/cast/`), the named cast's pool (`world/named/`, 40 files: one file a person, their `scale`), the city plan (`world/city.js`) and the exported map (`world/export/world.json`, `travel.mjs`). The city imports all three. |
 | `sim2/places.json` | 64 KB | The place list the city's go-to menu reads. |
 
 The biggest parts of `style/city/`: `ui/` 3.9 MB, `simstate/` 1.7 MB, `mainland/` 1.6 MB, `anim/` 1.4 MB,

@@ -19,6 +19,9 @@ export function endOf(place, from = null) {
     case 'jail':
     case 'clinic': return { block: from ?? 'market', spot: 'street', held: place };
     default: {
+      // (batch-1: any other place is its config's block and spot: Low Tide Docks `docks`, Glasswall Plaza `uptown`)
+      const p = RUN_CONFIG.places?.[place];
+      if (p?.block && !p.held && !p.home) return { block: p.block, spot: p.spot ?? 'street', held: null };
       // (routes-1: a stop on a way between two places is a place on the stage of its own: its block and spot,
       // src/run/config.mjs `stops`. Fit Street is DEAD AIR's block, `bar`)
       const s = RUN_CONFIG.stops?.[place];
@@ -45,8 +48,52 @@ const STAGE = {
   // truck to load; Teo in an old hoodie and bandana, a duffel man. stage/index.js LOOKS)
   'npc:connect:projects': { look: 'supplier' },
   'npc:connect:market': { look: 'snitch' },
+  // (batch-1: the docks' foremen in the dock vest and beanie the stage already has; its drivers in a delivery top.
+  // The plaza's flyers man in an apron at his folding table; the office crowd in the crowd's own clothes)
+  'npc:foreman:docks': { look: 'supplier' },
+  'npc:foreman:docks:2': { look: 'supplier' },
+  'npc:driver:docks': { look: 'courier' },
+  'npc:driver:docks:2': { look: 'courier' },
+  'npc:boss:plaza': { look: 'shopkeeper' },
+  // (sixes-1: Dutch in the Sixes' own look, the green rag and the grey corner hoodie: stage/index.js LOOKS rival)
+  'npc:sixes:dutch': { look: 'rival' },
 };
-const BLOCK = { park: 'projects', market: 'market' };
+/**
+ * THE NAMED CAST (named-1): who of the game's people is one of the city's drawn named people (world/named/, the
+ * owner's casting: each with their own face, hair, clothes, the thing they carry and their own size), by the pool's
+ * key. They wear their own pieces and only those, everywhere they are on stage (stage/index.js begin: `named`), and
+ * stand at their own size (demo/stage/actors.js). Anyone not here (the crowd, the marks, the office crowd, the Sixes'
+ * hired types, the Dunn brothers, the police of the market, the clinic's medic) keeps the look of their role (LOOKS).
+ * Cousin Earl is also the fights' and the raid's ally: demo/fight/index.js and demo/run/raidfight.js dress him by
+ * this same key (NAMED_EARL).
+ */
+export const NAMED = {
+  'npc:neighbour': 'alvarez',
+  'npc:neighbour:2': 'pruitt',
+  'npc:neighbour:3': 'gloria',
+  'npc:buyer:projects:1': 'dee',
+  'npc:debtor': 'benny',
+  'npc:connect:projects': 'earl',
+  'npc:shop:market': 'bao',
+  'npc:shop:market:2': 'ferraro',
+  'npc:buyer:market:1': 'lola',
+  'npc:buyer:market:2': 'pockets',
+  'npc:buyer:market:3': 'tiny',
+  'npc:buyer:market:4': 'cart',
+  'npc:stallholder:2': 'okafor',
+  'npc:stallholder:3': 'kowalski',
+  'npc:connect:market': 'teo',
+  'npc:sixes:dutch': 'dutch',
+  'npc:foreman:docks': 'haines',
+  'npc:foreman:docks:2': 'rosa',
+  'npc:driver:docks': 'lou',
+  'npc:driver:docks:2': 'nadia',
+  'npc:boss:plaza': 'vic',
+  'npc:police:plaza': 'pell',
+};
+export const NAMED_EARL = 'earl';
+// (batch-1: each place's block is its config's: a new place's people stand on its own block)
+const BLOCK = Object.fromEntries(Object.entries(RUN_CONFIG.places).filter(([, p]) => p.block).map(([id, p]) => [id, p.block]));
 
 // ── FIT STREET, OUTSIDE DEAD AIR (routes-1: the stop on the walk between the trailer park and the flea market) ──────
 // Nobody there is a person of the game (RUN.md "Routes": no trust, no mood, nobody to tell on you), so its people are
@@ -58,9 +105,19 @@ const STOP_FOLK = [
   { id: 'npc:fit:stranger', name: 'a stranger', look: 'buyer' },
   { id: 'npc:fit:drunk', name: 'a stranger who had one too many', look: 'buyer' },
   { id: 'npc:fit:smoker', name: 'a stranger', look: 'courier' },
+  // (batch-1: the barber of FRESH CUTZ, at the walk-up's door with the barber pole; the clerk of DROP, at its door by
+  // the sneaker wall)
+  { id: 'npc:fit:barber', name: 'the barber', look: 'shopkeeper' },
+  { id: 'npc:fit:clerk', name: 'the clerk at DROP', look: 'shopkeeper' },
 ];
 /** Who each card of the stop is played with (src/run/config.mjs `stops.fitst.cards`): the stage's person for it. */
-export const CARD_WITH = { errand: 'npc:fit:barkeep', lookout: 'npc:fit:stranger', tipsy: 'npc:fit:drunk', sell: 'npc:fit:smoker' };
+export const CARD_WITH = { errand: 'npc:fit:barkeep', lookout: 'npc:fit:stranger', tipsy: 'npc:fit:drunk', sell: 'npc:fit:smoker', barber: 'npc:fit:barber', drop: 'npc:fit:clerk' };
+/**
+ * THE PLAZA'S PATROL (batch-1: at Glasswall Plaza the police are the danger, and it is seen before it bites): an officer
+ * of the stage's own, not a person of the game, who walks the plaza's beat all day (the place table's stands with a
+ * `beat`, the stage's own patrol: director.js lifeStep, the city's patrol_walk). A stop on the plaza is hers.
+ */
+export const PATROL = { 'uptown': 'npc:police:plaza' };
 /**
  * THE STOP'S SPOTS, on DEAD AIR's block: each the place table's own standing place (places.json bar.stands: the city's
  * stand-spot maker's, clear of the walkers' lane and the kerb) nearest a point said from the block's own `street`
@@ -77,8 +134,39 @@ const STOP_SPOTS = {
     'fit:corner': [6.5, -3.5], // (the corner of Ivy St at the crossing: the one who had one too many)
     'fit:kerb': [-8.5, -0.5], // (up Fit Street past the alley mouth: the one who wants a smoke)
     'fit:stairs': [6.5, -8], // (up Ivy St, the way the FIT ST stairs lie: as far as the drunk is walked in an hour's scene)
-    // (the dumpster in the alley behind the bar: the place table's own, a step out from its box on the passage's side)
-    'fit:dumpster': { thing: 'alley·dumpster', side: [-1, 0] },
+    // (the dumpster in the service alley behind the bar: the place table's own, a step out from its box at its Ivy St
+    // end, the one end anybody can come to. The alley is shut by chain-link gates at both mouths (the city's own:
+    // heroes/fitstreet.js alleyGate) and nothing walks round to its far side: the spot was there (side [-1, 0]) and
+    // every walk to it gave out on the sidewalk at the gate, 2 m short of the dumpster: mapped 2026-11-18. The dig
+    // goes in by the gate and comes back out: demo/stage/hands/perform.js `shut`)
+    'fit:dumpster': { thing: 'alley·dumpster', side: [1, 0] },
+    // (batch-1: the two shopfronts on the block's north face, Fit Street proper, the other side of the block from the
+    // bar's front: FRESH CUTZ, the walk-up with the barber pole, and DROP with its sneaker wall, a step out from each
+    // door. The city's own pieces (city/from-trunk/style/city/heroes/fitstreet.js; audit.json `-3_0·walkup·barberpole·0`
+    // and `-3_0·drop·structure·0`, moved into the place table's frame as its other pieces of the block are). Not in the
+    // place table's stands (they are all on the bar's front), so the points are the doors' own)
+    'fit:barber': [-15.9, -26.6],
+    'fit:drop': [-5, -27.6],
+  },
+  // (batch-1) LOW TIDE DOCKS: the cargo ring behind the quay (places.json docks.stands, all open ground, about the
+  // `street` spot) and the quay's edge at its first mooring (`pier`). The foremen keep the ring's quay side, where the
+  // boxes go down to the pier; the drivers the ring's land side, by their semis' doors, toward Dock St.
+  docks: {
+    'dock:tally': [-2.5, -4], // (Mr. Haines, counting boxes at the quay side)
+    'dock:night': [3, -4.5], // (Rosa, at the quay side's other end)
+    'dock:cab': [-4.5, 4.5], // (Big Lou, by his cab on the land side)
+    'dock:cab:2': [4.5, 5], // (Nadia Petrakis, by hers)
+    'dock:load': [0, 2], // (the open middle of the ring: where a box is set down to be carried)
+  },
+  // (batch-1) GLASSWALL PLAZA: the plaza's west and south edges and its benches round the fountain (places.json uptown);
+  // Precinct 9 is 22 m east. Vic Amato's folding table at the bench by the plaza's north side; the office crowd along
+  // the edges with their phones and coffee; the patrol on the plaza's beat
+  uptown: {
+    'plz:table': [1, 3.5], // (Vic Amato: by the north bench, `counter:shop`)
+    'plz:edge': [-5, -2], // (a man in a lanyard, on the west edge)
+    'plz:edge:2': [3.5, -6], // (a woman on two phones, on the south edge)
+    'plz:edge:3': [-4.5, 4], // (a man with a coffee, by the north-west corner)
+    'plz:beat': { beat: true, near: [5, 0] }, // (the patrol: the stand with a beat nearest the plaza's east side)
   },
 };
 export function stopSpots(map) {
@@ -91,6 +179,16 @@ export function stopSpots(map) {
     const [sx, sz] = B.spots.street;
     const taken = new Set();
     for (const [name, at] of Object.entries(spots)) {
+      if (!Array.isArray(at) && at.beat) {
+        // (batch-1: a stand with a beat, nearest a point said from the street spot: whoever has it walks its beat)
+        const [x, z] = [sx + at.near[0], sz + at.near[1]];
+        const near = stands.filter(q => q.beat?.length && !taken.has(q)).sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z))[0];
+        if (!near) continue;
+        taken.add(near);
+        B.spots[name] ??= [near.x, near.z];
+        out[name] = B.spots[name];
+        continue;
+      }
       if (!Array.isArray(at)) {
         const t = (T?.near?.things ?? []).find(q => q.id.includes(at.thing));
         if (!t?.box) continue;
@@ -199,6 +297,27 @@ export const DAYS = {
   'npc:fit:drunk': [[12, 'fit:corner', ['drink']], [14, 'fit:corner', ['stagger']], [17, 'fit:corner', ['spaced_drift']], [20, 'fit:corner', ['drink']], [22, 'fit:corner', ['stagger']]],
   // the one who wants a smoke: waiting up Fit Street, on the phone, patting his pockets for one he has not got
   'npc:fit:smoker': [[12, 'fit:kerb', ['wait_stop']], [14, 'fit:kerb', ['phone_type']], [17, 'fit:kerb', ['pat_pockets']], [20, 'fit:kerb', ['phone_call']]],
+  // (batch-1) the barber, at his door between customers: a smoke, his phone, the step swept; the clerk at DROP's door
+  'npc:fit:barber': [[12, 'fit:barber', ['smoke']], [14, 'fit:barber', ['phone_type']], [16, 'fit:barber', ['sweep']], [19, 'fit:barber', ['smoke']], [21, 'fit:barber', ['phone_call']]],
+  'npc:fit:clerk': [[12, 'fit:drop', ['phone_type']], [15, 'fit:drop', ['stock_shelf']], [18, 'fit:drop', ['phone_type']], [21, 'fit:drop', ['smoke']]],
+
+  // ── Low Tide Docks (batch-1) ──────────────────────────────────────────────────────────────────────────────────────
+  // Mr. Haines (days; counts every box twice): his tally at the quay side, a box shifted, on the phone to the office
+  'npc:foreman:docks': [[12, 'dock:tally', ['phone_type']], [14, 'dock:tally', ['carry_box']], [16, 'dock:tally', ['phone_call']], [18, 'dock:tally', ['phone_type']]],
+  // Rosa (runs the night shift): in for it in the afternoon, a smoke, the phone, a box or two
+  'npc:foreman:docks:2': [[12, 'dock:night', ['smoke']], [15, 'dock:night', ['phone_call']], [18, 'dock:night', ['carry_box']], [21, 'dock:night', ['smoke']]],
+  // Big Lou (sleeps in his cab between loads): by his cab, drowsing on his feet, a smoke, a drink
+  'npc:driver:docks': [[12, 'dock:cab', ['wait_stop']], [14, 'dock:cab', ['smoke']], [17, 'dock:cab', ['drink']], [20, 'dock:cab', ['wait_stop']]],
+  // Nadia Petrakis (drives nights, trusts nobody): by hers, watching the ring, on the phone
+  'npc:driver:docks:2': [[12, 'dock:cab:2', ['deal_lookout']], [15, 'dock:cab:2', ['phone_type']], [18, 'dock:cab:2', ['deal_lookout']], [21, 'dock:cab:2', ['phone_call']]],
+
+  // ── Glasswall Plaza (batch-1) ─────────────────────────────────────────────────────────────────────────────────────
+  // Vic Amato (sells condos off a folding table): at his table, on the phone, a pitch at the air
+  'npc:boss:plaza': [[12, 'plz:table', ['phone_call']], [14, 'plz:table', ['haggle_counter']], [17, 'plz:table', ['phone_type']], [20, 'plz:table', ['phone_call']]],
+  // the office crowd: lunch on the edges, a phone, a coffee, waiting
+  'npc:office:plaza': [[12, 'plz:edge', ['phone_type']], [14, 'plz:edge', ['drink']], [17, 'plz:edge', ['phone_call']], [20, 'plz:edge', ['phone_type']]],
+  'npc:office:plaza:2': [[12, 'plz:edge:2', ['phone_call']], [15, 'plz:edge:2', ['phone_type']], [18, 'plz:edge:2', ['phone_call']]],
+  'npc:office:plaza:3': [[12, 'plz:edge:3', ['drink']], [14, 'plz:edge:3', ['phone_type']], [17, 'plz:edge:3', ['wait_stop']], [20, 'plz:edge:3', ['drink']]],
 };
 /**
  * EACH ONE'S OWN PLACE, where the sour keep their backs to you: a park person's porch, a keeper's stall. (The market's
@@ -211,6 +330,12 @@ const OWN = {
   'npc:stallholder:2': 'keep:2',
   'npc:stallholder:3': 'keep:5',
   'npc:connect:market': 'keep:0',
+  // (batch-1: the docks' foremen and drivers keep their posts; Vic Amato his table)
+  'npc:foreman:docks': 'dock:tally',
+  'npc:foreman:docks:2': 'dock:night',
+  'npc:driver:docks': 'dock:cab',
+  'npc:driver:docks:2': 'dock:cab:2',
+  'npc:boss:plaza': 'plz:table',
 };
 /** The spot a day names: a home's own (`door`, `yard` …) for whoever has a home, else the place's own spot as named. */
 const spotOf = (id, where) => (HOME[id] && /^(door|step|yard|stall|front)$/.test(where) ? `home:${HOME[id]}:${where}` : where);
@@ -230,12 +355,15 @@ const WORK_AT = { 'npc:shop:market': 'keep:7', 'npc:shop:market:2': 'keep:4' };
 /** A person's own place: their porch, or their stall. */
 const ownOf = id => homeSpot(id, 'door') ?? OWN[id] ?? null;
 const LOCALS = [
-  ...Object.entries(RUN_CONFIG.people).flatMap(([place, list]) => list.map(p => ({
+  // (sixes-1: the two of the Sixes who wait by the steps are extras, as the Dunn brothers are, below)
+  ...Object.entries(RUN_CONFIG.people).flatMap(([place, list]) => list.filter(p => !(RUN_CONFIG.sixes?.jumpers ?? []).includes(p.id)).map(p => ({
     id: p.id, name: p.name, block: BLOCK[place], role: STAGE[p.id]?.look ?? 'buyer', spot: DAYS[p.id] ? dayOf(p.id, 12).spot : 'street',
-    action: 'idle', keep: true, home: HOME[p.id] ?? null, days: !!DAYS[p.id],
+    action: 'idle', keep: true, home: HOME[p.id] ?? null, days: !!DAYS[p.id], named: NAMED[p.id] ?? null,
   }))),
   // (routes-1: the stop's own people, the stage's alone, on DEAD AIR's block)
   ...STOP_FOLK.map(p => ({ id: p.id, name: p.name, block: 'bar', role: p.look, spot: dayOf(p.id, 12).spot, action: 'idle', keep: true, home: null, days: true })),
+  // (batch-1: the plaza's patrol, Officer Dana Pell, on its beat all day: PATROL above)
+  { id: 'npc:police:plaza', role: 'police', name: 'Officer Dana Pell', block: 'uptown', spot: 'plz:beat', action: 'patrol', keep: true, named: NAMED['npc:police:plaza'] },
   { id: 'npc:medic', role: 'medic', name: 'Doc Imani', held: 'clinic', spot: 'bed' },
   // (somebody passing, robbed: one of ours cast as a passer-by for the hour, walking on along the lane as an extra
   // does; the city's own walkers are never taken over. demo/run/acted.js `rob`)
@@ -249,6 +377,8 @@ const LOCALS = [
   { id: 'npc:caser', role: 'buyer', name: 'somebody nobody here knows', block: 'park', keep: true },
   { id: 'npc:robber1', role: 'npcRobber', name: 'Mick Dunn', block: 'market' },
   { id: 'npc:robber2', role: 'npcRobber', name: 'Lyle Dunn', block: 'market' },
+  // (sixes-1: the two of the Sixes who wait for you by the steps, in their own look; on stage only for that hour)
+  ...(RUN_CONFIG.sixes?.jumpers ?? []).map(id => ({ id, role: 'rival', name: RUN_CONFIG.places.market.people.find(p => p.id === id)?.name ?? 'one of the Sixes', block: 'market' })),
   { id: 'npc:police1', role: 'police', name: 'Officer Hale', block: 'market' },
 ];
 const KEEPERS = new Set(['shopkeeper', 'medic']);
@@ -288,7 +418,7 @@ export function stageGame() {
     state: { t: 0, phase: 'day', order: [YOU], agents: { [YOU]: { id: YOU, name: 'You', block: 'projects', state: 'free', cls: null } }, npcs },
     // the stage reads a held place's way out (it starts building the zone there) and which block has the pads
     map: {
-      blocks: { projects: { name: 'the trailer park', pads: true }, market: { name: 'the flea market' }, bar: { name: 'Fit Street, outside DEAD AIR' } },
+      blocks: { projects: { name: 'the trailer park', pads: true }, market: { name: 'the Jay St night market' }, bar: { name: 'Fit Street, outside DEAD AIR' }, docks: { name: 'Low Tide Docks' }, uptown: { name: 'Glasswall Plaza' } },
       held: { jail: { name: 'the jail', exit: 'projects' }, clinic: { name: 'the clinic', exit: 'projects' } },
     },
   };

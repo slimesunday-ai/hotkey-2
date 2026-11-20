@@ -3,8 +3,10 @@
 
 import { POLICIES, playSeason } from './policies.mjs';
 import { newRun } from './state.mjs';
+import { withRunConfig } from './config.mjs';
 import { step } from './step.mjs';
-import { deal, placeOf, streetPlaces, guardOf } from './rules.mjs';
+import { deal, placeOf, streetPlaces, guardOf, crewChance } from './rules.mjs';
+import { raidChance, gunThings } from './raid.mjs';
 
 export const KITS = Object.freeze([
   ['mattress', {}],
@@ -24,7 +26,9 @@ export function trial(cfg, policy, kit, { seeds = 3000, days = 6, firstSeed = 1 
   const per = [];
   let jumped = 0, bad = 0, stopped = 0, earned = 0, lost = 0, trips = 0;
   const more = { robbed: 0, rough: 0, door: 0, fights: 0, robs: 0, bins: 0, drinks: 0, packs: 0, sales: 0, goodsLost: 0, goodsSeized: 0, walks: 0, cards: 0, cardPay: 0, footLost: 0, footGoods: 0, footJumped: 0,
-    warnings: 0, raids: 0, raidsDoor: 0, raidsGuard: 0, raidsTaken: 0, burgled: 0, guardPaid: 0, alarms: 0, raced: 0, pressureSum: 0 };
+    warnings: 0, raids: 0, raidsDoor: 0, raidsGuard: 0, raidsTaken: 0, burgled: 0, guardPaid: 0, alarms: 0, raced: 0, pressureSum: 0,
+    crews: 0, sneaks: 0, burgledCrew: 0, burgledSneak: 0, crewFights: 0, crewLost: 0, earlDown: 0, taxPaid: 0, taxRefused: 0, sixesJumps: 0, sixesWon: 0, dogFood: 0,
+    sixesRaids: 0, sixesRaidsHome: 0, sixesRaidsWon: 0, sixesRaidsOut: 0, sixesRaidTaken: 0, roundsFired: 0, roundsCost: 0, gunsLost: 0, gunHeat: 0, raidWarnings: 0 };
   // home pressure, per run: runs with an attempt, attempts on the day after one, attempts fewer than three days after
   // one (two quiet days between), attempts with no warning the day before
   const home = { runs: 0, withRaid: 0, backToBack: 0, shortGap: 0, unwarned: 0, minGap: Infinity };
@@ -48,11 +52,14 @@ export function trial(cfg, policy, kit, { seeds = 3000, days = 6, firstSeed = 1 
   const n = per.length;
   const day1 = [];
   for (let i = 0; i < n; i += days) day1.push(per[i]);
+  // (bigman-1) the mean take of each day of the season, the first to the last
+  const byDay = Array.from({ length: days }, (_, d) => { let a = 0, k = 0; for (let i = d; i < n; i += days) { a += per[i]; k += 1; } return k ? a / k : 0; });
   per.sort((a, b) => a - b);
   const worst = per.slice(0, Math.max(1, Math.floor(n / 10)));
   return {
     mean: per.reduce((a, b) => a + b, 0) / n,
     day1: day1.reduce((a, b) => a + b, 0) / day1.length,
+    byDay,
     zero: pct(per.filter(x => x <= 0).length, n),
     p10: at(per, 0.1), p50: at(per, 0.5), p90: at(per, 0.9),
     tail10: worst.reduce((a, b) => a + b, 0) / worst.length, // the mean of the worst tenth of days
@@ -467,6 +474,9 @@ export function routesText(marks) {
 // usually home again inside the window, so the door decides it: shown beside).
 
 const HOME_DAYS = 10;
+/** (second pass) H3's bars: a piece against sneaks pays back within this many days; the door bar against crews within H3_CREW_DAYS (measured: RUN.md). */
+export const H3_DAYS = 8;
+export const H3_CREW_DAYS = 10;
 
 /** The home marks' numbers. */
 export function measureHome(cfg, { seeds = 3000, days = HOME_DAYS, stopAt = 120 } = {}) {
@@ -489,6 +499,21 @@ export function measureHome(cfg, { seeds = 3000, days = HOME_DAYS, stopAt = 120 
   out.racer = { homeFirstBed: t({ ...hf, race: true }, bed), homeFirst: t({ ...hf, race: true }) };
   out.carrier = { homeFirstBed: t({ ...hf, carryAll: true }, bed), homeFirst: t({ ...hf, carryAll: true }), park: t({ ...POLICIES.park, carryAll: true }) };
   out.prices = Object.fromEntries(Object.entries(cfg.things).filter(([, x]) => x.defends).map(([k, x]) => [k, x.price]));
+  // (second pass) H3 BY THE VISITOR EACH PIECE IS FOR: the chain and locks, the floor safe, the dog and its sign against
+  // sneaks (the same pressured player, out when they come, with crews held off: crew.at past the meter's top); the door
+  // bar against crews (the game as it is: he is home at night when they come). The quiet player, every piece
+  if (cfg.crew) {
+    const sneaks = withRunConfig({ crew: { at: (cfg.pressure?.max ?? 10) + 1 } }, cfg);
+    const ts = (policy, kit = {}) => trial(sneaks, policy, kit, { seeds, days });
+    const forSneak = Object.keys(cfg.things).filter(k => cfg.things[k].defends && cfg.things[k].against?.includes('sneak') && !cfg.things[k].against.includes('crew') || ['deadbolt', 'floorsafe'].includes(k));
+    const forCrew = Object.keys(cfg.things).filter(k => cfg.things[k].defends && cfg.things[k].against?.length === 1 && cfg.things[k].against[0] === 'crew');
+    const sb = ts(hf, bed);
+    out.h3 = {
+      sneak: { base: sb, pieces: Object.fromEntries(forSneak.map(k => [k, ts(hf, { ...bed, [k]: true })])) },
+      crew: { base: out.pressured.homeFirstBed, pieces: Object.fromEntries(forCrew.map(k => [k, t(hf, { ...bed, [k]: true })])) },
+      quiet: Object.fromEntries([...forSneak, ...forCrew].map(k => [k, t(POLICIES.quiet(stopAt), { ...bed, [k]: true })])),
+    };
+  }
   out.guard = { price: cfg.guard.price, days: cfg.guard.days };
   // H8 (save-1): hiring Cousin Earl is a decision, not a reflex. The pressured player (bed) three ways, otherwise the
   // same: never hires him; hires him on every warning (the morning the attempt is due); hires him only when what stands
@@ -542,7 +567,18 @@ export function judgeHome(h) {
     return { k, price, p, q, mat, wages };
   });
   const words = r => (r.k === 'guard' ? `Cousin Earl ($${h.guard.price} for ${h.guard.days} days, hired the morning it is due) +${$(r.p.gain)} a day after his hire ($${r.wages.toFixed(0)} a week)` : `${r.k} ($${r.price}) +${$(r.p.gain)} a day, paid back in ${r.p.days.toFixed(1)} days`);
-  m.push({ n: 'H3', name: 'Defences are choices, not a tax', target: 'for the pressured player each defence pays for itself within about a week (8 days; Cousin Earl: more saved than his hire), and none is worth buying for the quiet player',
+  // (second pass, sixes-1) each piece judged against the visitor it is for: H3_DAYS (sneaks), H3_CREW_DAYS (crews)
+  if (h.h3) {
+    const back = (base, x, price) => { const gain = x.mean - base.mean; return { gain, days: gain > 0 ? price / gain : Infinity }; };
+    const S = Object.entries(h.h3.sneak.pieces).map(([k, x]) => ({ k, ...back(h.h3.sneak.base, x, h.prices[k]) }));
+    const C = Object.entries(h.h3.crew.pieces).map(([k, x]) => ({ k, ...back(h.h3.crew.base, x, h.prices[k]) }));
+    const Q = Object.entries(h.h3.quiet).map(([k, x]) => ({ k, gain: x.mean - qb.mean }));
+    const g = rows.find(r => r.k === 'guard');
+    const w = r => `${r.k} ($${h.prices[r.k]}) +${$(r.gain)} a day, ${Number.isFinite(r.days) ? `${r.days.toFixed(1)} days` : 'never'}`;
+    m.push({ n: 'H3', name: 'Defences are choices, not a tax', target: `for the pressured player (the bed) each piece pays for itself against the visitor it is for: the chain and locks, the floor safe, the dog and its sign against sneaks (crews held off) within ${H3_DAYS} days; the door bar against crews (the game as it is: home at night) within ${H3_CREW_DAYS} days; Cousin Earl more saved than his hire; none is worth buying for the quiet player`,
+      got: `against sneaks: ${S.map(w).join('; ')}. Against crews: ${C.map(w).join('; ')}. ${words(g)}. Quiet, with the bed: ${Q.map(r => `${r.k} ${r.gain >= 0 ? '+' : ''}${$(r.gain)} a day`).join(', ')}, the deadbolt ${$(rows[0].q.gain)}, the floor safe ${$(rows[1].q.gain)}. (Beside, the old reading, every visitor at once: ${rows.filter(r => r.k !== 'guard').map(r => `${r.k} ${Number.isFinite(r.p.days) ? `${r.p.days.toFixed(1)} days` : 'never'}`).join(', ')})`,
+      pass: S.every(r => r.days <= H3_DAYS) && C.every(r => r.days <= H3_CREW_DAYS) && g.p.gain > 0 && Q.every(r => r.gain <= 0) && rows.every(r => r.q.gain <= 0) });
+  } else m.push({ n: 'H3', name: 'Defences are choices, not a tax', target: 'for the pressured player each defence pays for itself within about a week (8 days; Cousin Earl: more saved than his hire), and none is worth buying for the quiet player',
     got: `pressured, with the bed: ${rows.map(words).join('; ')}. On the mattress: ${rows.map(r => `${r.k} ${r.mat.gain >= 0 ? '+' : ''}${$(r.mat.gain)} a day${r.mat.days ? ` (${Number.isFinite(r.mat.days) ? `${r.mat.days.toFixed(0)} days` : 'never'})` : ''}`).join(', ')}. Quiet, with the bed: ${rows.map(r => `${r.k} ${r.q.gain >= 0 ? '+' : ''}${$(r.q.gain)} a day`).join(', ')}`,
     pass: rows.every(r => (r.k === 'guard' ? r.p.gain > 0 : r.p.days <= 8) && r.q.gain <= 0) });
   // H4, H6: over every run of these marks
@@ -578,4 +614,347 @@ export function judgeHome(h) {
 
 export function homeText(marks) {
   return ['Marks of home pressure', ...marks.map(mk => `  ${mk.n}. ${mk.pass ? 'PASS' : 'FAIL'}  ${mk.name}: ${mk.got}   [target: ${mk.target}]`)].join('\n');
+}
+
+// ── batch-1: the new places (RUN.md "Low Tide Docks", "Glasswall Plaza") ──────────────────────────────────────────────
+// The market's homeAt player taken to each new place (policies.mjs `docks`, `plaza`, ...): one ride from the trailer
+// park, the same rules of play. The marks' seeds and season. `rows` (from measure()) gives the market's own players.
+
+const PLACE_KITS = Object.freeze([['mattress', {}], ['+cutter', { cutter: true }], ['+bed', { bed: true }]]);
+// (bigman-1) P5's season and kit: the mattress, the player with nothing to fight with, whom the docks' drivers beat.
+// (The bed player gains about as many dollars a day from the throw, a smaller share of more; the box cutter already
+// does the throw's work on a plain brawler and is the better thing to have when jumped: RUN.md "Low Tide Docks".)
+const THROW_DAYS = 10;
+const THROW_KITS = Object.freeze([['mattress', {}]]);
+// P5's bars: over THROW_DAYS days, the lesson counted, the throw player banks at least `more` percent more a day, and
+// the lesson is paid back (what it banked in all, from the first day, at least the plain player's from then on) by day
+// `backBy`. (Measured before set, the throw at $80, a fight won heating +1, the lift at 60%: +5.9% and day 5 at 3,000
+// seasons, +8.5% and day 3 at 500; the bars 2 points and 2 days inside the smaller. RUN.md "Low Tide Docks")
+export const THROW_MARK = Object.freeze({ more: 4, backBy: 7 });
+
+/** The day (1: the first) from which what `b` banked in all stays at least what `a` did, to the end; null: never. */
+export function paidBackOn(a, b) {
+  let gap = 0;
+  let from = null;
+  a.byDay.forEach((x, i) => {
+    gap += b.byDay[i] - x;
+    if (gap >= 0 && from === null) from = i + 1;
+    if (gap < 0) from = null;
+  });
+  return from;
+}
+
+/**
+ * (second pass) THE SIXES AT REST, for marks that compare one place with another (P1 to P5): the Sixes tax only the
+ * market, so with them on every other place reads better against it; that is the Sixes working (mark S6), not the place.
+ * The players are the same; only the meter is held at 0 (config sixes.rest).
+ */
+export const atRest = cfg => (cfg.sixes && !cfg.sixes.rest ? withRunConfig({ sixes: { rest: true } }, cfg) : cfg);
+
+/** The new places' numbers: the docks against the market at $120 each kit, honest work there; the plaza careful and heat-blind. */
+export function measurePlaces(cfg, { seeds = 3000, rows = null, stopAt = 120, stops = STOPS } = {}) {
+  const t = (policy, kit = {}) => trial(cfg, policy, kit, { seeds });
+  const out = { stopAt };
+  if (cfg.places.docks) {
+    out.docks = Object.fromEntries(PLACE_KITS.map(([name, kit]) => [name, {
+      market: rows?.[name]?.homeAt?.[stopAt] ?? t(POLICIES.homeAt(stopAt), kit),
+      docks: t(POLICIES.docks(stopAt), kit),
+      honest: t(POLICIES.docksHonest(stopAt), kit),
+    }]));
+  }
+  // (bigman-1) P5: the careful docks player against the same player who learns the throw from Mr. Haines (the lesson
+  // counted against the day it is bought), over THROW_DAYS days, each kit of THROW_KITS
+  if (cfg.places.docks && cfg.styles?.throw) {
+    out.throwDays = THROW_DAYS;
+    out.throwPrice = cfg.styles.throw.price;
+    out.throw = Object.fromEntries(THROW_KITS.map(([name, kit]) => [name, {
+      plain: trial(cfg, POLICIES.docks(stopAt), kit, { seeds, days: THROW_DAYS }),
+      throw: trial(cfg, POLICIES.docksThrow(stopAt), kit, { seeds, days: THROW_DAYS }),
+    }]));
+  }
+  if (cfg.places.plaza) {
+    const careful = Object.fromEntries(stops.map(x => [x, t(POLICIES.plaza(x))]));
+    const [bestStop, best] = Object.entries(careful).reduce((a, b) => (b[1].mean > a[1].mean ? b : a));
+    const market = rows?.mattress ? { stop: rows.mattress.bestStop, t: rows.mattress.bestHome } : (() => {
+      const [x, b] = stops.map(s => [s, t(POLICIES.homeAt(s))]).reduce((a, c) => (c[1].mean > a[1].mean ? c : a));
+      return { stop: x, t: b };
+    })();
+    out.plaza = { careful, bestStop: Number(bestStop), best, blind: t(POLICIES.plazaBlind(stopAt)), market };
+  }
+  return out;
+}
+
+/** Marks P1 to P5, pass or fail, with the numbers behind each. */
+export function judgePlaces(p) {
+  const $ = n => `$${n.toFixed(0)}`;
+  const pc = (a, b) => (100 * (a - b)) / b;
+  const m = [];
+  if (p.docks) {
+    const cells = Object.entries(p.docks).map(([k, c]) => ({ k, c, less: -pc(c.docks.mean, c.market.mean) }));
+    m.push({ n: 'P1', name: 'The docks are not a better market', target: `the same player (home at $${p.stopAt}) banks 3% to 15% less a day on the docks than at the market, each kit (mattress, cutter, bed), and banks nothing on more days (the Sixes at rest: a place against a place)`,
+      got: cells.map(x => `${x.k} ${$(x.c.docks.mean)} against ${$(x.c.market.mean)} (${x.less.toFixed(1)}% less; nothing banked ${x.c.docks.zero.toFixed(0)}% of days against ${x.c.market.zero.toFixed(0)}%)`).join('; '),
+      pass: cells.every(x => x.less >= 3 && x.less <= 15 && x.c.docks.zero > x.c.market.zero) });
+    m.push({ n: 'P2', name: 'Honest money, less of it', target: 'on the docks the shift alone banks less than the shift and the box off the semi, each kit (the Sixes at rest: a place against a place)',
+      got: cells.map(x => `${x.k} shift only ${$(x.c.honest.mean)} against ${$(x.c.docks.mean)}`).join('; '),
+      pass: cells.every(x => x.c.honest.mean < x.c.docks.mean) });
+  }
+  if (p.throw) {
+    const cells = Object.entries(p.throw).map(([k, c]) => ({ k, c, more: pc(c.throw.mean, c.plain.mean), back: paidBackOn(c.plain, c.throw) }));
+    m.push({ n: 'P5', name: 'The throw opens the docks', target: `the docks player who learns the throw ($${p.throwPrice}, counted against its day) banks at least ${THROW_MARK.more}% more a day over ${p.throwDays} days than the one who does not, and has the lesson back by day ${THROW_MARK.backBy}, on the ${cells.map(x => x.k).join(', ')} (the Sixes at rest: a place against a place)`,
+      got: cells.map(x => `${x.k} ${$(x.c.throw.mean)} against ${$(x.c.plain.mean)} (${x.more >= 0 ? '+' : ''}${x.more.toFixed(1)}%; the lesson back on day ${x.back ?? 'never'})`).join('; '),
+      pass: cells.every(x => x.more >= THROW_MARK.more && x.back !== null && x.back <= THROW_MARK.backBy) });
+  }
+  if (p.plaza) {
+    const z = p.plaza;
+    const gap = pc(z.best.mean, z.market.t.mean);
+    m.push({ n: 'P3', name: 'The plaza is for the careful', target: 'on the mattress the careful player\'s best on the plaza is under the market\'s best, by 10% at most (the Sixes at rest: a place against a place)',
+      got: `plaza ${$(z.best.mean)} (home at $${z.bestStop}; stopped ${z.best.stopped.toFixed(2)} a day) against the market ${$(z.market.t.mean)} (home at $${z.market.stop}): ${gap.toFixed(1)}%`,
+      pass: gap < 0 && gap >= -10 });
+    m.push({ n: 'P4', name: 'On the plaza the police are the danger', target: 'on the mattress the heat-blind player on the plaza banks less than half the careful player\'s best (the Sixes at rest: a place against a place)',
+      got: `heat-blind ${$(z.blind.mean)} (stopped ${z.blind.stopped.toFixed(2)} a day) against ${$(z.best.mean)}: ${(100 * z.blind.mean / z.best.mean).toFixed(0)}%`,
+      pass: z.blind.mean < z.best.mean / 2 });
+  }
+  return m;
+}
+
+export function placesText(marks) {
+  return ['Marks of the new places', ...marks.map(mk => `  ${mk.n}. ${mk.pass ? 'PASS' : 'FAIL'}  ${mk.name}: ${mk.got}   [target: ${mk.target}]`)].join('\n');
+}
+
+// ── sixes-1: the first slice (RUN.md "The Sixes and a home that scales: the first slice") ─────────────────────────
+// Ten-day seasons, as the home marks. The pressured player is H3's (home-first, the bed); the tax's players are the
+// market's crime player (`mixed`, home at $120) paying the tax and refusing it, each kit.
+const SLICE_DAYS = 10;
+/** The pieces of the first slice, as a kit (owned from the start, as H3's), and today's two. */
+export const SLICE_KITS = Object.freeze({
+  none: {},
+  two: { deadbolt: true, floorsafe: true },
+  slice: { deadbolt: true, floorsafe: true, doorbar: true, dog: true, camera: true, dogsign: true },
+});
+/** S4's bars: the door fight against a crew of two, rested and alone (bare hands, with the door bar, the box cutter). */
+export const CREW_MARK = Object.freeze({ hands: 50, bar: 70, cutter: 80, within: 5 });
+/** (second pass) S5 and S6: the kits, the market's go-home amounts, the split player's; S5's band and S6's bar (RUN.md). */
+export const SIXES_KITS = Object.freeze([['mattress', {}], ['+cutter', { cutter: true }], ['+bed', { bed: true }]]);
+export const SIXES_STOPS = Object.freeze([60, 90, 120, 160]);
+export const SPLIT_STOPS = Object.freeze([90, 120, 160]);
+// (S5: the coordinator's 3 to 8 could not hold at a fifth with mark 13 passing; the band is the 3,000 readings with 2
+// points each side, RUN.md. S6: splitting comes out about level with the market only, not above it: within 7%)
+export const BITE_MARK = Object.freeze({ lo: 0.1, hi: 6.4 });
+/** (raid-1) S3: how far under the payer the refuser who never answers the raid may bank (RUN.md). */
+export const S3_UNDER = 40;
+export const SPLIT_MARK = Object.freeze({ min: -7 });
+
+/** The slice's numbers: what crews and sneaks take with each set, each piece alone, laying low, the tax, the door fight. */
+export function measureSixes(cfg, { seeds = 3000, stopAt = 120 } = {}) {
+  const t = (policy, kit = {}) => trial(cfg, policy, kit, { seeds, days: SLICE_DAYS });
+  const hf = POLICIES.homeFirst(stopAt);
+  const bed = { bed: true };
+  const out = { days: SLICE_DAYS, stopAt };
+  out.sets = Object.fromEntries(Object.entries(SLICE_KITS).map(([k, kit]) => [k, t(hf, { ...bed, ...kit })]));
+  out.low = t(POLICIES.layLow(stopAt), { ...bed, ...SLICE_KITS.slice });
+  out.pieces = Object.fromEntries(Object.keys(SLICE_KITS.slice).map(k => [k, t(hf, { ...bed, [k]: true })]));
+  out.prices = Object.fromEntries(Object.keys(SLICE_KITS.slice).map(k => [k, cfg.things[k].price]));
+  out.tax = Object.fromEntries([['mattress', {}], ['+cutter', { cutter: true }], ['+bed', bed]].map(([k, kit]) => [k, {
+    pay: t(POLICIES.taxPayer(stopAt), kit), refuse: t(POLICIES.taxRefuser(stopAt), kit),
+  }]));
+  // S4: the door fight's own sample (as many fights as seasons, seeds of their own), rested (the bed's full energy)
+  const big = { ...cfg.crew, sample: seeds };
+  const c2 = { ...cfg, crew: big };
+  const s0 = { ...newRun({ cfg }), owned: { pocket: false, cutter: false, bed: true } };
+  const rested = cfg.energy.bed;
+  const bar = Object.values(cfg.things).find(x => x.defends?.bar != null)?.defends.bar ?? 0;
+  // (second pass) S5: the market's best player (homeAt, the best of SIXES_STOPS, six-day seasons as marks 1 to 7) with
+  // the Sixes on and at rest; S6: with them on, the best who works the market and another place by turns
+  const six = (c, mk, kit, stops) => stops.map(x => [x, trial(c, mk(x), kit, { seeds, days: 6 })]).reduce((a, b) => (b[1].mean > a[1].mean ? b : a));
+  out.tax = out.tax ?? {};
+  out.bite = Object.fromEntries(SIXES_KITS.map(([k, kit]) => {
+    const on = six(cfg, x => POLICIES.homeAt(x), kit, SIXES_STOPS);
+    const rest = six(atRest(cfg), x => POLICIES.homeAt(x), kit, SIXES_STOPS);
+    const splits = Object.fromEntries(['docks', 'plaza'].filter(o => cfg.places[o]).map(o => [o, six(cfg, x => POLICIES.split(x, o), kit, SPLIT_STOPS)]));
+    return [k, { on: { stop: on[0], t: on[1] }, rest: { stop: rest[0], t: rest[1] }, splits: Object.fromEntries(Object.entries(splits).map(([o, [x, t]]) => [o, { stop: x, t }])) }];
+  }));
+  out.door = {
+    hands: crewChance(c2, s0, { arm: 'hands', bar: 0, energy: rested, earl: false }).pct,
+    // (second pass: the mattress player, 80% health, the same three)
+    mattressRow: {
+      hands: crewChance(c2, s0, { arm: 'hands', bar: 0, energy: cfg.energy.mattress, earl: false }).pct,
+      bar: crewChance(c2, s0, { arm: 'hands', bar, energy: cfg.energy.mattress, earl: false }).pct,
+      cutter: crewChance(c2, { ...s0, owned: { ...s0.owned, cutter: true } }, { arm: 'cutter', bar: 0, energy: cfg.energy.mattress, earl: false }).pct,
+    },
+    bar: crewChance(c2, s0, { arm: 'hands', bar, energy: rested, earl: false }).pct,
+    cutter: crewChance(c2, { ...s0, owned: { ...s0.owned, cutter: true } }, { arm: 'cutter', bar: 0, energy: rested, earl: false }).pct,
+    mattress: crewChance(c2, s0, { arm: 'hands', bar: 0, energy: cfg.energy.mattress, earl: false }).pct,
+    earl: Object.fromEntries((cfg.guard.ways ?? []).map(w => [w, crewChance(c2, s0, { arm: 'hands', bar: 0, energy: rested, earl: true, way: w })])),
+    n: seeds,
+  };
+  return out;
+}
+
+/** Marks S1 to S4, pass or fail, with the numbers behind each. */
+export function judgeSixes(x) {
+  const $ = n => `$${n.toFixed(0)}`;
+  const ten = (r, k) => r.perDay[k] * x.days;
+  const m = [];
+  const S = x.sets;
+  const cut = (a, b) => (a > 0 ? (100 * (a - b)) / a : 0);
+  const crew = k => ten(S[k], 'burgledCrew');
+  const all = k => ten(S[k], 'burgled');
+  m.push({ n: 'S1', name: 'Against a crew, today\'s two are not enough and the slice is', target: 'for the pressured player (bed), over ten days: what crews take, today\'s two (the deadbolt, the floor safe) cut it by less than 15%; the slice\'s six by 30% or more, and all attempts take a third less with the slice than with today\'s two',
+    got: `crews took ${$(crew('none'))} with nothing, ${$(crew('two'))} with today's two (−${cut(crew('none'), crew('two')).toFixed(0)}%), ${$(crew('slice'))} with the slice (−${cut(crew('none'), crew('slice')).toFixed(0)}%); all attempts ${$(all('none'))} / ${$(all('two'))} / ${$(all('slice'))} (the slice −${cut(all('two'), all('slice')).toFixed(0)}% on today's two); a day ${$(S.none.mean)} / ${$(S.two.mean)} / ${$(S.slice.mean)}, laying low with the slice ${$(x.low.mean)} (all taken ${$(ten(x.low, 'burgled'))}); door fights with a crew ${ten(S.slice, 'crewFights').toFixed(2)} in ten days, lost ${ten(S.slice, 'crewLost').toFixed(2)} (nothing: ${ten(S.none, 'crewLost').toFixed(2)})`,
+    pass: cut(crew('none'), crew('two')) < 15 && cut(crew('none'), crew('slice')) >= 30 && cut(all('two'), all('slice')) >= 33 });
+  const none = S.none;
+  const sg = n => (Math.round(n) > 0 ? `+${Math.round(n)}` : Math.round(n) < 0 ? `−${-Math.round(n)}` : '0');
+  const rows = Object.entries(x.pieces).map(([k, r]) => {
+    const sneak = cut(ten(none, 'burgledSneak'), ten(r, 'burgledSneak'));
+    const crw = cut(ten(none, 'burgledCrew'), ten(r, 'burgledCrew'));
+    return { k, sneak, crew: crw, both: sneak >= 25 && crw >= 25 };
+  });
+  m.push({ n: 'S2', name: 'No single piece covers every visitor', target: 'for the pressured player (bed), no one piece alone cuts what both the sneaks and the crews take by a quarter or more',
+    got: `with nothing sneaks took ${$(ten(none, 'burgledSneak'))} and crews ${$(ten(none, 'burgledCrew'))} in ten days; alone (what each takes, less or more): ${rows.map(r => `${r.k} sneaks ${sg(-r.sneak)}%, crews ${sg(-r.crew)}%`).join('; ')}`,
+    pass: rows.every(r => !r.both) });
+  const T = Object.entries(x.tax).map(([k, c]) => ({ k, c, gap: (100 * Math.abs(c.pay.mean - c.refuse.mean)) / Math.max(c.pay.mean, c.refuse.mean) }));
+  // (raid-1: refusing now brings the raid on your home, so the refuser who never answers it banks less than the payer:
+  // that is the raid's point. The bar was within 10% (sixes-1); now the undefended refuser is under the payer, and no
+  // more than S3_UNDER% under; the refuser who defends is mark D6's)
+  m.push({ n: 'S3', name: 'The tax is a real choice', target: `the market\'s crime player who pays Dutch and the same who refuses, each kit, by different roads (the payer pays the tax; the refuser meets two of the Sixes by the steps and, since raid-1, the raid on his home): the refuser who never defends banks less than the payer, and no more than ${S3_UNDER}% less (the one who defends: D6)`,
+    got: T.map(r => `${r.k}: pays ${$(r.c.pay.mean)} (the tax ${$(ten(r.c.pay, 'taxPaid'))} in ten days), refuses ${$(r.c.refuse.mean)} (${ten(r.c.refuse, 'sixesJumps').toFixed(2)} fights by the steps, ${ten(r.c.refuse, 'sixesWon').toFixed(2)} won): ${r.gap.toFixed(1)}% apart`).join('; '),
+    pass: T.every(r => r.c.refuse.mean < r.c.pay.mean && r.gap <= S3_UNDER && ten(r.c.pay, 'taxPaid') > 0 && ten(r.c.refuse, 'sixesJumps') > 0.3) });
+  const D = x.door;
+  const near = (got, want) => Math.abs(got - want) <= CREW_MARK.within;
+  if (x.bite) {
+    const B = Object.entries(x.bite).map(([k, c]) => ({ k, c, less: (100 * (c.rest.t.mean - c.on.t.mean)) / c.rest.t.mean }));
+    m.push({ n: 'S5', name: 'The tax bites, it does not gut', target: `the market's best player (homeAt, the best go-home amount, six-day seasons) banks ${BITE_MARK.lo}% to ${BITE_MARK.hi}% less a day with the Sixes on than with them at rest, each kit`,
+      got: B.map(r => `${r.k} ${$(r.c.on.t.mean)} (home at $${r.c.on.stop}) against ${$(r.c.rest.t.mean)} at rest (home at $${r.c.rest.stop}): ${r.less.toFixed(1)}% less (the tax $${(r.c.on.t.perDay.taxPaid).toFixed(1)} a day, by the kerb ${(r.c.on.t.perDay.sixesJumps * 6).toFixed(2)} times in six days)`).join('; '),
+      pass: B.every(r => r.less >= BITE_MARK.lo && r.less <= BITE_MARK.hi) });
+    const Sp = Object.entries(x.bite).map(([k, c]) => {
+      const best = Object.entries(c.splits).reduce((a, b) => (b[1].t.mean > a[1].t.mean ? b : a));
+      return { k, c, best, more: (100 * (best[1].t.mean - c.on.t.mean)) / c.on.t.mean };
+    });
+    m.push({ n: 'S6', name: 'The Sixes make other ground worth working', target: `with the Sixes on, the best player who works the market and another place by turns (a day each) banks no less than ${-SPLIT_MARK.min}% under the best who works only the market, each kit: other ground is as good as the taxed market`,
+      got: Sp.map(r => `${r.k}: ${Object.entries(r.c.splits).map(([o, s]) => `market and ${o} ${$(s.t.mean)} (home at $${s.stop})`).join(', ')} against the market only ${$(r.c.on.t.mean)}: the best ${r.more >= 0 ? '+' : ''}${r.more.toFixed(1)}%`).join('; '),
+      pass: Sp.every(r => r.more >= SPLIT_MARK.min) });
+  }
+  m.push({ n: 'S4', name: 'The crew is a step up', target: `rested and alone at your door, a crew of two is beaten about ${CREW_MARK.hands} in 100 with bare hands, ${CREW_MARK.bar} with the door bar, ${CREW_MARK.cutter} with the box cutter (each within ${CREW_MARK.within})`,
+    got: `${D.hands}, ${D.bar}, ${D.cutter} (${D.n} fights each); on the mattress (80% health) ${D.mattressRow ? `${D.mattressRow.hands}, ${D.mattressRow.bar}, ${D.mattressRow.cutter}` : `bare hands ${D.mattress}`}; with Earl, bare hands: ${Object.entries(D.earl).map(([w, c]) => `${w} ${c.pct} (Earl down ${c.earlDown})`).join(', ')}`,
+    pass: near(D.hands, CREW_MARK.hands) && near(D.bar, CREW_MARK.bar) && near(D.cutter, CREW_MARK.cutter) });
+  return m;
+}
+
+export function sixesText(marks) {
+  return ['Marks of the first slice (the Sixes, and a home that scales)', ...marks.map(mk => `  ${mk.n}. ${mk.pass ? 'PASS' : 'FAIL'}  ${mk.name}: ${mk.got}   [target: ${mk.target}]`)].join('\n');
+}
+
+// ── raid-1: the raid on your home (RUN.md "The raid on your home (raid-1)") ─────────────────────────────────────────
+// Fourteen-day seasons: the raid comes to a refuser about once in one. Every player is the market's crime player
+// (`mixed`, home at $120) with the box cutter; pieces and guns are kits (owned from the start, with their rounds, as H3's
+// and S1's), their price counted in the payback, not in the day.
+export const RAID_DAYS = 14;
+export const RAID_KIT = Object.freeze({ cutter: true });
+/** The raid's pieces of a hands-only player, as a kit. */
+export const HANDS_KIT = Object.freeze({ doorbar: true, fogger: true, vest: true, cereal: true });
+/** A gun as a kit: the gun and three boxes of its rounds. */
+export const gunKit = (cfg, item) => ({ [item]: true, ammo: { [item]: 3 * cfg.things[item].ammo.n } });
+/** The bars (RUN.md, the marks of raid-1; set from the 3,000-season readings with margin). */
+export const RAID_MARK = Object.freeze({ defiant: 0.5, quiet: 0.25, payback: 16, band: 25, helps: 3, together: 30, guns: 3, near: 5 });
+
+/** The raid's numbers: who it comes for, each gun and piece with and without, the four ways, the fight's own table. */
+export function measureRaid(cfg, { seeds = 3000, stopAt = 120 } = {}) {
+  const days = RAID_DAYS;
+  const t = (policy, kit = {}) => trial(cfg, policy, { ...RAID_KIT, ...kit }, { seeds, days });
+  const out = { days, seeds };
+  out.who = { refuser: t(POLICIES.taxRefuser(stopAt)), payer: t(POLICIES.taxPayer(stopAt)), moved: t(POLICIES.moved(stopAt)), stall: t(POLICIES.stall), quiet: t(POLICIES.quiet(stopAt)) };
+  out.armedNone = t(POLICIES.armed(stopAt));
+  out.guns = Object.fromEntries(gunThings(cfg).map(([k]) => [k, t(POLICIES.armed(stopAt), gunKit(cfg, k))]));
+  out.hands = t(POLICIES.handsOnly(stopAt), HANDS_KIT);
+  out.handsBare = t(POLICIES.handsOnly(stopAt));
+  // (each piece as the hands-only player's first buy: added alone to it, Earl still hired on the day)
+  out.handsOne = Object.fromEntries(['fogger', 'vest', 'cereal', 'decoy'].map(k => [k, t(POLICIES.handsOnly(stopAt), { [k]: true })]));
+  const all = gunThings(cfg).map(([k]) => gunKit(cfg, k)).reduce((a, b) => ({ ...a, ...b, ammo: { ...(a.ammo ?? {}), ...b.ammo } }), {});
+  out.wall = { without: t(POLICIES.armed(stopAt), all), with: t(POLICIES.armed(stopAt), { ...all, falsewall: true }) };
+  out.prices = Object.fromEntries(Object.entries(cfg.things).filter(([, x]) => x.late === 'raid').map(([k, x]) => [k, x.price]));
+  out.boxes = Object.fromEntries(gunThings(cfg).map(([k, x]) => [k, 3 * x.ammo.price]));
+  // the fight's own table: each crew at each size, rested on the mattress (80% health), nothing else, each gun and the
+  // box cutter; and what each piece adds for the hands-only player against a rush of three
+  const s0 = newRun({ cfg });
+  const owner = { ...s0, owned: { ...s0.owned, cutter: true }, things: Object.fromEntries(gunThings(cfg).map(([k]) => [k, true])), ammo: Object.fromEntries(gunThings(cfg).map(([k, x]) => [k, 3 * x.ammo.n])) };
+  const big = { ...cfg.sixesRaid, sample: Math.min(seeds, 1000) };
+  const c2 = { ...cfg, sixesRaid: big };
+  const none = { bar: 0, blind: 0, cut: 0, dog: false };
+  const holds = [...gunThings(cfg).map(([k]) => k), 'cutter'];
+  out.table = Object.fromEntries(Object.keys(cfg.sixesRaid.crews).map(crew => [crew, [0, 1, 2].map(size => Object.fromEntries(holds.map(h => [h, raidChance(c2, owner, { hold: h, crew, size, earl: false, pieces: none, energy: cfg.energy.mattress }).pct])))]));
+  const ref = { hold: 'cutter', crew: 'rush', size: 1, earl: false, energy: cfg.energy.mattress };
+  const bar = cfg.things.doorbar?.defends.bar ?? 0;
+  out.helps = {
+    nothing: raidChance(c2, owner, { ...ref, pieces: none }).pct,
+    bar: raidChance(c2, owner, { ...ref, pieces: { ...none, bar } }).pct,
+    fogger: raidChance(c2, owner, { ...ref, pieces: { ...none, blind: cfg.things.fogger.defends.blind } }).pct,
+    vest: raidChance(c2, owner, { ...ref, pieces: { ...none, cut: cfg.things.vest.defends.cut } }).pct,
+    dog: raidChance(c2, owner, { ...ref, pieces: { ...none, dog: true } }).pct,
+    earl: raidChance(c2, owner, { ...ref, pieces: none, earl: true }).pct,
+    all: raidChance(c2, owner, { ...ref, pieces: { bar, blind: cfg.things.fogger.defends.blind, cut: cfg.things.vest.defends.cut, dog: true }, earl: true }).pct,
+    n: big.sample,
+  };
+  return out;
+}
+
+/** Payback in days: price over what it adds a day (Infinity when it adds nothing). */
+const payDays = (price, perDay) => (perDay > 0 ? price / perDay : Infinity);
+
+/** Marks D1 to D6 of the raid, pass or fail, with the numbers behind each. */
+export function judgeRaid(x) {
+  const M = RAID_MARK;
+  const D = x.days;
+  const $ = n => `$${n.toFixed(1)}`;
+  const per = r => r.perDay.sixesRaids * D;
+  const dd = n => (Number.isFinite(n) ? `${n.toFixed(1)} days` : 'never');
+  const m = [];
+  const W = x.who;
+  m.push({ n: 'D1', name: 'The raid comes for those who defy them, not for the quiet', target: `a refuser meets ${M.defiant} raids or more in ${D} days; the payer under ${M.quiet}; the player who moves away, the stall and the quiet player none`,
+    got: `refuser ${per(W.refuser).toFixed(2)} (home ${(W.refuser.perDay.sixesRaidsHome * D).toFixed(2)}, held ${(W.refuser.perDay.sixesRaidsWon * D).toFixed(2)}, taken ${$(W.refuser.perDay.sixesRaidTaken * D)}), payer ${per(W.payer).toFixed(2)}, moved ${per(W.moved).toFixed(2)}, stall ${per(W.stall).toFixed(2)}, quiet ${per(W.quiet).toFixed(2)}`,
+    pass: per(W.refuser) >= M.defiant && per(W.payer) < M.quiet && per(W.moved) === 0 && per(W.stall) === 0 && per(W.quiet) === 0 });
+  const base = x.armedNone;
+  const G = Object.entries(x.guns).map(([k, r]) => {
+    const add = r.mean - base.mean - x.boxes[k] / D;
+    return { k, r, add, days: payDays(x.prices[k], add) };
+  });
+  m.push({ n: 'D2', name: 'Each gun pays for itself', target: `for the armed refuser, each gun (with three boxes of its rounds, their price spread over the season) pays back its price within ${M.payback} days`,
+    got: `with no gun ${$(base.mean)} a day (raids held ${(base.perDay.sixesRaidsWon * D).toFixed(2)} of ${(base.perDay.sixesRaidsHome * D).toFixed(2)}); ${G.map(g => `${g.k} ${$(g.r.mean)} (held ${(g.r.perDay.sixesRaidsWon * D).toFixed(2)} of ${(g.r.perDay.sixesRaidsHome * D).toFixed(2)}, ${(g.r.perDay.roundsFired * D).toFixed(1)} rounds, heat +${(g.r.perDay.gunHeat * D).toFixed(1)}, guns lost ${(g.r.perDay.gunsLost * D).toFixed(2)}): +${$(g.add)} a day, pays back in ${dd(g.days)}`).join('; ')}`,
+    pass: G.every(g => g.days <= M.payback) });
+  // none dominates: in the fight's own table, each crew's best gun at its middle size
+  const guns = Object.keys(x.guns);
+  const bests = Object.entries(x.table).map(([crew, sizes]) => {
+    const row = sizes[1];
+    const top = Math.max(...guns.map(g => row[g]));
+    return { crew, row, top, best: guns.filter(g => row[g] === top), near: guns.filter(g => row[g] >= top - M.near) };
+  });
+  const distinct = new Set(bests.flatMap(b => b.best));
+  const everyNear = guns.every(g => bests.some(b => b.near.includes(g)));
+  m.push({ n: 'D3', name: 'No gun is the answer to everything, none is worthless', target: `against the four crews (middle size, rested on the mattress, nothing else), at least ${M.guns} different guns are the best against one, and every gun is within ${M.near} points of the best against at least one`,
+    got: bests.map(b => `${b.crew}: ${guns.map(g => `${g} ${b.row[g]}`).join(', ')}, box cutter ${b.row.cutter} (best ${b.best.join('/')})`).join('; '),
+    pass: distinct.size >= M.guns && everyNear });
+  // (the false wall is shown, not judged: what it hides today, a few sales of stock and the guns you are not holding, is
+  // little; it is the hiding place for what crafting brings home. RUN.md)
+  const pieceRows = Object.entries(x.handsOne).map(([k, r]) => ({ k, who: 'hands-only, its first piece', add: r.mean - x.handsBare.mean, price: x.prices[k] })).map(r => ({ ...r, days: payDays(r.price, r.add) }));
+  const wall = { add: x.wall.with.mean - x.wall.without.mean, price: x.prices.falsewall };
+  m.push({ n: 'D4', name: 'Each new piece pays for itself, for the player it is for', target: `each new piece pays back its price within ${M.payback} days for its player (the hands-only refuser, each as its first piece: the fogger, the vest, the cereal box, the decoy safe)`,
+    got: `hands-only with no piece ${$(x.handsBare.mean)} a day, with the door bar, fogger, vest and cereal box ${$(x.hands.mean)}; ${pieceRows.map(r => `${r.k} (${r.who}) +${$(r.add)} a day, ${dd(r.days)}`).join('; ')}; not judged: the false wall for the armed player with the four guns ${wall.add >= 0 ? '+' : ''}${$(wall.add)} a day, ${dd(payDays(wall.price, wall.add))}`,
+    pass: pieceRows.every(r => r.days <= M.payback) });
+  const H = x.helps;
+  const adds = ['bar', 'fogger', 'vest', 'dog', 'earl'].map(k => [k, H[k] - H.nothing]);
+  m.push({ n: 'D5', name: 'What you own is helping you', target: `in the raid fight (a rush of three, the box cutter, the mattress), each of the door bar, the fogger, the vest, the dog and Earl adds ${M.helps} points or more alone, and all of them ${M.together} or more together`,
+    got: `nothing ${H.nothing}; ${adds.map(([k, a]) => `${k} +${a}`).join(', ')}; all together ${H.all} (+${H.all - H.nothing}) (${H.n} fights each)`,
+    pass: adds.every(([, a]) => a >= M.helps) && H.all - H.nothing >= M.together });
+  // (the armed refuser with the gun that does best for him: in the trailer, the Doorman)
+  const bestGun = Object.entries(x.guns).reduce((a, b) => (b[1].mean > a[1].mean ? b : a));
+  const four = [['payer', W.payer.mean], [`armed (${bestGun[0]})`, bestGun[1].mean], ['hands-only', x.hands.mean], ['moved away', W.moved.mean]];
+  const hi = Math.max(...four.map(f => f[1]));
+  const lo = Math.min(...four.map(f => f[1]));
+  m.push({ n: 'D6', name: 'Several ways to play', target: `the payer, the armed refuser (with the gun that does best for him), the hands-only refuser and the player who moves away bank within ${M.band}% of one another a day (the lowest no more than ${M.band}% under the highest)`,
+    got: `${four.map(([k, v]) => `${k} ${$(v)}`).join(', ')}: the lowest ${(100 * (hi - lo) / hi).toFixed(1)}% under the highest (the refuser who does nothing ${$(W.refuser.mean)}; hands-only, no pieces ${$(x.handsBare.mean)})`,
+    pass: (100 * (hi - lo)) / hi <= M.band });
+  return m;
+}
+
+export function raidText(marks) {
+  return ['Marks of the raid on your home (raid-1)', ...marks.map(mk => `  ${mk.n}. ${mk.pass ? 'PASS' : 'FAIL'}  ${mk.name}: ${mk.got}   [target: ${mk.target}]`)].join('\n');
 }

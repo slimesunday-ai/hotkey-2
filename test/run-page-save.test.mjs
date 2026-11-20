@@ -75,7 +75,7 @@ test('picked up at a choice point, a run goes on exactly as the unbroken one (pl
   for (const [name, policy, make] of players) {
     for (const seed of [3, 8, 12]) {
       const whole = play(make(seed), policy, 150).state;
-      for (const cut of [17, 63, 111]) {
+      for (const cut of [17, 62, 111]) { // (memory-1: 61, not 63: with marks the lean player's door falls on other steps; sixes-1: 62, crews move it again)
         const head = play(make(seed), policy, cut).state;
         const v = view(cfg, head);
         if (v.home?.notice) notices += 1;
@@ -141,8 +141,8 @@ test('a save the rules refuse is refused, never thrown: an older state version, 
 });
 
 test('the page\'s lines: picked up, refused, NEW RUN\'s second ask, the mark', () => {
-  const at = { day: 3, hour: 14, clock: '14:00', place: 'the flea market', banked: 240, seed: 8 };
-  assert.equal(pickedLine(at), 'Picked up where you left off: day 3, 14:00, the flea market.');
+  const at = { day: 3, hour: 14, clock: '14:00', place: 'the Jay St night market', banked: 240, seed: 8 };
+  assert.equal(pickedLine(at), 'Picked up where you left off: day 3, 14:00, the Jay St night market.');
   assert.equal(refusedLine('version'), 'Your saved run is from an older build and cannot be continued. A new run has started.');
   assert.match(refusedLine('broken'), /could not be read and cannot be continued\. A new run has started\.$/);
   assert.match(replaceAsk(at), /day 3, \$240 banked/);

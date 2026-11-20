@@ -27,7 +27,6 @@
  "slots": [
   {"id":"wall","label":"the wall · over the futon","place":"wall","x":4,"z":0,"foot":[8,6],"rot":0,"demo":"sneaker-wall","variant":0,"fits":["collectible"],"wall":"N","y":0.9},
   {"id":"on-the-shelf","label":"on the shelf","place":"surface","x":1,"z":0,"foot":[2,2],"rot":0,"demo":"vinyl-dicehead","variant":0,"fits":["collectible","trophy","stash"],"on":3},
-  {"id":"grail","label":"the grail","place":"surface","x":12,"z":1,"foot":[3,3],"rot":0,"demo":"chain-bust","variant":0,"fits":["collectible","trophy"],"on":5},
   {"id":"on-the-table","label":"on the table","place":"surface","x":7,"z":6,"foot":[3,2],"rot":0,"demo":"watch-box","variant":0,"fits":["collectible","trophy"],"on":6}
  ],
  "vacant": [

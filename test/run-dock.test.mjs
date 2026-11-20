@@ -43,7 +43,9 @@ function statesOf(seed, policy, kit) {
   }
   return out;
 }
-const OFF_DOCK = new Set(['wear', 'unwear']);
+// (styles-1: what you fight with is the You panel's, as what you wear is)
+// (sixes-1: and how Earl is told to fight: the You panel's and the door card's, as what you fight with)
+const OFF_DOCK = new Set(['wear', 'unwear', 'fightWith', 'earlWay']);
 
 test('the verbs are always the same six, in the same order, and every choice is on the dock', () => {
   let points = 0;

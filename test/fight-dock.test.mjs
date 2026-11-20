@@ -1,16 +1,17 @@
-// THE FIGHT'S INTERFACE AS DATA (demo/fight/dock.js, join-1): the dock's five loadouts and three levels, what Enter
+// THE FIGHT'S INTERFACE AS DATA (demo/fight/dock.js, join-1): the dock's five loadouts and four levels, what Enter
 // says, the meters while a round is on, the result card, the results side by side, and each site's own words. Pure.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createFight, step, runFight, report, PRESETS, LEVELS, POLICIES } from '../src/fight/index.mjs';
 import { SITES } from '../demo/fight/sites.js';
-import { dockOf, metersOf, cardOf, tableOf, goWords, stepLevel, stepPreset, siteWords, levelName, vestTook, lastWords, PRESET_KEYS, LEVEL_KEYS } from '../demo/fight/dock.js';
+import { dockOf, metersOf, cardOf, tableOf, goWords, stepLevel, stepPreset, siteWords, levelName, vestTook, lastWords, weaponWords, earlRows, contentsOf, PRESET_KEYS, LEVEL_KEYS } from '../demo/fight/dock.js';
+import { ARMS, STREET } from '../src/fight/data.mjs';
 
 const MALL = SITES.mall;
 const ELM = SITES.elm;
 const pickOf = (id, level = 'real') => ({ ...PRESETS[id], gear: [...PRESETS[id].gear], level });
 
-test('the dock offers the five loadouts on 1 to 5 and the three levels, and says exactly what Enter does', () => {
+test('the dock offers the five loadouts on 1 to 5 and the four levels, and says exactly what Enter does', () => {
   const d = dockOf({ pick: pickOf('pistolVest'), results: {}, site: MALL });
   assert.deepEqual(d.cards.map(c => c.n), [1, 2, 3, 4, 5]);
   assert.deepEqual(d.cards.map(c => c.id), PRESET_KEYS);
@@ -19,8 +20,10 @@ test('the dock offers the five loadouts on 1 to 5 and the three levels, and says
   assert.equal(d.cards.find(c => c.on).id, 'pistolVest');
   assert.equal(d.go, 'Fight · Handgun + vest · Real');
   assert.equal(goWords(pickOf('full', 'hard'), true), 'Again · Chopper + vest + Earl · Hard');
-  assert.deepEqual(d.levels.map(l => l.word), ['Easy', 'Real', 'Hard']);
+  assert.deepEqual(d.levels.map(l => l.word), ['Jumped', 'Easy', 'Real', 'Hard']);
   assert.equal(d.levels.find(l => l.on).id, 'real');
+  // (fight-3: getting jumped, the small one, first: two at once, one a runner)
+  assert.deepEqual(d.levels[0], { id: 'jumped', word: 'Jumped', name: 'two at once', says: STREET.jumped.says, on: false });
   // (what is in each, in the fight's own names)
   assert.equal(d.cards.find(c => c.id === 'full').contents, 'chopper · stab vest · Earl');
   assert.equal(d.cards.find(c => c.id === 'hands').contents, 'bare hands');
@@ -50,8 +53,10 @@ test('the arrows step along the loadouts (round the ends) and the levels (kept a
   assert.equal(stepPreset({ weapon: 'pistol', gear: ['shoes'], ally: false }, 1), 'hands');
   assert.equal(stepLevel('real', 1), 'hard');
   assert.equal(stepLevel('hard', 1), 'hard');
-  assert.equal(stepLevel('easy', -1), 'easy');
-  assert.deepEqual(LEVEL_KEYS, ['easy', 'real', 'hard']);
+  assert.equal(stepLevel('easy', -1), 'jumped');
+  assert.equal(stepLevel('jumped', -1), 'jumped');
+  assert.equal(stepLevel('nowhere', 1), 'hard', 'from no level: one up from the real one');
+  assert.deepEqual(LEVEL_KEYS, ['jumped', 'easy', 'real', 'hard']);
 });
 
 test("each site says its own name for its levels: the mall's real night is not Elm St's (the rules are the same)", () => {
@@ -140,10 +145,31 @@ test('the result card: won or lost in plain numbers, one line of advice, the try
 test('the results side by side: every loadout a row, every level a column, your own build once fought', () => {
   const results = { pistol: { hard: { result: 'lost', seconds: 30, hp: 0, max: 100, dropped: 4, of: 11 } }, custom: { easy: { result: 'won', seconds: 25, hp: 80, max: 100, dropped: 3, of: 3 } } };
   const T = tableOf(results, pickOf('pistol', 'hard'));
-  assert.deepEqual(T.levels.map(l => l.word), ['Easy', 'Real', 'Hard']);
+  assert.deepEqual(T.levels.map(l => l.word), ['Jumped', 'Easy', 'Real', 'Hard']);
   assert.deepEqual(T.rows.map(r => r.name), ['Bare hands', 'Starter', 'Handgun', 'Handgun + vest', 'Chopper + vest + Earl', 'Your own']);
   assert.equal(T.rows.find(r => r.id === 'pistol').on, true);
-  assert.equal(T.rows.find(r => r.id === 'pistol').cells[2].short, 'down 4/11');
-  assert.equal(T.rows.find(r => r.id === 'custom').cells[0].short, 'won 25 s');
+  assert.equal(T.rows.find(r => r.id === 'pistol').cells[3].short, 'down 4/11');
+  assert.equal(T.rows.find(r => r.id === 'custom').cells[1].short, 'won 25 s');
   assert.equal(T.rows.find(r => r.id === 'hands').cells[0], null);
+});
+
+test('build your own (fight-3): every weapon says its job first, the long guns their rounds; Earl\'s three ways when he comes', () => {
+  assert.deepEqual(ARMS, ['hands', 'blade', 'pistol', 'chopper', 'doorman', 'longeye']);
+  assert.deepEqual(weaponWords('doorman'), { job: 'several at once, up close', stats: '24–32 a shell · 2 in it · reload 1.8 s · 20 shells' });
+  assert.deepEqual(weaponWords('longeye'), { job: 'one hard shot, from far off', stats: '36–46 a shot · 5 in it · reload 2.6 s · 15 rounds' });
+  assert.equal(weaponWords('pistol').job, 'for anything');
+  assert.equal(weaponWords('chopper').job, 'strong, and hungry for rounds');
+  for (const id of ARMS) assert.ok(weaponWords(id).job, `${id} has a job`);
+  // (Earl's ways only with Earl; none told: at your side, as the loadouts have him)
+  assert.deepEqual(earlRows({ ally: false, earl: 'front' }), []);
+  const rows = earlRows({ ally: true, earl: 'side' });
+  assert.deepEqual(rows.map(r => r.word), ['Out in front', 'Goes hunting', 'One at a time']);
+  assert.deepEqual(rows.map(r => r.says), ['stands in front, takes the hits', 'goes after the shooters', 'keeps the second one off you']);
+  assert.ok(rows.every(r => !r.on));
+  assert.deepEqual(earlRows({ ally: true, earl: 'hunt' }).map(r => r.on), [false, true, false]);
+  // (said on the card and the button: "Earl, goes hunting"; a loadout with Earl told a way is your own build)
+  assert.equal(contentsOf({ weapon: 'pistol', gear: [], ally: true, earl: 'hunt' }), 'six-shot · Earl, goes hunting');
+  const own = dockOf({ pick: { ...pickOf('full'), earl: 'block' }, results: {}, site: MALL });
+  assert.equal(own.custom, true);
+  assert.equal(own.go, 'Fight · Chopper + stab vest + Cousin Earl (one at a time) · Real');
 });

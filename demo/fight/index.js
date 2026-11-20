@@ -9,7 +9,14 @@
 //           (after a round: again), B build your own, J the results side by side, F the dock to one row, I the
 //           interface's size, Esc closes one thing (on a run's try-out stop: back to the run)
 //   frame   THE RUN'S (join-1; panels.js, dock.js): the where card, the dock with the five loadouts, the meters while a
-//           round is on, the result card after it; any weapon, gear and help still to be had (B), folded
+//           round is on, the result card after it; any weapon, gear and help still to be had (B), folded; with Cousin
+//           Earl, how he is told to fight (fight-3: out in front, goes hunting, one at a time; his line and spot shown
+//           in the round)
+//
+//   ONE-ON-ONE (anim-1, in Build your own): what you fight with (bare hands, the box cutter, quick hands, the haymaker,
+//           the throw) against one of the five ways the run's people fight, played by itself on the lot exactly as the
+//           run plays its fights (demo/run/duel.js, the run's own numbers): for looking at the moves side by side.
+//           It changes no rule and keeps no result.
 //
 //   mountFight(host, { stage, demo, seed, site, tryout }) → the page's api; api.dispose() takes it all off again
 //     site    a site of sites.js (else ?site=, else the dead mall)
@@ -27,7 +34,11 @@
 // behind the stage's own fade to black; and the page checks every picture for anyone who came on or went off in it,
 // and for cars or walkers through the arena (watch.js; hud.frameCheck(), the auto-play fails on any).
 // THE MOVES (fight-2): the fight's own clips (clips/) on the cast's walkers; who plays which when (anim.js).
-import { createFight, step, TICK, ARENA, PRESETS, WEAPONS, FOES, LEVELS, presetOf, kite } from '../../src/fight/index.mjs';
+import { createFight, step, TICK, ARENA, PRESETS, WEAPONS, FOES, EARL_WAYS, RIVALS, rivalFoe, runDuel, presetOf, kite, levelOf } from '../../src/fight/index.mjs';
+import { RUN_CONFIG } from '../../src/run/index.mjs';
+import { createDuel } from '../run/duel.js';
+import { createRaidFight } from '../run/raidfight.js';
+import { raidCase, RAID_HOLDS, RAID_CREWS } from '../run/raidcase.js';
 import { report } from '../../src/fight/report.mjs';
 import { createKit } from '../stage/rides/kit.js';
 import { arenaOn, arenaAt, siteOf, centerFromStairs } from './place.js';
@@ -37,9 +48,11 @@ import { quietBox } from './frame.js';
 import { createWatch } from './watch.js';
 import { installClips } from './clips/index.js';
 import { createAnimator } from './anim.js';
+import { createGunners } from './puppet/gunner.js';
+import { warmBlood } from './puppet/gunmesh.js';
 import { placeCover } from './cover.js';
 import { createPanels } from './panels.js';
-import { stepLevel, stepPreset } from './dock.js';
+import { stepLevel, stepPreset, LEVEL_KEYS } from './dock.js';
 
 /** Metres a walker on its way in walks out of the picture before it comes into it (ways.js startOn). */
 const AHEAD = 3;
@@ -54,11 +67,14 @@ const BAR_Y = 2.55;
 const RUN_V = 2.9;
 const LOOKS = {
   you: { seed: 'agent:you', pool: 'agent' },
-  ally: { seed: 'npc:Cousin Earl', pool: 'agent', wear: { top: 'dock_vest', hat: 'dockhand_beanie' } },
+  // (named-1: Cousin Earl and Big Moss are two of the city's drawn named people, world/named/: their own pieces, at their
+  // own size. The one-on-one's unnamed big man keeps the look the boss had: `bigman`)
+  ally: { seed: 'npc:Cousin Earl', named: 'earl', was: { pool: 'agent', wear: { top: 'dock_vest', hat: 'dockhand_beanie' } } },
   heavy: n => ({ seed: `fight:heavy:${n}`, pool: 'agent', wear: { hat: 'corner_rag', top: 'corner_hoodie' } }),
   runner: n => ({ seed: `fight:runner:${n}`, pool: 'agent', wear: { top: 'old_hoodie', hat: 'old_bandana' } }),
   shooter: n => ({ seed: `fight:shooter:${n}`, pool: 'agent', wear: { top: 'old_hoodie', hat: 'old_beanie' } }),
-  boss: () => ({ seed: 'fight:boss', pool: 'agent', wear: { top: 'dock_vest', hat: 'corner_rag', eyewear: 'precinct_aviators' } }),
+  boss: () => ({ seed: 'fight:boss', named: 'moss', was: { pool: 'agent', wear: { top: 'dock_vest', hat: 'corner_rag', eyewear: 'precinct_aviators' } } }),
+  bigman: () => ({ seed: 'fight:boss', pool: 'agent', wear: { top: 'dock_vest', hat: 'corner_rag', eyewear: 'precinct_aviators' } }),
 };
 const PRESET_KEYS = Object.keys(PRESETS);
 
@@ -66,6 +82,10 @@ export async function mountFight(host, { stage, demo = window.__demo, seed: seed
   const city = demo?.city ?? window.__city;
   const { actors, camera, rides } = stage;
   const kit = rides?.kit ?? createKit({ city, actors, CLIPS: actors.CLIPS });
+  // (named-1: Big Moss walks on in the middle of a round and Cousin Earl at its start: their named looks baked now, at
+  // the page's mount, so no frame of a round bakes a look for them)
+  actors.prebake?.(LOOKS.boss());
+  actors.prebake?.(LOOKS.ally);
   // EVERYTHING THIS PAGE HANGS ON THE STAGE AND THE WINDOW, to take off again (dispose: a run's try-out stop leaves)
   const offs = [];
   let dead = false;
@@ -76,6 +96,8 @@ export async function mountFight(host, { stage, demo = window.__demo, seed: seed
   const st = SITE.stairs ? rides?.station?.(SITE.stairs.top[0], SITE.stairs.top[1], SITE.stairs.station) ?? null : null;
   const A = arenaOn(SITE, ARENA, SITE.stairs ? centerFromStairs(st?.top ?? SITE.stairs.top, st?.dir ?? SITE.stairs.dir) : SITE.center);
   const RULES_ARENA = arenaAt(SITE);
+  // (the zone the page opened in: its site's)
+  const siteZone = stage.loader?.zone ?? null;
   const W = (x, y, up = 0) => {
     const [wx, wz] = A.world(x, y);
     return [wx, actors.groundAt(wx, wz) + up, wz];
@@ -139,8 +161,14 @@ export async function mountFight(host, { stage, demo = window.__demo, seed: seed
   // THE FIGHT'S OWN CLIPS on the cast's walkers (clips/index.js: the city's walkers are built by now), and who plays
   // which of them when (anim.js)
   await actors.until(() => !!city.peds?.anim?.batch || !city.peds);
-  const clipNames = installClips({ CLIPS: actors.CLIPS, mats: [city.peds?.anim?.mat, city.peds?.anim?.batch?.customDepthMaterial] });
-  const anim = createAnimator({ actors, CLIPS: actors.CLIPS, fx, W });
+  const clipNames = installClips({ CLIPS: actors.CLIPS, mats: [city.peds?.anim?.mat, city.peds?.anim?.batch?.customDepthMaterial], THREE: city.THREE });
+  // (anim-1: the bodies of the fight you steer are posed by hand, puppet/gunner.js: each gun held, raised, fired and
+  // reloaded its own way, the hands on it, the shot from its barrel; the falls by what dropped them. `?guns=old`: the
+  // clips they had before, to look at the two side by side. Nothing of the rules, the steering or the camera differs)
+  const OLD_GUNS = new URLSearchParams(location.search).get('guns') === 'old'; // (join-2: the owner judged the hand-posed gun bodies from the clips on 2026-11-19: they are the page's default; `?guns=old` still shows the ones before)
+  const anim = OLD_GUNS ? createAnimator({ actors, CLIPS: actors.CLIPS, fx, W }) : createGunners({ actors, fx, W, city });
+  // (anim-2: the blood's mist is first drawn at the first hit; its program is built now, not then: gunmesh.js warmBlood)
+  warmBlood(city);
   /** The actor of a sim id. */
   const aidOf = id => bodies.get(id)?.id ?? (id === 'you' ? YOU : id === 'earl' ? EARL : `fight:${id}`);
 
@@ -169,11 +197,20 @@ export async function mountFight(host, { stage, demo = window.__demo, seed: seed
   }
   /** Takes everyone of the last round off the stage: only ever under the fade to black (start). */
   function clearBodies() {
+    // (anim-1: whoever stood for the last one-on-one)
+    for (const style of Object.keys(RIVALS)) {
+      const id = `fight:rival:${style}`;
+      if (!actors.has(id)) continue;
+      kit.owned?.get(id)?.release();
+      actors.remove(id);
+    }
     for (const [sid, B] of bodies) {
       kit.owned?.get(B.id)?.release();
       if (B.id !== YOU && actors.has(B.id)) actors.remove(B.id);
       bodies.delete(sid);
     }
+    // (anim-1: and what the hand-posed bodies held: the guns, the cases on the ground)
+    anim.clear?.();
     for (const C of coming.values()) {
       kit.owned?.get(C.id)?.release();
       if (actors.has(C.id) && !bodies.has(C.sid)) actors.remove(C.id);
@@ -195,7 +232,7 @@ export async function mountFight(host, { stage, demo = window.__demo, seed: seed
   const seenNow = (x, z) => watch.seen(x, z, actors.groundAt(x, z), 0.8);
   function planComing(F) {
     coming.clear();
-    for (const P of pickWays(LEVELS[F.level].waves, ways, F.seed)) {
+    for (const P of pickWays(F.waves, ways, F.seed)) {
       coming.set(P.id, { sid: P.id, id: `fight:${P.id}`, kind: P.kind, t: P.t, from: P.from, path: P.path, len: wayLength(P.path), v: FOES[P.kind].speed, started: false, arrived: false, body: null, back: false });
     }
   }
@@ -319,6 +356,15 @@ export async function mountFight(host, { stage, demo = window.__demo, seed: seed
       }
       return;
     }
+    // (a one-on-one playing: Space or Enter skips it, as in the run; a raid the same)
+    if (phase === 'duel' || phase === 'raid') {
+      if (e.code === 'Space' || e.code === 'Enter' || e.code === 'NumpadEnter') {
+        e.preventDefault();
+        if (phase === 'raid') raidUi?.skip();
+        else duelUi?.skip();
+      }
+      return;
+    }
     if (phase !== 'pick' && phase !== 'over') return;
     // (the build list open: ↑ ↓ along it, Enter takes or drops)
     if (ui.buildOpen && ui.buildKey(e.code)) {
@@ -368,7 +414,8 @@ export async function mountFight(host, { stage, demo = window.__demo, seed: seed
   let acc = 0;
   let seen = 0;
   let first = true;
-  const pick = { weapon: 'blade', gear: [], ally: false, level: 'real' };
+  // (`earl`: how Cousin Earl is told to fight when he comes, fight-3: 'side' his old way, as the loadouts have him)
+  const pick = { weapon: 'blade', gear: [], ally: false, earl: 'side', level: 'real' };
   // (this browser's memory of how each loadout did at this place, so the table is still there on the next visit and
   // after a reload: the fight's own key, never the run's save; the page works without it)
   const KEPT = `hk2.fight.results.${SITE.id}`;
@@ -390,13 +437,13 @@ export async function mountFight(host, { stage, demo = window.__demo, seed: seed
     phase = 'arrive';
     held.clear();
     ui.begin();
-    const build = { weapon: pick.weapon, gear: [...pick.gear], ally: pick.ally };
+    const build = { weapon: pick.weapon, gear: [...pick.gear], ally: pick.ally, ...(pick.ally && pick.earl !== 'side' ? { earl: pick.earl } : {}) };
     const stairs = first && STAIRS;
     // A NEW ROUND BEHIND THE STAGE'S OWN FADE TO BLACK: the last round's people (down where they fell, or standing)
     // are taken off, you are put back at the stairs, Cousin Earl beside you, with nobody watching. The first round
     // comes up the stairs instead, and needs no cut
     const fade = stage.travel?.fade ?? null;
-    const cut = !stairs && fade && (bodies.size > 0 || coming.size > 0 || build.ally || actors.get(YOU).w.hide || !first);
+    const cut = !stairs && fade && (bodies.size > 0 || coming.size > 0 || build.ally || actors.get(YOU).w.hide || !first || Object.keys(RIVALS).some(k => actors.has(`fight:rival:${k}`)));
     if (cut) await fade.out();
     // (taken off meanwhile, a try-out stop gone back to the run: nothing more, and the black given back)
     if (dead) {
@@ -406,13 +453,25 @@ export async function mountFight(host, { stage, demo = window.__demo, seed: seed
     clearBodies();
     rides?.cancel?.(YOU);
     actors.stop(YOU);
+    // (raidfight-1: back from a raid at the trailer park, the site's own zone again, under this black)
+    if (zoneMoved && siteZone) {
+      zoneMoved = false;
+      try {
+        await stage.enterZone(siteZone, stage.map.viewOf?.(siteZone) ?? null);
+      } catch (err) {
+        console.warn('[fight] the site did not load again:', err);
+      }
+    }
     F = createFight({ build, level: pick.level, seed, arena: RULES_ARENA });
     seed += 1;
+    // (the frame says this round's level from now: it was painted while the last round's fight was still up)
+    ui.paint();
     acc = 0;
     seen = 0;
     frames.length = 0;
     // (the last round's places are not this round's: a person's first tick is eased from where they are)
     prev.clear();
+    slides.clear();
     anim.begin();
     planComing(F);
     const ally = F.people.find(p => p.side === 'ally');
@@ -481,6 +540,18 @@ export async function mountFight(host, { stage, demo = window.__demo, seed: seed
       anim.event(e, F, aidOf);
     } else if (e.type === 'hit') {
       const q = P(e.id);
+      // (thrown back by the Doorman's shell, fight-3: a skid of dust from where they stood)
+      const by = P(e.by);
+      if (e.how === 'shot' && by?.gun && WEAPONS[by.gun].cone && prev.has(q.id)) {
+        const [x0, y0] = prev.get(q.id);
+        if (Math.hypot(q.x - x0, q.y - y0) > 0.25) {
+          fx.skid(W(x0, y0, 0.05), W(q.x, q.y, 0.05));
+          // (slid back over SLIDE s from where the picture had them, not a metre in one picture)
+          const [sx, sy] = slideOf(q.id, F.t);
+          slides.set(q.id, { ox: x0 + sx - q.x, oy: y0 + sy - q.y, t: F.t });
+          prev.set(q.id, [q.x, q.y]);
+        }
+      }
       fx.pop(W(q.x, q.y, BAR_Y + 0.45), `-${e.dmg}`, q.side === 'you' ? 'you' : q.side === 'ally' ? 'ally' : 'them');
       if (e.bleed === 'hit') stage.gore?.hit(B(e.id)?.id, B(e.by)?.id);
       else stage.gore?.blow(B(e.id)?.id, B(e.by)?.id, 'punch');
@@ -500,7 +571,11 @@ export async function mountFight(host, { stage, demo = window.__demo, seed: seed
       q.face = Math.atan2(by.y - q.y, by.x - q.x);
       bq.down = true;
       bq.run = false;
-      put(bq, q, q.x, q.y, 0);
+      // (from where the picture last had them: a blow's throw back on this tick, the Doorman's a metre, is eased
+      // in by the frames after it, not jumped)
+      const [dx0, dy0] = prev.get(q.id) ?? [q.x, q.y];
+      const [sx, sy] = slideOf(q.id, F.t);
+      put(bq, q, dx0 + sx, dy0 + sy, 0);
       bq.body.snapYaw?.();
       // (the city's own fall: anim.js, fall_back → lie_hurt for you and Earl, death_collapse → lie_still for them)
       anim.event(e, F, aidOf);
@@ -533,7 +608,12 @@ export async function mountFight(host, { stage, demo = window.__demo, seed: seed
       const p = F.people.find(q => q.id === sid);
       if (B.run) actors.stop(B.id);
       B.run = false;
-      if (p && !p.down) put(B, p, p.x, p.y, 0);
+      // (where it is drawn: the rules' place and what is left of a slide; put at the rules' place alone, a body
+      // still sliding was moved at once as the round ended)
+      if (p && !p.down) {
+        const [sx, sy] = slideOf(p.id, F.t);
+        put(B, p, p.x + sx, p.y + sy, 0);
+      }
     }
     // (walked back onto the stairs: down them, the city's own flight; where there are none, off across the lot, the
     // camera with you)
@@ -555,6 +635,24 @@ export async function mountFight(host, { stage, demo = window.__demo, seed: seed
   // EVERY FRAME OF THE STAGE (its clock: paused with it, at its speed): the fight's ticks, then the bodies where the
   // ticks put them, eased between two ticks
   const prev = new Map();
+  // THROWN BACK, SLID NOT JUMPED (fight-3): the Doorman throws them a metre in one tick, more than the picture may move
+  // anyone at once (watch.js). The rules' place is theirs at once; the picture adds back what is left of the throw, over
+  // SLIDE s: sim id → { ox, oy, t } (the throw, arena m, back toward where they stood; the fight's clock it came)
+  const SLIDE = 0.22;
+  /** (raidfight-3) A move this far (m) past a body's own step in one tick is slid, not eased over its tick. */
+  const SHOVE = 0.15;
+  const slides = new Map();
+  const slideOf = (id, T) => {
+    const S = slides.get(id);
+    if (!S) return [0, 0];
+    const u = Math.min(1, Math.max(0, (T - S.t) / SLIDE));
+    if (u >= 1) {
+      slides.delete(id);
+      return [0, 0];
+    }
+    const f = 1 - u * u * (3 - 2 * u);
+    return [S.ox * f, S.oy * f];
+  };
   offs.push(actors.onFrame(dt => {
     if (!F || dead) return;
     // (the walk in of the first of them, before the rules start: the fight's clock below zero)
@@ -578,7 +676,26 @@ export async function mountFight(host, { stage, demo = window.__demo, seed: seed
       step(F, moveNow());
       acc -= TICK;
       n += 1;
+      // (the effects of this tick's events are timed from this tick, not from the last picture: fight-3, the shells'
+      // spread is shorter than a few ticks)
+      fx.now = F.t;
       for (; seen < F.events.length; seen++) play(F.events[seen]);
+      // (raidfight-2: MOVED FURTHER THAN ITS OWN STEP, SLID NOT EASED OVER ONE TICK: every knock back, not only the
+      // Doorman's (the Long-eye's half metre, the six-shot's, a blow's), was eased over one tick: 0.3 to 0.5 m in two
+      // pictures. Now each slides over SLIDE s from where the picture had it, as the Doorman's always did; the rules'
+      // places are theirs at once as before. Only a move SHOVE m past its own step: the small shoves of two bodies
+      // walking into each other, every tick, are eased over their tick as before. (raidfight-3: at 0.05 m they were
+      // slid too, and a slide begun again every tick never got anywhere: Cousin Earl, shoving at a heavy, was drawn
+      // further and further behind where the rules had him, and put there at once when the round ended: 2.3 m)
+      for (const p of F.people) {
+        const was = prev.get(p.id);
+        if (!was || p.down || slides.has(p.id) && slides.get(p.id).t === F.t) continue;
+        if (Math.hypot(p.x - was[0], p.y - was[1]) > Math.hypot(p.vx, p.vy) * TICK + SHOVE) {
+          const [sx, sy] = slideOf(p.id, F.t);
+          slides.set(p.id, { ox: was[0] + sx - p.x, oy: was[1] + sy - p.y, t: F.t });
+          prev.set(p.id, [p.x, p.y]);
+        }
+      }
       if (hold?.at !== null && hold?.at !== undefined && F.t >= hold.at && !hold.held) {
         hold.held = true;
         stage.setSpeed(0);
@@ -592,11 +709,20 @@ export async function mountFight(host, { stage, demo = window.__demo, seed: seed
     // (the blows of the next few ticks, with the keys as they are: anim.js starts their wind-ups in time)
     if (n) anim.predict(F, moveNow());
     const a = Math.min(1, acc / TICK);
+    // (anim-1: where everybody is drawn this frame; the hand-posed bodies then hold them off one another, so nobody
+    // stands in anybody: gunner.js apart. The old bodies have no such thing and are drawn where the rules have them)
+    const at = new Map();
+    for (const p of F.people) {
+      const [x0, y0] = prev.get(p.id) ?? [p.x, p.y];
+      const [sx, sy] = slideOf(p.id, F.t + acc);
+      at.set(p.id, [x0 + (p.x - x0) * a + sx, y0 + (p.y - y0) * a + sy]);
+    }
+    const heldOff = anim.apart?.(F, at, dt) ?? null;
     for (const p of F.people) {
       const B = bodies.get(p.id) ?? bodyFor(p);
-      const [x0, y0] = prev.get(p.id) ?? [p.x, p.y];
       const v = p.down ? 0 : Math.hypot(p.vx, p.vy);
-      put(B, p, x0 + (p.x - x0) * a, y0 + (p.y - y0) * a, v);
+      const q = at.get(p.id);
+      put(B, p, q[0], q[1], heldOff?.has(p.id) ? Math.min(v, heldOff.get(p.id)) : anim.paceOf?.(p, v) ?? v);
     }
     // (everyone's clip, look and facing for this frame: the gun held or raised, a blow winding up, the run, the walk)
     anim.frame(F, F.t + acc, dt, aidOf);
@@ -651,12 +777,28 @@ export async function mountFight(host, { stage, demo = window.__demo, seed: seed
       const B = bodies.get(p.id);
       if (!B || !actors.has(B.id)) continue;
       const Q = actors.get(B.id);
-      people.push({ who: p.kind === 'boss' ? 'boss' : p.side, p: [Q.x, Q.y, Q.z], head: Q.y + BAR_Y, frac: p.hp / p.max, label: p.side === 'you' ? 'you' : p.side === 'ally' ? 'Earl' : FOES[p.kind].name, hp: p.hp, down: p.down || (phase === 'over' && p.side === 'you' && F.over.result === 'left') });
+      people.push({ who: p.kind === 'boss' ? 'boss' : p.side, p: [Q.x, Q.y, Q.z], head: Q.y + BAR_Y, frac: p.hp / p.max, label: p.side === 'you' ? 'you' : p.side === 'ally' ? (F.build.earl ? `Earl · ${EARL_WAYS[F.build.earl].name}` : 'Earl') : FOES[p.kind].name, hp: p.hp, down: p.down || (phase === 'over' && p.side === 'you' && F.over.result === 'left') });
     }
     const me = F.people[0];
     const Wn = WEAPONS[me.gun ?? me.arm];
     const MQ = actors.get(YOU);
+    // (Cousin Earl told a way, fight-3: whom he goes for and the spot he holds, while the round is on; his way is
+    // said on his name plate)
+    const E = F.people.find(p => p.side === 'ally');
+    const way = F.build.earl;
+    const EB = E && bodies.get(E.id);
+    let earl = null;
+    if (phase === 'fight' && E && !E.down && way && EB && actors.has(EB.id)) {
+      const Q = actors.get(EB.id);
+      const T = E.target ? F.people.find(p => p.id === E.target && !p.down) : null;
+      const TB = T && bodies.get(T.id);
+      const TQ = TB && actors.has(TB.id) ? actors.get(TB.id) : null;
+      // (the spot he holds: his goal when it is not the one he goes for, out in front and one at a time)
+      const holds = (way === 'front' || way === 'block') && E.goal && T && Math.hypot(E.goal[0] - T.x, E.goal[1] - T.y) > 0.6;
+      earl = { at: [Q.x, Q.y + 0.05, Q.z], to: TQ ? [TQ.x, TQ.y + 0.05, TQ.z] : null, spot: holds ? W(E.goal[0], E.goal[1], 0.05) : null };
+    }
     fx.draw({
+      earl,
       outline: outline(),
       // (its words for leaving only while a round is on: after it, the plain mark, and nothing over the bodies)
       exit: exitMark(phase === 'fight' && Math.hypot(me.x - ARENA.exit[0], me.y - ARENA.exit[1]) < ARENA.exitR + 2.5),
@@ -672,10 +814,144 @@ export async function mountFight(host, { stage, demo = window.__demo, seed: seed
 
   // ── THE FRAME: the run's (panels.js; what it shows, dock.js) ──────────────────────────────────────────────────
   /** What the frame reads: the phase, the pick, the results, the round and its report. */
-  const now = () => ({ phase, pick, results, F, R: last, coming: phase === 'arrive' && !!pre });
+  const now = () => ({ phase, pick, results, F, R: last, coming: phase === 'arrive' && !!pre, duel: duelPick, raid: raidPick });
+
+  // ── ONE-ON-ONE, TO LOOK AT (anim-1): the run's own fight, played by itself on the lot ───────────────────────────
+  const DUEL = RUN_CONFIG.duel;
+  const duelPick = { arm: 'hands', foe: 'brawler' };
+  const rivalId = style => `fight:rival:${style}`;
+  let duelUi = null;
+  let duelSeed = seed0;
+  async function watchDuel() {
+    if (round() || phase === 'duel' || dead) return;
+    const { arm, foe } = duelPick;
+    const Y = DUEL.you[arm];
+    const inputs = { you: { weapon: Y.weapon, hp: 85, max: DUEL.hp.max, hits: Y.hits }, foe: rivalFoe(foe, { id: 'them', name: RIVALS[foe].name, hp: 58 }), cap: DUEL.cap, hit: DUEL.hit / 100, brawl: { ...DUEL.brawl }, arena: { ...DUEL.arena } };
+    duelSeed += 1;
+    const seedNow = duelSeed * 7919 + 13;
+    const R = runDuel(inputs, seedNow);
+    const D = { inputs, seed: seedNow, result: R.over.result, seconds: R.over.t, you: { why: [Y.label, 'to look at: no rule changed'] }, them: { why: [RIVALS[foe].says] } };
+    phase = 'duel';
+    held.clear();
+    ui.toggleBuild(false);
+    if (ui.cardUp) ui.putAway();
+    ui.paint();
+    // (the last round's people off, the two put on the lot, behind the stage's own black)
+    const fade = stage.travel?.fade ?? null;
+    if (fade) await fade.out();
+    if (dead) return;
+    clearBodies();
+    rides?.cancel?.(YOU);
+    actors.stop(YOU);
+    const [yx, , yz] = W(ARENA.w / 2 - 1.2, ARENA.h / 2);
+    const [tx, , tz] = W(ARENA.w / 2 + 1.2, ARENA.h / 2);
+    actors.show?.(YOU, true);
+    actors.place(YOU, yx, yz, Math.atan2(tx - yx, tz - yz));
+    const them = rivalId(foe);
+    if (!actors.has(them)) actors.add({ id: them, name: RIVALS[foe].name, x: tx, z: tz, ry: Math.atan2(yx - tx, yz - tz), look: (foe === 'bigman' ? LOOKS.bigman : foe === 'quick' || foe === 'knife' ? LOOKS.runner : LOOKS.heavy)(`rival:${foe}`) });
+    else actors.place(them, tx, tz, Math.atan2(yx - tx, yz - tz));
+    actors.show?.(them, true);
+    camera.focus(YOU);
+    camera.arrived();
+    watch.cut();
+    if (fade) fade.in();
+    first = false;
+    await actors.seconds(0.4);
+    duelUi ??= createDuel({ stage, city, root: ui.root });
+    let rec = null;
+    try {
+      rec = await duelUi.play({ duel: D, you: YOU, them, youName: 'You', themName: RIVALS[foe].name[0].toUpperCase() + RIVALS[foe].name.slice(1) });
+    } catch (err) {
+      console.warn('[fight] the one-on-one did not play:', err);
+    }
+    if (dead) return;
+    phase = 'pick';
+    ui.paint();
+    ui.toast(rec ? `${Y.label} against ${RIVALS[foe].name}: you ${rec.seen === 'won' ? 'won' : 'lost'} in ${D.seconds.toFixed(1)} s (B to pick another)` : 'The one-on-one did not play');
+    return rec;
+  }
+  // ── THE RAID ON YOUR HOME, TO LOOK AT (raidfight-1): the run's own raid fight, played by itself at the trailer's
+  // door (demo/run/raidfight.js, the scene the run calls): who comes, how many, what is in your hands, Earl or not.
+  // `?raid=<crew>:<hold>:<size>:<earl 0|1>:<seed>` picks one (the film tool's way in; the seed: that very fight)
+  const raidPick = (() => {
+    const [crew, hold, size, earl, s] = (new URLSearchParams(location.search).get('raid') ?? '').split(':');
+    // (raidfight-2: AT NIGHT by default, as the game always has it, under the very light it uses; `&night=0`, or Day
+    // in the rows, the same raid by day to compare)
+    const nightQ = new URLSearchParams(location.search).get('night');
+    return { crew: RAID_CREWS.includes(crew) ? crew : 'rush', hold: RAID_HOLDS.some(([k]) => k === hold) ? hold : 'doorman', size: /^[012]$/.test(size ?? '') ? Number(size) : 1, earl: earl === '1', seed: s && Number.isFinite(Number(s)) ? Number(s) : null, night: nightQ !== '0' };
+  })();
+  let raidUi = null;
+  let raidSeed = seed0;
+  /** (raidfight-1) the trailer park's zone was loaded for a raid: the site's own is put back before the next round */
+  let zoneMoved = false;
+  async function watchRaid() {
+    if (round() || phase === 'duel' || phase === 'raid' || dead) return;
+    const P = raidPick;
+    raidSeed += 1;
+    const D = raidCase({ crew: P.crew, size: P.size, hold: P.hold, earl: P.earl, seed: P.seed ?? raidSeed * 7919 + 29 });
+    phase = 'raid';
+    held.clear();
+    ui.toggleBuild(false);
+    if (ui.cardUp) ui.putAway();
+    ui.paint();
+    // (the last round's people off; you at your trailer's door (the run's own pad, a1: the stage's map), behind the
+    // stage's black, which the raid takes over and lifts on them coming)
+    const fade = stage.travel?.fade ?? null;
+    if (fade) await fade.out();
+    if (dead) return;
+    clearBodies();
+    rides?.cancel?.(YOU);
+    actors.stop(YOU);
+    // (the trailer park's zone, under the black, when the page is at a site of its own (the dead mall): the trailers
+    // are built only in it. The next round puts the site's own back: start)
+    const parkZone = stage.map?.zoneOf?.('projects') ?? null;
+    if (parkZone && stage.loader?.zone && stage.loader.zone !== parkZone && stage.enterZone) {
+      try {
+        await stage.enterZone(parkZone, stage.map.viewOf?.(parkZone) ?? null);
+        zoneMoved = true;
+      } catch (err) {
+        console.warn('[fight] the trailer park did not load:', err);
+      }
+      if (dead) return;
+    }
+    const spots = stage.map?.BLOCKS?.projects?.spots ?? {};
+    const [st0, dr0] = [spots['home:a1:step'], spots['home:a1:door']];
+    actors.show?.(YOU, true);
+    if (st0 && dr0) actors.place(YOU, st0[0], st0[1], Math.atan2(st0[0] - dr0[0], st0[1] - dr0[1]));
+    camera.focus(YOU);
+    camera.arrived();
+    watch.cut();
+    first = false;
+    // (night or day, under the black: the stage's own clock, the light it brings with it; the page's day after)
+    stage.setClock?.(P.night ? { day: 5, hour: 21.5 } : { day: 5, hour: 13 });
+    if (!raidUi) {
+      raidUi = createRaidFight({ stage, city, root: ui.root });
+      // (raidfight-5: the page taken off with a raid up: the scene ends at once and puts the stage's light back)
+      offs.push(() => raidUi.leave());
+    }
+    let rec = null;
+    try {
+      rec = await raidUi.play({ raid: D, you: YOU, pad: 'a1' });
+    } catch (err) {
+      console.warn('[fight] the raid did not play:', err);
+      if (fade?.dark) fade.in();
+    }
+    if (dead) return;
+    // (the page's own day again; a night raid's light is given back by the scene)
+    if (P.night) {
+      const fade2 = stage.travel?.fade ?? null;
+      if (fade2 && !fade2.dark) await fade2.out();
+      stage.setClock?.({ day: 5, hour: 13 });
+      if (fade2) fade2.in();
+    }
+    phase = 'pick';
+    ui.paint();
+    ui.toast(rec ? `The raid: ${D.them.text}, ${D.you.label} in your hands${P.earl ? ', Earl beside you' : ''}: you ${rec.seen === 'won' ? 'held the door' : 'went down'} in ${D.seconds.toFixed(1)} s (B to pick another)` : 'The raid did not play');
+    return rec;
+  }
   function usePreset(id) {
     const P = PRESETS[id];
-    Object.assign(pick, { weapon: P.weapon, gear: [...P.gear], ally: P.ally });
+    Object.assign(pick, { weapon: P.weapon, gear: [...P.gear], ally: P.ally, earl: 'side' });
     ui.paint();
   }
   /** What the frame's parts ask for (a key or a click). Nothing while a round is on but Back. */
@@ -686,7 +962,7 @@ export async function mountFight(host, { stage, demo = window.__demo, seed: seed
       usePreset(id);
     },
     level(id) {
-      if (round() || !LEVELS[id]) return;
+      if (round() || !levelOf(id) || !LEVEL_KEYS.includes(id)) return;
       if (ui.cardUp) ui.putAway();
       pick.level = id;
       ui.paint();
@@ -706,7 +982,57 @@ export async function mountFight(host, { stage, demo = window.__demo, seed: seed
       pick.ally = !pick.ally;
       ui.paint();
     },
+    /** How Earl fights (fight-3): one of his three ways; the one he is told already, back to his old way. Brings him. */
+    earl(way) {
+      if (round() || !EARL_WAYS[way]) return;
+      pick.earl = pick.earl === way ? 'side' : way;
+      pick.ally = true;
+      ui.paint();
+    },
     fight: () => start(),
+    /** (anim-1) One-on-one, to look at: what you fight with, who you face, and the watching of it. */
+    duelArm(id) {
+      if (round() || phase === 'duel' || !DUEL.you[id]) return;
+      duelPick.arm = id;
+      ui.paint();
+    },
+    duelFoe(id) {
+      if (round() || phase === 'duel' || !RIVALS[id]) return;
+      duelPick.foe = id;
+      ui.paint();
+    },
+    duel: () => watchDuel(),
+    /** (raidfight-1) The raid to look at: who comes, how many, what is in your hands, Earl; and the watching of it. */
+    raidCrew(id) {
+      if (round() || phase === 'raid' || !RAID_CREWS.includes(id)) return;
+      raidPick.crew = id;
+      raidPick.seed = null;
+      ui.paint();
+    },
+    raidSize(k) {
+      if (round() || phase === 'raid') return;
+      raidPick.size = k;
+      raidPick.seed = null;
+      ui.paint();
+    },
+    raidHold(id) {
+      if (round() || phase === 'raid') return;
+      raidPick.hold = id;
+      raidPick.seed = null;
+      ui.paint();
+    },
+    raidEarl() {
+      if (round() || phase === 'raid') return;
+      raidPick.earl = !raidPick.earl;
+      raidPick.seed = null;
+      ui.paint();
+    },
+    raidNight(on) {
+      if (round() || phase === 'raid') return;
+      raidPick.night = !!on;
+      ui.paint();
+    },
+    raid: () => watchRaid(),
     /** BACK TO THE RUN (a try-out stop only). Mid-round it asks first, in the page; `sure`: asked and answered. */
     back(sure = false) {
       if (!tryout) return;
@@ -735,6 +1061,23 @@ export async function mountFight(host, { stage, demo = window.__demo, seed: seed
   const api = {
     get phase() {
       return phase;
+    },
+    /** (anim-1) For the tools: a one-on-one to look at, picked and watched; the one playing, and every one played. */
+    watchDuel: (arm, foe) => {
+      if (arm) duelPick.arm = arm;
+      if (foe) duelPick.foe = foe;
+      return watchDuel();
+    },
+    get duel() {
+      return { active: !!duelUi?.active, state: duelUi?.state ?? null, log: duelUi?.log.slice() ?? [], pick: { ...duelPick } };
+    },
+    /** (raidfight-1) For the tools: the raid to look at, picked and watched; the one playing, and every one played. */
+    watchRaid: (o = {}) => {
+      Object.assign(raidPick, o);
+      return watchRaid();
+    },
+    get raid() {
+      return { active: !!raidUi?.active, state: raidUi?.state ?? null, log: raidUi?.log.slice() ?? [], pick: { ...raidPick }, skipButton: !!raidUi?.skipButton };
     },
     get fight() {
       return F;

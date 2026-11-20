@@ -48,8 +48,9 @@ const cap = s => (s ? s[0].toUpperCase() + s.slice(1) : s);
 const signed = n => (n > 0 ? `+${n}` : `−${-n}`);
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const kbd = key => h('kbd', null, key);
-const ROLE = { neighbour: 'neighbour', buyer: 'buyer', mark: 'mark', debtor: 'debtor', shopkeeper: 'shopkeeper', stallholder: 'stallholder' };
-const PLACE_ORDER = ['park', 'market'];
+const ROLE = { neighbour: 'neighbour', buyer: 'buyer', mark: 'mark', debtor: 'debtor', shopkeeper: 'shopkeeper', stallholder: 'stallholder', foreman: 'foreman', driver: 'driver', boss: 'flyers', office: 'office worker' };
+// (batch-1: every place you can work, in the config's order: the park, the market, the docks, the plaza)
+const PLACE_ORDER = Object.keys(RUN_CONFIG.places).filter(id => RUN_CONFIG.places[id].jobs && !RUN_CONFIG.places[id].locked);
 const placeName = (cfg, p) => cap(cfg.places[p].label);
 
 /** A section of a panel: a heading in the kit's sign face and its body. */
@@ -154,7 +155,7 @@ export function characterStats({ cfg, v, state, dayStart }) {
       h('div', { class: 'k-stats' },
         statRow('Day and hour', `Day ${v.day} · ${v.clock}`),
         statRow('Where', cap(v.placeLabel)),
-        statRow(v.place === 'market' ? 'Carried · at risk' : 'Carried', money(v.carried), true),
+        statRow(v.danger?.here ? 'Carried · at risk' : 'Carried', money(v.carried), true),
         statRow('Banked · safe', money(v.banked)),
         statRow('Energy', `${v.energy} / ${v.energyMax}${v.tired ? ' · tired' : ''}`),
         statRow('Heat here', `${v.heatHere ?? v.heat} / ${v.heatMax}${here?.police ? ' · police about' : ''}`),
@@ -285,13 +286,24 @@ function boughtEl({ cfg, v, choosing, go }) {
  * you are in comes first, with who is about there this hour (only someone about can see what you do) and the view's
  * own sentence of who would tell.
  */
+/** (memory-1) One person's mark under their row: what they remember and for how long, in the run's own words. */
+function markLine(m) {
+  const tone = m.fear ? 'is-fear' : m.holds ? 'is-holds' : 'is-hates';
+  return h('p', { class: `rn-mark-line ${tone}`, title: `${m.did}: ${m.words}${m.due ? `. On day ${m.due} ${m.warned ? 'they come' : 'they may come'} to your door for another go` : ''}` },
+    h('i', { 'aria-hidden': 'true' }, m.fear ? '◆' : m.holds ? '▲' : '●'), h('span', null, m.did), h('em', null, ` · ${m.words}`));
+}
+
 export function characterPeople({ cfg, v }) {
   const T = cfg.trust;
   const at = v.trustHere?.place ?? (v.trust ?? []).find(t => t.here)?.place ?? null;
   const order = PLACE_ORDER.slice().sort((a, b) => Number(b === at) - Number(a === at));
   const pay = Math.round(T.withPay * (tierOf(cfg, 'park')?.pay ?? 1));
   const payMarket = Math.round(T.withPay * (tierOf(cfg, 'market')?.pay ?? 1));
+  // (memory-1: what each person remembers of you this week, and who is coming to your door: the view's `marks`, `coming`)
+  const marks = new Map((v.marks ?? []).map(m => [m.who.id, m]));
+  const coming = v.coming ?? [];
   return [
+    coming.length ? h('p', { class: 'rn-note rn-coming' }, h('b', null, 'Coming to your door: '), coming.map(c => c.text).join('; '), '.') : null,
     ...order.map(place => {
       const all = v.people.filter(p => p.place === place);
       const trust = new Map((v.trust ?? []).filter(t => t.place === place).map(t => [t.id, t]));
@@ -317,13 +329,53 @@ export function characterPeople({ cfg, v }) {
               here ? h('span', { class: `rn-about${t.around ? ' is-on' : ''}` }, t.around ? 'about now' : 'not about') : null,
               t.offDays ? h('span', { class: 'rn-off' }, t.offText) : null) : null,
             // (a regular: how hooked, in words, under the row)
-            p.regular ? h('p', { class: `rn-hooked-line${p.regular.hooked ? ' is-hooked' : ''}` }, hookedText(cfg, p.regular)) : null);
+            p.regular ? h('p', { class: `rn-hooked-line${p.regular.hooked ? ' is-hooked' : ''}` }, hookedText(cfg, p.regular)) : null,
+            // (memory-1: what they remember of you, for how long: "you beat him on day 2 · gives way for 5 more days")
+            marks.has(p.id) ? markLine(marks.get(p.id)) : null);
         })),
         h('p', { class: 'rn-note' }, `${plural(left, 'person', 'people')} left to work today of ${all.length}. Whoever you work (not the safe job) is out for the rest of the day; everyone is calm again in the morning.`));
     }),
+    h('p', { class: 'rn-note rn-mark-key' }, h('b', null, 'They remember a big act for a week'), ` (${cfg.memory?.days ?? 7} days): a fight, won or lost; robbing them to their face; the door shut on them. Beaten or robbed by you, they `,
+      h('b', null, 'give way'), ': a debt is paid without a fight, no swing at your door, nobody tells (robbed, they still talk), never the one casing your crib; no sales to them or work from them. Lose a fight where they are and it ends at once. When the week is up they come to your door for another go, warned the evening before, unless you pay them off.'),
     h('p', { class: 'rn-note rn-trust-key' }, 'Trust runs ', h('b', null, `${signedT(T.min)} to ${signedT(T.max)}`), ', lasts across nights and drifts back to 0; each place\'s people are its own. ',
       trustMark({ band: 'against', trust: T.against, bandText: T.bands.against }), ` at ${signedT(T.against)} or less: won't deal with you; about at their place, ${T.tellPct}% each to call in a crime or the bins there (heat +${T.tellHeat}). `,
       trustMark({ band: 'with', trust: T.with, bandText: T.bands.with }), ` at ${signedT(T.with)} or more: they look away, and a job with them pays ${money(pay)} more (${money(payMarket)} at the market).`),
+  ];
+}
+
+/**
+ * (styles-1) THE FIGHT TAB: what you fight with, one-on-one and when you are jumped (one choice among what you own, a
+ * button each: a press sets it, no hour; E steps to the next), what each is for, and every punch style with where it is
+ * taught (Learn, where you stand and can pay). From the view's `fight` and `shop` alone.
+ *   ctx: { cfg, v, choosing, go(key) }
+ */
+export function characterFight({ v, choosing, go }) {
+  const F = v.fight;
+  if (!F) return [h('p', { class: 'rn-empty' }, 'Nothing to fight with.')];
+  const cutter = (v.shop ?? []).find(s => s.item === 'cutter');
+  const said = { hands: 'What you were born with.', cutter: cutter ? `${cutter.does}.` : '' };
+  for (const st of F.styles) said[st.style] = st.does;
+  const arms = F.arms.map(a => h('button', {
+    type: 'button', class: `u-btn rn-fightwith${a.chosen ? ' is-on is-go' : ''}`, 'aria-pressed': String(a.chosen), 'data-arm': a.arm,
+    disabled: !choosing || a.chosen || !a.key ? true : null,
+    title: a.chosen ? `You fight with ${a.label}` : `Fight with ${a.label}: no hour`,
+    onclick: () => (a.key ? go(a.key) : null),
+  }, h('b', null, cap(a.label)), a.chosen ? h('small', null, ' you fight with it') : null));
+  const lone = F.arms.length < 2;
+  return [
+    sec('Fight with',
+      h('p', { class: 'rn-note' }, 'You fight with ', h('b', null, F.label), ': one-on-one, and when you are jumped. Change it any time you are not in a fight. Every fight card says what you win with it.'),
+      lone ? h('p', { class: 'rn-empty' }, 'Bare hands is all you have. Learn a punch style, or buy the box cutter at your crib (L, Fight, says where).')
+        : h('div', { class: 'rn-fightwith-row', role: 'group', 'aria-label': 'Fight with' }, arms),
+      lone ? null : h('p', { class: 'rn-note' }, h('kbd', null, 'E'), ' steps to the next.'),
+      h('ul', { class: 'rn-owns' }, F.arms.map(a => h('li', null, h('b', null, cap(a.label)), h('span', null, said[a.arm] ?? ''))))),
+    sec('Punch styles',
+      h('ul', { class: 'rn-styles' }, F.styles.map(st => h('li', { class: st.known ? 'is-known' : '' },
+        h('div', { class: 'rn-style-top' }, h('b', null, cap(st.label)), h('span', { class: 'rn-style-price' }, money(st.price)), st.known ? h('span', { class: 'hk-tag is-up' }, 'yours') : null),
+        h('p', { class: 'rn-note' }, st.does),
+        h('p', { class: 'rn-note rn-style-where' }, `${st.keeper ? `${st.keeper.name} teaches it` : 'Taught'} ${st.where}.`),
+        !st.known && st.here ? h('button', { type: 'button', class: `u-btn${st.available && choosing ? ' is-go' : ''}`, disabled: !(st.available && choosing) ? true : null, 'data-learn': st.style,
+          title: st.available ? `Learn ${st.label}: $${st.price} from what you carry, no hour` : st.why, onclick: () => go(st.key) }, `Learn it · ${money(st.price)}`, st.available ? null : h('small', null, ` ${st.why}`)) : null)))),
   ];
 }
 
@@ -413,8 +465,11 @@ function streetEl(ctx, place) {
   for (const it of p.shop ?? []) {
     const c = at ? v.choices.find(x => x.choice.do === 'shop' && x.choice.item === it.item) : null;
     const sold = at ? v.shopHere.find(s => s.item === it.item) : null;
-    out.push(row(it.label, money(it.price), `${it.does}. Paid from what you carry; no hour.${it.perDay ? ` ${it.perDay} a day.` : ''} B, the shop, sells it here; the Stuff panel (O) lists everything.`,
-      sold?.left !== null && sold?.left !== undefined ? h('span', { class: `rn-supply${sold.left ? '' : ' is-none'}` }, `${sold.left} of ${it.perDay} left today`) : null, tag(c, 'E')));
+    // (batch-1: the day's one count of food and drink, every place's together: config `food`)
+    const day = v.food?.perDay != null && it.gives?.energy ? v.food : null;
+    out.push(row(it.label, money(it.price), `${it.does}. Paid from what you carry; no hour.${it.perDay ? ` ${it.perDay} a day.` : ''}${day ? ` At most ${day.perDay} food or drink a day, every place's together.` : ''} B, the shop, sells it here; the Stuff panel (O) lists everything.`,
+      day?.full ? h('span', { class: 'rn-supply is-none' }, cap(cfg.food.full))
+        : sold?.left !== null && sold?.left !== undefined ? h('span', { class: `rn-supply${sold.left ? '' : ' is-none'}` }, `${sold.left} of ${it.perDay} left today${day ? ` · ${day.eaten} of ${day.perDay} food today` : ''}`) : null, tag(c, 'E')));
   }
   // (goods-1: the place's connect, P on the bar, and its things, K: as its shop, all of it in the Stuff panel too)
   const conn = (v.connects ?? []).find(c => c.place === place);
@@ -459,11 +514,11 @@ export function movesBody(ctx) {
   const jobsAt = place => Object.entries(cfg.jobs[place]);
   const count = PLACE_ORDER.reduce((n, p) => n + jobsAt(p).length, 0);
   return [
-    h('p', { class: 'rn-lede' }, `${count} jobs at two places, a third place locked, and ${v.place === 'park' || v.place === 'market' ? `${v.options.length} dealt this hour` : v.route ? `${v.hand.length} card${v.hand.length === 1 ? '' : 's'} dealt at ${v.placeLabel}` : 'none dealt where you are'}. Each hour a place deals its safe job and two of the rest that still have somebody to do them to. Every job costs an hour and ${e.perHour} energy.`),
+    h('p', { class: 'rn-lede' }, `${count} jobs at ${PLACE_ORDER.length} places, one more locked, and ${PLACE_ORDER.includes(v.place) ? `${v.options.length} dealt this hour` : v.route ? `${v.hand.length} card${v.hand.length === 1 ? '' : 's'} dealt at ${v.placeLabel}` : 'none dealt where you are'}. Each hour a place deals its safe job and two of the rest that still have somebody to do them to. Every job costs an hour and ${e.perHour} energy.`),
     // (routes-1: on a way, the way first: where you are and the hand)
     ...(v.route ? (v.routes ?? []).filter(r => r.id === v.route.id).map(r => routeEl(ctx, r)) : []),
     ...PLACE_ORDER.map(place => sec(`${placeName(cfg, place)}${v.place === place || (place === 'park' && v.place === 'crib') ? ' · you are here' : ''}`,
-      place === 'market' ? h('p', { class: 'rn-note is-risk' }, `Pays about twice the park, and people will take it off you: every hour there can go wrong (now ${dangerAt(cfg, { ...state, place: 'market', hoursThere: state.place === 'market' ? state.hoursThere : 0 }).jump.chance}% jumped for a ${state.place === 'market' ? 'this' : 'first'} hour, more each hour and each $${cfg.jump.perDollars} on you; police from heat ${cfg.police.from}).`) : h('p', { class: 'rn-note' }, 'Safe and poor: nobody jumps you here. The police come only once the place itself is hot.'),
+      placeNote(ctx, place),
       (v.places ?? []).find(q => q.place === place) ? h('p', { class: `rn-note${(v.places ?? []).find(q => q.place === place).hot ? ' is-risk' : ''}` }, (v.places ?? []).find(q => q.place === place).text) : null,
       h('ul', { class: 'rn-jobs' }, jobsAt(place).map(([id, job]) => jobEl(cfg, v, state, place, id, job, ctx.keyFor))),
       streetEl(ctx, place))),
@@ -479,9 +534,9 @@ export function movesBody(ctx) {
       h('ul', { class: 'rn-jobs' },
         move('Step out', `From the crib to the trailer park. No hour. Take any of your banked money with you (none unless you say). Needs ${e.perHour} energy.`, choiceKey(c => c.do === 'out')),
         move('Go inside', 'From the trailer park into the crib. No hour. Everything you carry is banked: safe. H picks it.', choiceKey(c => c.do === 'inside')),
-        move('Subway to the flea market', `One hour and ${e.perHour} energy, ${money(s.fare)} fare from what you carry. You need energy ${e.rideBack + e.perHour} to get there and back.`, choiceKey(c => c.do === 'subway' && c.to === 'market' && !c.hop), money(s.fare)),
+        ...Object.entries(cfg.places.park.links).filter(([to]) => !cfg.places[to]?.locked).map(([to]) => move(`Subway to ${cfg.places[to].label}`, `One hour and ${e.perHour} energy, ${money(s.fare)} fare from what you carry. You need energy ${e.rideBack + e.perHour} to get there and back. One ride from the trailer park.`, choiceKey(c => c.do === 'subway' && c.to === to && !c.hop), money(s.fare))),
         move('Hop it', `The subway without the fare: free, ${s.hopCaughtPct}% you are seen (heat +${s.hopHeat}), and you still ride. Carrying under ${money(s.fare)}, it is the only way.`, choiceKey(c => c.do === 'subway' && c.hop), 'free'),
-        move('Head home', `From the market, ${money(s.fare)} or hop it. The hour you leave is still an hour there: it can still go wrong. Home, what you carry is banked. H picks it.`, choiceKey(c => c.do === 'subway' && c.to === 'park' && !c.hop), money(s.fare)),
+        move('Head home', `From any place, ${money(s.fare)} or hop it. The hour you leave is still an hour there: it can still go wrong. Home, what you carry is banked. H picks it.`, choiceKey(c => c.do === 'subway' && c.to === 'park' && !c.hop), money(s.fare)),
         move('Sleep', `At the crib. The day ends: energy back to ${state.owned.bed ? e.bed : e.mattress}, heat −${cfg.heat.nightDrop}, everyone calm again.`, choiceKey(c => c.do === 'sleep')),
         move('Buy', 'At the crib, from banked money: B, the shop at home, sells the three; the Stuff panel (O) lists it all.', v.choices.find(c => c.choice.do === 'buy' && c.available) ?? null),
         move('Morning', `Out of the clinic or the jail and home. The day after the clinic starts ${e.clinicMorning} energy lower, after jail ${e.jailMorning}.`, choiceKey(c => c.do === 'morning')))),
@@ -594,7 +649,8 @@ function defencesEl(ctx) {
     : h('span', { class: 'hk-tag is-why' }, why ?? 'not now'));
   const rows = d.things.map(t => h('li', { class: `rn-thing${t.owned ? ' is-owned' : ''}` },
     h('div', { class: 'rn-job-head' }, h('b', null, cap(thingWord(t.label))), h('span', { class: 'rn-pay' }, t.owned ? 'yours' : money(t.price))),
-    h('p', { class: 'rn-thing-does' }, `${t.does}: ${t.defends.pct != null ? `with nobody home and nobody on your step they get in ${t.defends.pct}% of the time, not ${o.away.basePct}%` : `in, they take ${t.defends.share}% of what is banked, not ${o.away.baseShare}%`}. ${t.owned ? (trailerWhere(t.item) ? `In the crib ${trailerWhere(t.item)}.` : t.inTrailer === 'door' ? 'On the trailer\'s door.' : '') : `${cap(t.keeper?.name ?? 'Sold')} sells it ${t.atLabel ? `at ${t.atLabel}` : ''}, from what you carry.`}`),
+    // (sixes-1: each piece's one job, in plain words, and whom it is against; where it is, or who sells it where)
+    h('p', { class: 'rn-thing-does' }, `${t.job ?? `${t.does}: ${t.defends.pct != null ? `with nobody home and nobody on your step they get in ${t.defends.pct}% of the time, not ${o.away.basePct}%` : `in, they take ${t.defends.share}% of what is banked, not ${o.away.baseShare}%`}`}.${t.against ? ` Against ${t.against.map(a => (a === 'crew' ? 'a crew' : 'a sneak')).join(' and ')}.` : ''} ${t.owned ? (trailerWhere(t.item) ? `In the crib ${trailerWhere(t.item)}.` : t.inTrailer === 'door' ? 'On the trailer\'s door.' : '') : `${cap(t.keeper?.name ?? 'Sold')} sells it ${t.atLabel ? `at ${t.atLabel}` : ''}, from what you carry.`}`),
     h('div', { class: 'rn-job-odds' }, t.owned ? h('span', { class: 'hk-tag is-yours' }, 'yours') : tag(t.key, `Buy ${money(t.price)}`, t.available, t.why))));
   if (g) rows.push(h('li', { class: `rn-thing${g.on ? ' is-owned' : ''}` },
     h('div', { class: 'rn-job-head' }, h('b', null, `${cap(g.who.name)} on your step`), h('span', { class: 'rn-pay' }, `${money(g.price)} for ${g.days} days`)),
@@ -606,7 +662,9 @@ function defencesEl(ctx) {
   return h('section', { class: 'rn-sec rn-defences' },
     h('h3', { class: 'rn-sec-h' }, `Defending your crib · ${d.things.filter(t => t.owned).length + (g?.on ? 1 : 0)} of ${d.things.length + (g ? 1 : 0)}`),
     h('ul', { class: 'rn-stuff' }, rows),
-    h('p', { class: 'rn-note' }, `If they tried it now (${money(o.stake.takes)} of ${money(o.stake.banked)} banked): with you out, ${o.away.guard ? `${100 - o.away.guard.beatenPct}% ${cap(g?.who?.name ?? 'your guard')} sees them off, else ` : ''}${o.away.pct}% they get in; home, you meet them at the door. Pressure at home ${v.pressure?.value ?? 0} of ${v.pressure?.max ?? 10}: L shows it.`));
+    h('p', { class: 'rn-note' }, `If they tried it now (${money(o.stake.takes)} of ${money(o.stake.banked)} banked): with you out, ${o.away.guard ? `${100 - o.away.guard.beatenPct}% ${cap(g?.who?.name ?? 'your guard')} sees them off, else ` : ''}${o.away.pct}% they get in; home, you meet them at the door. Pressure at home ${v.pressure?.value ?? 0} of ${v.pressure?.max ?? 10}: K shows it.`),
+    // (sixes-1: from 7 it is a crew: the door fight's odds; and no one piece does it all)
+    v.home.crew ? h('p', { class: 'rn-note' }, `${v.home.crew.text} No one piece covers every visitor: a sneak comes while you are out, a crew after dark.`) : null);
 }
 
 /**
@@ -645,7 +703,8 @@ function hereEl(ctx) {
       h('div', { class: 'rn-job-head' }, h('b', null, `${cap(thingWord(e.label))}${e.keeper ? ` · ${cap(e.keeper.name)}` : ''}`), h('span', { class: 'rn-pay' }, money(e.price))),
       h('p', { class: 'rn-thing-does' }, food ? `${e.does}${gives ? ` (${gives})` : ''}.` : e.kind === 'ride' ? `${cap(e.desc)}. ${cfg.things[e.item]?.does ?? ''}. Yours for the run.` : cfg.things[e.item]?.defends ? `${cap(e.desc)}. Defends your crib: ${cfg.things[e.item].does.toLowerCase()}.` : `${cap(e.desc)}.${e.kind === 'home' ? ' For the trailer' : ` To wear (${e.slot})`}; looks only.`),
       h('div', { class: 'rn-job-odds' },
-        food && e.left !== null ? h('span', { class: `rn-supply${e.left ? '' : ' is-none'}` }, `${e.left} of ${e.perDay} left today`) : null,
+        food && e.dayFull ? h('span', { class: 'rn-supply is-none' }, cap(cfg.food.full))
+          : food && e.left !== null ? h('span', { class: `rn-supply${e.left ? '' : ' is-none'}` }, `${e.left} of ${e.perDay} left today${v.food?.perDay != null ? ` · ${v.food.eaten} of ${v.food.perDay} food today` : ''}`) : null,
         e.owned ? h('span', { class: 'hk-tag is-yours' }, 'owned') : buy(e.key, e.price, food ? 'E' : null, e.available, e.why))));
   }
   const mine = (v.goods ?? []).filter(g => g.carried || g.home);
@@ -666,7 +725,7 @@ function hereEl(ctx) {
 // The map panel is the kit's paper map of the island (demo/run/map.js); these are the words on it. Each stop's card
 // (a click on the stop): what it pays, its danger in a word and a number, who is left to work there today; the corner
 // locked as the next place. And the line itself in one sentence. Read-only: the moves stay on the bar.
-export const STOP_NAME = { park: 'Trailer park', market: 'Flea market', corner: 'The corner' };
+export const STOP_NAME = { park: 'Trailer park', market: 'Jay St night market', docks: 'Low Tide Docks', plaza: 'Glasswall Plaza', corner: 'The corner' };
 export const stopOf = v => (v.place === 'crib' ? 'park' : v.place === 'jail' || v.place === 'clinic' ? null : v.place);
 
 /** Names in a sentence, each followed by its trust mark when it is not neutral. */
@@ -680,8 +739,30 @@ function payOf(cfg, place, owned) {
   const jobs = Object.values(cfg.jobs[place] ?? {}).filter(j => !j.needs || owned[j.needs]);
   return jobs.length ? [Math.min(...jobs.map(j => j.pay[0])), Math.max(...jobs.map(j => j.pay[1]))] : null;
 }
-/** The market's danger: the view's own this hour when you are there; else the engine's for a first hour there now. */
-const marketDanger = ({ cfg, v, state }) => (v.danger.here ? v.danger.thisHour : dangerAt(cfg, { ...state, place: 'market', hoursThere: 0 }));
+/** A place's danger: the view's own this hour when you are there; else the engine's for a first hour there now. */
+const placeDanger = ({ cfg, v, state }, place) => (v.danger.here && stopOf(v) === place ? v.danger.thisHour : dangerAt(cfg, { ...state, place, hoursThere: 0 }));
+/** The risk of an hour there as one number (jumped or stopped) and what it is (batch-1: the meter's words). */
+const riskOf = d => {
+  const n = Math.round(100 * (1 - (1 - d.jump.chance / 100) * (1 - d.stop.chance / 100)));
+  return { n, word: !n ? 'safe' : d.stop.chance > 0 && d.stop.chance >= d.jump.chance ? 'police could stop you' : 'could be jumped' };
+};
+/**
+ * A place's line in the All moves panel (batch-1, from its tier, not its name): the pay against the park's, who
+ * acts on you there, the police, and the risk of an hour there now.
+ */
+function placeNote(ctx, place) {
+  const { cfg, state } = ctx;
+  const tier = tierOf(cfg, place);
+  const base = tierOf(cfg, 'park')?.pay ?? 1;
+  const d = dangerAt(cfg, { ...state, place, hoursThere: state.place === place ? state.hoursThere : 0 });
+  const r = riskOf(d);
+  if (!tier?.jump && !tier?.patrol) return h('p', { class: 'rn-note' }, 'Safe and poor: nobody jumps you here. The police come only once the place itself is hot.');
+  const pay = tier.pay / base;
+  const pays = pay >= 2.5 ? 'about three times' : pay >= 1.75 ? 'about twice' : 'about half again';
+  const who = tier.jump >= 1.5 ? 'tougher people, who will take it off you more often and hit harder' : tier.jump >= 1 ? 'people who will take it off you' : 'few who would jump you';
+  const police = tier.police > 1.5 ? `the police are the danger here: patrolled, and a stop is ${tier.police} times as likely, from heat ${cfg.police.from}` : `police from heat ${cfg.police.from}`;
+  return h('p', { class: 'rn-note is-risk' }, `Pays ${pays} the park, with ${who}; ${police}. Now: risk ${r.n}% for a ${state.place === place ? 'this' : 'first'} hour (${d.jump.chance}% jumped, ${d.stop.chance}% stopped), more each hour and each $${cfg.jump.perDollars} on you.`);
+}
 
 /** The line in one sentence: the fare, the turnstile, the hour and the energy a ride costs. */
 export const lineNote = ({ cfg }) => `The line: ${money(cfg.subway.fare)} fare, or hop the turnstile (${cfg.subway.hopCaughtPct}% seen: heat +${cfg.subway.hopHeat}) · 1 hour, ${cfg.energy.perHour} energy.`;
@@ -689,11 +770,11 @@ export const lineNote = ({ cfg }) => `The line: ${money(cfg.subway.fare)} fare, 
 /** A stop's flag on the map, at a glance: its pay and its danger in a word. */
 export function stopFlag(ctx, stop) {
   const { cfg, state } = ctx;
-  if (stop === 'corner') return 'locked';
+  if (cfg.places[stop]?.locked) return 'locked';
   const r = payOf(cfg, stop, state.owned);
-  // (rules-2: a place nobody jumps you in is "safe" only while it is not hot: hot, the police are about there)
-  const hot = (ctx.v.places ?? []).find(q => q.place === stop)?.hot;
-  return `${r ? range(r) : '–'} · ${stop === 'market' ? `${marketDanger(ctx).jump.chance}% jumped` : hot ? 'nobody jumps you' : 'safe'}`;
+  // (batch-1: the risk of a first hour there, from its tier: a number labelled a risk, or safe)
+  const k = riskOf(placeDanger(ctx, stop));
+  return `${r ? range(r) : '–'} · ${k.n ? `risk ${k.n}%` : 'safe'}`;
 }
 
 /** A stop's card: what it pays, its danger, who is left there today (the corner: locked, the next place). */
@@ -701,14 +782,16 @@ export function stopBody(ctx, stop) {
   const { cfg, v, state } = ctx;
   const at = stopOf(v);
   const here = stop === at ? h('span', { class: 'hk-tag is-yours' }, v.place === 'crib' ? 'you are home' : 'you are here') : null;
-  if (stop === 'corner') {
-    return [h('p', null, h('b', null, 'Locked'), ` ${cfg.places.corner.locked}. The next place: nothing can be done there yet.`)];
+  if (cfg.places[stop]?.locked) {
+    return [h('p', null, h('b', null, 'Locked'), ` ${cfg.places[stop].locked}. The next place: nothing can be done there yet.`)];
   }
   const r = payOf(cfg, stop, state.owned);
   const all = v.people.filter(p => p.place === stop);
   const on = all.filter(p => !p.outToday);
   const out = all.filter(p => p.outToday);
-  const mk = stop === 'market' ? marketDanger(ctx) : null;
+  const dg = placeDanger(ctx, stop);
+  const mk = dg.jump.chance || dg.stop.chance ? dg : null;
+  const rk = mk ? riskOf(mk) : null;
   // (rules-2: the place's own heat and police, in the view's words, and what it has left of its street today)
   const pl = (v.places ?? []).find(q => q.place === stop);
   const sup = pl?.supply ?? {};
@@ -718,9 +801,9 @@ export function stopBody(ctx, stop) {
     pl ? h('p', { class: pl.hot ? 'is-hot' : pl.police ? 'is-police' : 'is-quiet' }, h('b', null, `heat ${pl.heat}`), ` ${pl.text}`) : null,
     h('p', null, 'Pays ', h('b', null, r ? range(r) : '–'), ' an hour.'),
     mk
-      ? h('p', { class: 'is-risk' }, h('b', null, `${mk.jump.chance}% jumped`), v.danger.here ? ' this hour, and rising.' : ` a first hour there, rising each hour and each $${cfg.jump.perDollars} on you.`)
+      ? h('p', { class: 'is-risk' }, h('b', null, `Risk ${rk.n}%`), `: ${rk.word}`, v.danger.here && stopOf(v) === stop ? ' this hour, and rising.' : ` a first hour there, rising each hour and each $${cfg.jump.perDollars} on you.`)
       : h('p', { class: 'is-safe' }, h('b', null, 'Safe'), ': nobody acts on you here.'),
-    mk?.stop.chance ? h('p', { class: 'is-police' }, h('b', null, `${mk.stop.chance}% police`), ` at heat ${v.place === stop ? v.heatHere : Math.max(state.heat, pl?.heat ?? 0)} here.`) : null,
+    mk?.stop.chance ? h('p', { class: 'is-police' }, h('b', null, `${mk.stop.chance}% police`), ` at heat ${v.place === stop ? v.heatHere : Math.max(state.heat, pl?.heat ?? 0)} here.`) : mk && pl?.police ? h('p', { class: 'is-police' }, h('b', null, 'Police about'), `: they stop you from heat ${cfg.police.from}.`) : null,
     // (each name with its trust mark when it is not neutral: trust-1)
     h('p', { class: 'rn-stop-left' }, h('span', null, on.length ? 'Left today: ' : 'Nobody left today.'), ...named(v, on),
       out.length ? h('em', null, `${on.length ? '.' : ''} Out: `, ...named(v, out), '.') : on.length ? '.' : null),

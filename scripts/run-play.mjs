@@ -9,6 +9,7 @@
 import { createInterface } from 'node:readline';
 import { RUN_CONFIG, newRun, view, step, checkRunBooks } from '../src/run/index.mjs';
 import { viewText, eventsText, choiceForKey } from '../src/run/text.mjs';
+import { fightAdvice } from '../src/run/rules.mjs';
 
 const argv = process.argv.slice(2);
 const opt = name => {
@@ -24,10 +25,14 @@ function play(key) {
   const v = view(cfg, state);
   const picked = choiceForKey(v, key);
   if (picked.error) return picked.error;
+  const before = state;
   const r = step(cfg, state, picked.choice);
   state = r.state;
   if (!checkRunBooks(state).ok) throw new Error('the books do not balance');
-  console.log(`> ${key}\n${eventsText(r.events)}\n`);
+  // (styles-1: after a fight lost, one line of what would have helped)
+  const lost = r.events.find(e => e.duel && e.duel.result !== 'won');
+  const help = lost ? fightAdvice(cfg, before, lost.duel) : null;
+  console.log(`> ${key}\n${eventsText(r.events)}${help ? `\n  What would have helped: ${help.line}` : ''}\n`);
   return null;
 }
 

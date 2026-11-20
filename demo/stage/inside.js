@@ -64,8 +64,11 @@
 //   place.way(a, b)     → [[x, y, z] …] or null   a way between two points inside ([x, z] each), round what stands
 //                                            in it, ending at b
 //   place.solidAt(x, z) → what a body there stands in ('wall', a piece's name), or null: for the audit
-//   place.leaf?(side, k)                     its door leaf, 'out' (the building's real door) or 'in' (the inside
-//                                            view's), open by k: 0 shut … 1 open
+//   place.leaf?(side, k, { way, alpha })     its door leaf, 'out' (the building's real door) or 'in' (the inside
+//                                            view's), open by k: 0 shut … 1 open, swinging `way` ('in' into the
+//                                            building, 'out' out of it: away from whoever walks through, doorway.js)
+//   place.leafAt?(side) → { hinge, y, reach, boxes }   where a leaf hangs and what of it is shown (doorway.js measures
+//                                            bodies against it)
 //   place.ground?()     → 'grass' | 'dirt' | 'concrete'   what its inside stands on (GROUNDS, below; concrete if unsaid)
 //   place.lamp?()       → [x, y, z] or null  a lamp inside by night (set/light.js, the city's own lamp light; the
 //                                            controller adds a key over the lead, toward the camera)

@@ -2,6 +2,8 @@
 // material layer), quarter-turn stamping for props, a 5×7 pixel font and a canvas→voxel painter for display lettering.
 import { CV, PAL } from './style.js';
 import { REG } from './audit.js';
+// fine detail below the voxel (the traits' own storage and texel layout): a Vol may carry V.fp / V.hv, drawn by meshFine below
+import { PLANE, hd, vkd } from '../../world/cast/fit/fine.js';
 export const AOV = [0.55, 0.72, 0.87, 1];
 
 export class Vol {
@@ -227,13 +229,90 @@ export function meshVol(V, bank) {
   if (bank.mid && bigEnough(V, 1.3, 2.5)) meshMid(V, bank.mid, tap);   // fidelity pass: lettering, lines and wall paint survive the mid tier (midOf)
   if (bank.far && bigEnough(V, 6, 6)) meshVolRaw(downVol(V, 5, 30), bank.far, .3);   // cleanup pass: its walls lean 30% toward the haze, like every far tier (far.js)
   if (REG.blk) { if (bank === REG.blk.bank) REG.vol(V, bank); else { bank.kind ??= 'structure'; if (REG.audit) (bank.vols ??= []).push(V); } }   // pass 1d: structures (ids + audit)
-  return bank.farOnly ? bank : meshVolRaw(V, bank);   // cleanup pass: a far-only bank keeps only its far companion
+  // cleanup pass: a far-only bank keeps only its far companion
+  if (bank.farOnly) return bank;
+  // home-kit fine pass: the painted faces and the fine voxels (meshFine), and the faces it drew left out of the greedy mesh
+  V.fineSkip = (V.fp && V.fp.size) || (V.hv && V.hv.size) ? meshFine(V, bank) : null;
+  return meshVolRaw(V, bank);
+}
+// ── FINE DETAIL ON A VOL (home-kit fine pass, 2026-11-17). The traits' two tools below the voxel (world/cast/fit/fine.js: the same
+// painter, the same storage, the same texel and half-cell layout) on a dense Vol, for the home kit's pieces (interiors/home lib.js
+// fineOf). A Vol carrying V.fp (voxel key → 6 faces of 4 × 4 texels) and V.hv (half key → [colour, layer, slot]) is meshed here:
+//   FINE PAINT   each painted face that shows is drawn as its texels, same-colour texels merged into rectangles (a face of one
+//                colour is one quad), in the voxel's own material, with the face's corner AO (the greedy mesher's) spread across it;
+//                that face is then left out of the greedy mesh (the returned per-voxel face mask, meshVolRaw's fineSkip).
+//   FINE VOXELS  half-size cubes, greedy-meshed on a 2× grid round them in which the Vol's own voxels stand solid but undrawn
+//                (midOf's skip / outside), so they cull against the piece and take its corner AO.
+// Only the near mesh draws them: the mid and far tiers resample the voxels (the kit's far tier folds the paint into its voxels first).
+const NB6 = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+function quadF(O, xs, ys, zs, nx, ny, nz, rgb, F) {
+  O.P.need(12); O.N.need(12); O.C.need(12); O.I.need(6); const v0 = O.v;
+  for (let q = 0; q < 4; q++) { O.P.a[O.P.n++] = xs[q]; O.P.a[O.P.n++] = ys[q]; O.P.a[O.P.n++] = zs[q]; O.N.a[O.N.n++] = nx * 127; O.N.a[O.N.n++] = ny * 127; O.N.a[O.N.n++] = nz * 127;
+    O.C.a[O.C.n++] = rgb[0] * F[q]; O.C.a[O.C.n++] = rgb[1] * F[q]; O.C.a[O.C.n++] = rgb[2] * F[q]; }
+  const I = O.I.a; let n = O.I.n;
+  if (F[0] + F[2] < F[1] + F[3]) { I[n++] = v0 + 1; I[n++] = v0 + 2; I[n++] = v0 + 3; I[n++] = v0 + 1; I[n++] = v0 + 3; I[n++] = v0; } else { I[n++] = v0; I[n++] = v0 + 1; I[n++] = v0 + 2; I[n++] = v0; I[n++] = v0 + 2; I[n++] = v0 + 3; }
+  O.I.n = n; O.v += 4;
+}
+export function meshFine(V, bank) {
+  const { nx, ny, nz, d, pal, lay, sxz } = V, s = V.s, [ox, oy, oz] = V.org;
+  const solid = (x, y, z) => (x >= 0 && y >= 0 && z >= 0 && x < nx && y < ny && z < nz) ? d[x + z * nx + y * sxz] !== 0 : (V.ground && y < 0);
+  let skip = null;
+  if (V.fp && V.fp.size) {
+    skip = new Uint8Array(d.length);
+    const xs = [0, 0, 0, 0], ys = [0, 0, 0, 0], zs = [0, 0, 0, 0], F = [0, 0, 0, 0], tx = new Int32Array(16), used = new Uint8Array(16), p = [0, 0, 0], q3 = [0, 0, 0], P = [0, 0, 0], ru = [0, 0], rw = [0, 0];
+    for (const [k, arr] of V.fp) {
+      const [x, y, z] = vkd(k); if (!V.in(x, y, z)) continue; const i = x + z * nx + y * sxz, c = d[i]; if (!c) continue;
+      const base = pal[c], O = bank.L[lay[c]]; p[0] = x; p[1] = y; p[2] = z;
+      for (let f = 0; f < 6; f++) {
+        const e = arr[f]; if (!e) continue; const nb = NB6[f]; if (solid(x + nb[0], y + nb[1], z + nb[2])) continue;
+        skip[i] |= 1 << f;
+        // the face's corner AO, exactly as meshVolRaw takes it (u, w: the face's in-plane axes; corners (0,0) (1,0) (1,1) (0,1) in u, w)
+        const a = f >> 1, sg = f & 1 ? -1 : 1, u = (a + 1) % 3, w = (a + 2) % 3, U = p[u], W = p[w];
+        const L = (uu, ww) => { q3[a] = p[a] + sg; q3[u] = uu; q3[w] = ww; return solid(q3[0], q3[1], q3[2]) ? 1 : 0; };
+        const um = L(U - 1, W), up = L(U + 1, W), wm = L(U, W - 1), wp = L(U, W + 1);
+        const A0 = AOV[(um && wm) ? 0 : 3 - (um + wm + L(U - 1, W - 1))], A1 = AOV[(up && wm) ? 0 : 3 - (up + wm + L(U + 1, W - 1))];
+        const A2 = AOV[(up && wp) ? 0 : 3 - (up + wp + L(U + 1, W + 1))], A3 = AOV[(um && wp) ? 0 : 3 - (um + wp + L(U - 1, W + 1))];
+        // the texels (t[j * 4 + i]: i along PLANE[f][0], j along PLANE[f][1]; −1 shows the voxel), merged into same-colour rectangles
+        const pa = PLANE[f][0];
+        for (let t = 0; t < 16; t++) { tx[t] = e.t[t] < 0 ? base : e.t[t]; used[t] = 0; }
+        for (let j = 0; j < 4; j++) for (let ii = 0; ii < 4; ii++) {
+          const t0 = j * 4 + ii; if (used[t0]) continue; const col = tx[t0];
+          let wd = 1; while (ii + wd < 4 && !used[t0 + wd] && tx[t0 + wd] === col) wd++;
+          let ht = 1; grow: for (; j + ht < 4; ht++) for (let t = 0; t < wd; t++) { const tt = (j + ht) * 4 + ii + t; if (used[tt] || tx[tt] !== col) break grow; }
+          for (let jj = 0; jj < ht; jj++) for (let t = 0; t < wd; t++) used[(j + jj) * 4 + ii + t] = 1;
+          const ia = [ii / 4, (ii + wd) / 4], jb = [j / 4, (j + ht) / 4];
+          if (pa === u) { ru[0] = ia[0]; ru[1] = ia[1]; rw[0] = jb[0]; rw[1] = jb[1]; } else { ru[0] = jb[0]; ru[1] = jb[1]; rw[0] = ia[0]; rw[1] = ia[1]; }
+          const rgb = lin(col);
+          for (let q = 0; q < 4; q++) { const o = sg > 0 ? q : (4 - q) % 4, fu = o === 1 || o === 2 ? ru[1] : ru[0], fw = o >= 2 ? rw[1] : rw[0];
+            P[a] = p[a] + (sg > 0 ? 1 : 0); P[u] = U + fu; P[w] = W + fw; xs[q] = ox + P[0] * s; ys[q] = oy + P[1] * s; zs[q] = oz + P[2] * s;
+            F[q] = A0 * (1 - fu) * (1 - fw) + A1 * fu * (1 - fw) + A2 * fu * fw + A3 * (1 - fu) * fw; }
+          quadF(O, xs, ys, zs, a === 0 ? sg : 0, a === 1 ? sg : 0, a === 2 ? sg : 0, rgb, F);
+        }
+      }
+    }
+  }
+  if (V.hv && V.hv.size) {
+    // the fine voxels' box on the 2× grid, two half cells round; the Vol's voxels inside it solid but skipped, outside it seen as solid
+    let x0 = 1e9, y0 = 1e9, z0 = 1e9, x1 = -1e9, y1 = -1e9, z1 = -1e9;
+    for (const k of V.hv.keys()) { const [hx, hy, hz] = hd(k); if (hx < x0) x0 = hx; if (hy < y0) y0 = hy; if (hz < z0) z0 = hz; if (hx > x1) x1 = hx; if (hy > y1) y1 = hy; if (hz > z1) z1 = hz; }
+    x0 -= 2; y0 -= 2; z0 -= 2; x1 += 3; y1 += 3; z1 += 3;
+    const wx = x1 - x0, wy = y1 - y0, wz = z1 - z0, h = s / 2, W = new Vol(wx, wy, wz, { s: h, org: [ox + x0 * h, oy + y0 * h, oz + z0 * h], ground: false });
+    W.pal = pal.slice(); W.lay = lay.slice(); W.pm = new Map(V.pm); const wd = W.d, ws = W.skip = new Uint8Array(wd.length), fill = pal.length > 1 ? 1 : W.ci(0);
+    for (let y = 0; y < wy; y++) for (let z = 0; z < wz; z++) for (let x = 0; x < wx; x++) { const X = (x + x0) >> 1, Y = (y + y0) >> 1, Z = (z + z0) >> 1;
+      if (!solid(X, Y, Z)) continue; const j = x + z * wx + y * wx * wz; wd[j] = V.in(X, Y, Z) ? d[X + Z * nx + Y * sxz] : fill; ws[j] = 1; }
+    for (const [k, v] of V.hv) { const [hx, hy, hz] = hd(k), x = hx - x0, y = hy - y0, z = hz - z0; W.set(x, y, z, v[0], v[1]); ws[x + z * wx + y * wx * wz] = 0; }
+    W.outside = (x, y, z) => solid((x + x0) >> 1, (y + y0) >> 1, (z + z0) >> 1);
+    meshVolRaw(W, bank);
+  }
+  return skip;
 }
 // air: aerial perspective for far tiers — side faces of unlit layers lean that fraction toward the horizon colour (tops keep their colour)
 const airHex = (c, t) => { const h = PAL.horizon, m = k => Math.round(((c >> k) & 255) * (1 - t) + ((h >> k) & 255) * t); return (m(16) << 16) | (m(8) << 8) | m(0); };
 function meshVolRaw(V, bank, air = 0) {
   const { nx, ny, nz, d, pal, lay, sxz } = V, dims = [nx, ny, nz], str = [1, sxz, nx], s = V.s, [ox, oy, oz] = V.org;
   const out = V.outside, skip = V.skip;   // fidelity pass: a mid-tier patch sees the coarse cells round it (outside) and draws no face for cells it only borrows (skip)
+  // home-kit fine pass: the faces meshFine drew as texels (a 6-bit face mask per voxel, FACES order)
+  const fsk = V.fineSkip || null;
   const solid = (x, y, z) => (x >= 0 && y >= 0 && z >= 0 && x < nx && y < ny && z < nz) ? d[x + z * nx + y * sxz] !== 0 : out ? out(x, y, z) : (V.ground && y < 0);
   const p = [0, 0, 0], rgbs = pal.map(h => lin(h)), side = air ? pal.map((h, k) => lay[k] === 3 ? rgbs[k] : lin(airHex(h, air))) : rgbs, xs = [0, 0, 0, 0], ys = [0, 0, 0, 0], zs = [0, 0, 0, 0], A = [0, 0, 0, 0], AA = [0, 0, 0, 0];
   for (let a = 0; a < 3; a++) {
@@ -242,10 +321,10 @@ function meshVolRaw(V, bank, air = 0) {
     const L = (nb, uu, ww) => { p[a] = nb; p[u] = uu; p[w] = ww; return solid(p[0], p[1], p[2]) ? 1 : 0; };
     for (let sl = 0; sl <= dims[a]; sl++) for (let sg = 1; sg >= -1; sg -= 2) {
       const own = sg > 0 ? sl - 1 : sl, nb = sg > 0 ? sl : sl - 1; if (own < 0 || own >= dims[a]) continue;
-      let any = false, n = 0; const inside = nb >= 0 && nb < dims[a], base = own * sa, nbase = nb * sa;
+      let any = false, n = 0; const inside = nb >= 0 && nb < dims[a], base = own * sa, nbase = nb * sa, fbit = 1 << (a * 2 + (sg > 0 ? 0 : 1));
       for (let j = 0; j < no; j++) { const rj = base + j * so, nrj = nbase + j * so;
         for (let i = 0; i < ni; i++, n++) {
-          const c = d[rj + i * si]; if (c === 0 || (skip && skip[rj + i * si])) { mask[n] = 0; continue; }
+          const c = d[rj + i * si]; if (c === 0 || (skip && skip[rj + i * si]) || (fsk && (fsk[rj + i * si] & fbit))) { mask[n] = 0; continue; }
           const U = swap ? j : i, Wc = swap ? i : j;
           if (inside ? d[nrj + i * si] !== 0 : L(nb, U, Wc)) { mask[n] = 0; continue; }
           const um = L(nb, U - 1, Wc), up = L(nb, U + 1, Wc), wm = L(nb, U, Wc - 1), wp = L(nb, U, Wc + 1);

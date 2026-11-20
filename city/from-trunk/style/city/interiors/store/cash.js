@@ -2,6 +2,8 @@
 // behind bulletproof plexi (and the liquor store's turntable), bottles behind plexi, the 99¢ and pharmacy aisles; registers, cameras,
 // the CCTV monitor, tubes, a fan, a mop, and the signs inside: NO LOITERING, CASH ONLY, WE BUY GOLD, SMILE YOU'RE ON CAMERA.
 import { obj, K, LIT, GLOW, SPIRITS, MALT, hh, pick, shadeK, sign, off, mirrorZ, shelving, stockRow, glassCase } from './lib.js';
+// the fine pass below the voxel (../fine.js, FORMAT.md "Fine detail")
+import { frect } from '../fine.js';
 import { registerAt } from './bodega.js';
 
 // ── the bulletproof window: counter, ledge, plexi to the header (framed, glints), speaker grilles, deal trays, lit window numbers
@@ -106,5 +108,18 @@ const phones = obj({ id: 'store-phone-case', name: 'Phone case', cat: 'cases', f
   (P, o) => { const { W, D, v } = o; glassCase(P, { x0: 0, x1: W, z0: 0, z1: D, base: 11, top: 20, cab: [K.white, K.blue][v], deck: [K.ink, K.white][v], frame: K.chrome, lightBar: true });
     for (let r = 0; r < 2; r++) for (let k = 0; k < 6 - r; k++) { const x = 2 + k * 4 + r * 2, z = 4 + r * 5, y = 12; P.box(x, y, z, x + 3, y + 1, z + 3, K.char); P.box(x, y + 1, z, x + 3, y + 5 - r, z + 1, K.ink); P.box(x, y + 2, z + 1, x + 3, y + 5 - r, z + 2, pick([0x3fa9f5, K.pink, K.lime, K.white, K.orange], k + r + v), GLOW); }
     for (let k = 0; k < 4; k++) P.box(3 + k * 6, 12, D - 3, 6 + k * 6, 13, D - 2, pick([K.red, K.yellow, K.purple, K.cyan], k + v)); });
+
+// fine pass (2026-11-17) on the CCTV monitor: four little pictures, one a camera (the back door with someone at it, the counter and the
+// till, the lot with a car, the stockroom aisle), each with its timestamp line, and REC on the first
+monitor.fine = P => {
+  const scene = [
+    (u, v) => v < 3 ? 0x4a524e : (u >= 4 && u < 8 && v < 10) ? 0x2a302e : (u >= 9 && u < 11 && v >= 3 && v < 8) || Math.hypot(u - 9.5, v - 9) < 1.3 ? 0x1a1e1c : 0x8a9a94,
+    (u, v) => v < 5 ? (v === 4 ? 0x5a604e : 0x6e7262) : (u >= 7 && u < 10 && v >= 5 && v < 8) ? 0x3a3e34 : Math.hypot(u - 3.5, v - 9) < 1.6 || (u >= 2 && u < 5 && v >= 5 && v < 8) ? 0x2a2c26 : 0x9aa08a,
+    (u, v) => (v === 2 || v === 6) && u % 4 < 2 ? 0xd8dcd2 : (u >= 3 && u < 9 && v >= 3 && v < 6) ? (v === 5 && u > 3 && u < 8 ? 0x6a7a8a : 0x3a4250) : 0x7a8290,
+    (u, v) => Math.abs(u - 5.5) < (12 - v) * .35 && v > 2 ? 0x9a9488 : (u < 3 || u > 8) && v > 2 ? ((v % 3 === 0) ? 0x5a5448 : 0x7a7466) : 0x6a6458,
+  ];
+  [[1, 5], [5, 5], [1, 1], [5, 1]].forEach(([x, y], k) => frect(P, '+z', x, y, x + 3, y + 3, (qa, qb) => { const u = qa - x * 4, v = qb - y * 4;
+    if (v === 0) return u < 7 ? K.white : null; if (k === 0 && v >= 10 && u >= 9 && u < 11) return K.red; return scene[k](u, v); }));
+};
 
 export default [plexi, liquorwin, desk, liquor, dollar, pharmacy, regCounter, camera, monitor, tube, fan, mop, ...signs, phones];

@@ -18,6 +18,8 @@
 // until someone is). The zone that is loaded is the one they are in. When their hour takes them to another, this
 // file starts the trip (voyage): the destination starts building as they set off, the picture cuts when it stands.
 import { createActors } from './actors.js';
+import { createRoom } from './room.js';
+import { createHands } from './hands/perform.js';
 import { createDirector } from './director.js';
 import { createCamera } from './camera.js';
 import { planHour, weightOf, HOUR_MS } from './director-plan.js';
@@ -33,6 +35,8 @@ import { createInside } from './inside.js';
 import { createOpening } from './opening.js';
 import { createFallaway } from './fallaway.js';
 import * as CITYMAP from './citymap.js';
+import { createAlong } from './props/along.js';
+import { createWorkbenches } from './set/workbench.js';
 
 /**
  * What each kind of person wears, so a viewer can tell them apart at a glance. `pool` is the cast's: agents are the
@@ -58,6 +62,13 @@ const LOOKS = {
 
 export async function createStage({ city, CITY, map = CITYMAP, loader: given = null }) {
   const actors = await createActors({ city, CITY });
+  // (named-1: the things that go about with a named person, the cart man's cart: props/along.js)
+  const along = await createAlong({ city, CITY, actors });
+  // (notes-2: Mr. Pruitt's workbench in his yard, the city's own bench, vise and lamp: set/workbench.js)
+  const workbench = await createWorkbenches({ city, CITY, actors }).catch(err => {
+    console.warn('[stage] the workbench did not load:', err);
+    return null;
+  });
   // the rooms to see into (the pads) and the time of day. Nothing is dressed: the places are the city's own
   let set = null;
   try {
@@ -147,7 +158,9 @@ export async function createStage({ city, CITY, map = CITYMAP, loader: given = n
       return inline > 0.5 ? g * (1 + 0.45 * inline) : g;
     },
     // (free ground handed out when a place's spots are all taken is never on a step, a stoop or by a chair either)
-    blocked: (x, z, r = 0.6) => actors.solidKnown(x, z) && (!!actors.solidAt(x, z) || actors.lowNear(x, z, r)),
+    // (sixes-1, second pass: ground the city's collision world does not hold yet is 'unknown', not free: what stands
+    // there loads later. stands.js takes known free ground first, unknown only when there is nothing else)
+    blocked: (x, z, r = 0.6) => (![[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]].every(([dx, dz]) => actors.solidKnown(x + dx, z + dz)) ? 'unknown' : !!actors.solidAt(x, z) || actors.lowNear(x, z, r)),
     // (and free ground is standing ground: off the roadway, and off the walkers' own lane, which a body stood on closes)
     ground: (x, z) => actors.offKerb(x, z) && (actors.laneDistance(x, z) ?? 9) >= 0.75,
     fit(x0, z0, along) {
@@ -231,8 +244,18 @@ export async function createStage({ city, CITY, map = CITYMAP, loader: given = n
   // inside view draws a place's inside alone)
   actors.pictureHides = (x, y, z) => !!inside.up && !inside.holds(inside.up, x, y, z);
   const opening = createOpening({ city, fade: travel.fade, inside, fall, camera: () => camera });
-  const director = createDirector({ city, actors, map, stands, travel, rooms, doorway, padKey: set?.padOf ?? (id => `pad:${id}`), hooks: { cut: () => camera?.arrived(), landed: id => id === journeying && travelOver() } });
+  const director = createDirector({ city, actors, map, stands, travel, rooms, doorway, padKey: set?.padOf ?? (id => `pad:${id}`), hooks: { cut: () => camera?.arrived(), landed: id => id === journeying && travelOver(), perform: o => performStep(o), prepare: o => performStep(o, 'prepare'), stance: o => hands.stance(o) } });
   director.setZone(zone0);
+  // (anim-1: THE DEALS, performed on hand-posed bodies: a step of a scene that carries `perform` ({ deal, roles, … }:
+  // roles name who plays what, `actor` and `target` the step's own two, or an id) is staged and played by hands/)
+  const hands = createHands({ actors, city, camera, map, rides: null, fade: travel.fade, director, room: () => room });
+  function performStep({ step, actor, target, block, alive }, how = 'perform') {
+    const { deal, roles = {}, ...told } = step.perform;
+    const who = Object.fromEntries(Object.entries(roles).map(([role, v]) => [role, v === 'actor' ? actor : v === 'target' ? target : v]).filter(([, id]) => id));
+    return hands[how]({ deal, roles: who, told, block, alive });
+  }
+  // (anim-1: a fight is given room by everybody not in it: the city's crowd, and ours standing or walking; room.js)
+  const room = createRoom({ city, actors, director });
   // (the city's see-through hole, for the camera to soften: camera.js)
   const hole = await import(`${CITY}gpu.js`).then(m => m.HOLE ?? null, () => null);
   let firstSeat = null;
@@ -427,6 +450,8 @@ export async function createStage({ city, CITY, map = CITYMAP, loader: given = n
   // street lamp. KEY: how high the lamp is over the ground they stand on and how far toward the camera (m); lower
   // is brighter and tighter (the city's lamp light falls off with distance^1.4 and ends at 15 m; its own lamps are
   // 5.4 m up). `?key=<up>,<front>` tries others; `?key=0` is the night without it.
+  /** (raidfight-2) more key lamps a scene asks for, by night: () → [[x, y, z], ...] (stage.keyLamps) */
+  let keyAlso = null;
   const KEY = (v => (v === '0' ? null : { up: Number(v?.split(',')[0]) || 4.2, front: Number(v?.split(',')[1] ?? '') || 2.4 }))(QS.get('key'));
   if (KEY && set?.setKeys) {
     actors.onFrame(() => {
@@ -454,6 +479,8 @@ export async function createStage({ city, CITY, map = CITYMAP, loader: given = n
         } else if (keys.length < 3) keys.push(over(...m));
       }
       if (mine) keys.unshift(over(...mine));
+      // (raidfight-2: lamps a scene of its own asks for, by night: the raid's muzzle flashes, a frame or three each)
+      for (const p of keyAlso?.() ?? []) if (keys.length < 4) keys.push(p);
       set.setKeys(keys);
     });
   }
@@ -566,6 +593,7 @@ export async function createStage({ city, CITY, map = CITYMAP, loader: given = n
     director.clear();
     director.setPlayer(mode === 'watch' ? null : you);
     for (const A of actors.all()) actors.remove(A.id);
+    along.clear();
     const { state } = game;
     ends = {};
     // the zone the season opens in: where the lead is (everyone is put where the state has them; whoever is not in
@@ -586,10 +614,14 @@ export async function createStage({ city, CITY, map = CITYMAP, loader: given = n
       ends[agentId] = { block: a.block, spot: 'street', held };
     }
     for (const npc of Object.values(state.npcs ?? {})) {
-      const look = (LOOKS[npc.role] ?? LOOKS.buyer)(npc, kin);
+      // (named-1: one of the city's drawn named people wears their own pieces, at their own size, and nothing of the
+      // role's: demo/run/scenes.js NAMED)
+      const was = (LOOKS[npc.role] ?? LOOKS.buyer)(npc, kin);
+      const look = npc.named ? { named: npc.named, was } : was;
       actors.add({ id: npc.id, name: npc.name, x: 0, z: 0, look: { seed: `npc:${npc.name}`, ...look } });
       const home = npc.held ? { block: npc.held, spot: 'street', held: null } : { block: npc.block, spot: npc.spot ?? 'street', held: null };
       director.add({ id: npc.id, kind: 'npc', role: npc.role, ...home, routine: 'idle', keep: !!npc.keep });
+      if (npc.named) along.attach(npc.id);
     }
     actors.mark(mode === 'watch' ? null : you);
     if (z0 === loader.zone) {
@@ -726,6 +758,8 @@ export async function createStage({ city, CITY, map = CITYMAP, loader: given = n
     note.len = +(actors.clock - t0).toFixed(1);
     note.log = director.log.filter(e => e.hour === director.hourNo).map(e => `${e.kind}@${e.block} ${e.began}+${e.took}${e.waited > 0.5 ? ` (waited ${e.waited})` : ''}${e.ownWalk ? ` own walk ${e.ownWalk}` : ''}${e.took > 6 ? ` [${e.steps.join(', ')}]` : ''}`);
     // (the lead's own walks this hour: where to, how far, at what pace, how long, for the tools)
+    // (each scene's steps and their seconds, for the tools that measure a scene's pace: demo/tools/hand-film.mjs)
+    note.steps = director.log.filter(e => e.hour === director.hourNo).map(e => e.steps.join(', '));
     note.walks = director.trips.filter(e => e.hour === director.hourNo && e.id === id).map(e => `${e.to}${e.xz ? ` (${e.xz})` : ''} ${e.way ?? '?'} m @${e.pace ?? '-'} ${e.took ?? '-'} s ${e.ended}`);
     notes.push(note);
     if (notes.length > 80) notes.shift();
@@ -788,6 +822,10 @@ export async function createStage({ city, CITY, map = CITYMAP, loader: given = n
       const did = director.skipTrip(journeying);
       if (did) rides?.closeBetween();
       return did;
+    },
+    /** (raidfight-4) The clock last set ({ day, hour }), or null. */
+    get clock() {
+      return lastClock;
     },
     setClock(clock) {
       lastClock = clock;
@@ -897,6 +935,10 @@ export async function createStage({ city, CITY, map = CITYMAP, loader: given = n
      * No fade and no camera move of its own: the page holds the black and puts the camera where it wants it. → the
      * loader's entry ({ seconds, built, cached, blocks }).
      */
+    /** (raidfight-2) A scene's own key lamps by night, after the ones over whoever the picture is about (at most four in all): fn() → [[x, y, z], ...], or null. */
+    keyLamps(fn) {
+      keyAlso = fn;
+    },
     async enterZone(z, view = null) {
       await inFlight.catch(() => {});
       await ready;
@@ -924,6 +966,14 @@ export async function createStage({ city, CITY, map = CITYMAP, loader: given = n
       city.camera.clearViewOffset();
     },
     actors,
+    /** (named-1) the things that go about with a named person (props/along.js): attach, pose, state */
+    along,
+    /** (notes-2) Mr. Pruitt's workbench (set/workbench.js): state(), anvilTop(spot) */
+    workbench,
+    /** (anim-1) A fight's ground, kept clear while it is on: room.open({ c, r, keep }) → { close(), inside() } (room.js). */
+    room,
+    /** (anim-1) The deals performed on hand-posed bodies: hands.perform(…), hands.state (hands/perform.js). */
+    hands,
     /**
      * TRYING ON (lib-1): the player shown wearing `pieces` ({ cast slot: id }, e.g. from src/run/library.mjs tryOn's
      * `dress`) until tryOff(); nothing of the run changes. The page ends it when the player leaves the wardrobe or stall.
@@ -937,6 +987,8 @@ export async function createStage({ city, CITY, map = CITYMAP, loader: given = n
     figures,
     stands,
     doorway,
+    /** (sixes-1) For the tools: what the run's crib shows now (set/starter.js shows), or null. */
+    starterShows: () => set?.starterShows?.() ?? null,
     inside,
     opening,
     fall,

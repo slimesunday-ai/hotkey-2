@@ -1,6 +1,6 @@
 // Home objects · round 2 (the reviewer's gaps): the walk-up's window AC, a dining set, a wardrobe of hanging clothes, a medicine cabinet
 // and the pedestal sink it hangs over, a fish tank (lit or dark via `states`).
-import { def, K, SAFE, pick, cyl, LIT, glow, shade, mix, rng, hash } from './lib.js';
+import { def, K, SAFE, pick, cyl, LIT, glow, shade, mix, rng, hash, fsurf } from './lib.js';
 
 // the window AC in its window: frame, a deep sill, accordion panels, the lower sash down on the unit, a towel over the sill, the drip
 export const acWindow = def({ id: 'ac-window', name: 'Window AC', cat: 'electronics', place: 'wall', foot: [4, 6], h: 0.45, mount: 0.65,
@@ -82,17 +82,30 @@ export const sinkBath = def({ id: 'sink-bath', name: 'Pedestal sink', cat: 'bath
 export const fishTank = def({ id: 'fish-tank', name: 'Fish tank', cat: 'decor', place: 'floor', foot: [4, 2], h: 1.3, tops: [1.3], states: ['on', 'off'],
   tiers: ['trailer', 'apartment', 'house', 'penthouse'], tags: ['fish', 'glow', 'aquarium'], variants: 2, vnames: ['black stand', 'walnut stand'], far: true,
   build(V, { variant = 0, seed = 1, state = 'on' } = {}) {
-    const st = pick([0x1f1f24, K.walnut], variant), on = state !== 'off', L = on ? LIT : 1, r = rng(seed * 13 + 7);
+    // THIRD PASS · the tank keeps its box; the confetti is gone: sand and pebbles, weed rising, a sunken safe, and the fish and
+    // bubbles painted on the glass (fine), so it reads as a lit tank with a few fish
+    const st = pick([0x1f1f24, K.walnut], variant), on = state !== 'off', L = on ? LIT : 1;
     V.box(0, 0, 0, 20, 14, 9, st); V.box(1, 1, 8, 19, 13, 9, shade(st, 1.25)); V.box(9, 1, 8, 11, 13, 9, st); V.set(8, 7, 9, K.gold, 2); V.set(11, 7, 9, K.gold, 2);   // the stand, two doors
     V.box(0, 14, 0, 20, 24, 9, (x, y) => mix(on ? K.cyan : 0x1f5a8a, on ? K.cobalt : 0x14224a, (23 - y) / 9), L);          // the water
-    V.box(0, 14, 0, 20, 16, 9, (x, y, z) => pick([K.pink, K.yellow, K.cyan, K.white, 0xc98a4b], ((hash(x, y, z) * 5) | 0)));   // gravel
+    V.box(0, 14, 0, 20, 16, 9, (x, y, z) => (y === 15 && hash(x, y, z) > .7 ? pick([0x8a8e98, 0x6d707a, 0xb08a5a], (hash(z, x, y) * 3) | 0) : y === 15 ? 0xd8c08a : 0xc4a874), 1);   // sand, a few pebbles
     for (const x of [0, 19]) for (const z of [0, 8]) V.box(x, 14, z, x + 1, 24, z + 1, K.ink);                       // the glass edges
-    for (const [x, n] of [[2, 6], [3, 4], [16, 7], [17, 5], [9, 3]]) for (let y = 16; y < 16 + n; y++) V.set(x + (y % 3 === 0 ? 1 : 0), y, 8, y % 2 ? K.leaf : K.leafD, L);   // plants
+    for (const [x, n] of [[2, 6], [3, 4], [16, 7], [17, 5]]) for (let y = 16; y < 16 + n; y++) V.set(x + (y % 3 === 0 ? 1 : 0), y, 8, y % 2 ? K.leaf : K.leafD, L);   // weed
     V.box(12, 16, 8, 15, 18, 9, SAFE.body); V.set(14, 17, 8, K.gold, 2);                                                  // a sunken safe (a wink)
-    for (let y = 17; y < 24; y += 2) V.set(6, y, 8, K.white, L);                                                     // bubbles
-    for (let k = 0; k < 5; k++) { const fx = 2 + ((r() * 14) | 0), fy = 17 + ((r() * 6) | 0), fc = pick([K.orange, K.yellow, K.pink, K.orange, K.red], k), left = r() < .5;
-      V.box(fx, fy, 8, fx + 3, fy + 1, 9, fc, L); V.set(left ? fx + 3 : fx - 1, fy, 8, shade(fc, .75), L); V.set(left ? fx : fx + 2, fy, 8, K.ink, L); }   // fish
     V.box(0, 24, 0, 20, 26, 9, K.ink); V.box(1, 24, 8, 19, 25, 9, on ? K.white : K.gun, on ? LIT : 0);             // the hood, its light
+    void seed;
+  },
+  fine(P, { variant = 0, seed = 1, V } = {}) {
+    // on the front glass (the water's +z faces): five fish (a body, a tail, a fin, an eye), weed fronds, a rising trail of bubbles
+    const r = rng(seed * 13 + 7 + variant), F = [];
+    for (let k = 0; k < 5; k++) F.push({ x: 3 + k * 3.1 + r() * 1.2, y: 17.2 + ((k * 7 + (r() * 4 | 0)) % 6) * .9, c: pick([K.orange, K.yellow, K.red, K.orange, K.pink], k), left: k % 2 === 0 });
+    const fish = (X, Y) => { for (const f of F) { const dx = (X - f.x) * (f.left ? -1 : 1), dy = Y - f.y;
+        if ((dx / 1.05) ** 2 + (dy / .55) ** 2 <= 1) return Math.abs(dx - .62) < .13 && Math.abs(dy - .12) < .13 ? K.ink : dy < -.25 ? shade(f.c, .8) : f.c;   // body, eye
+        if (dx < -.85 && dx > -1.6 && Math.abs(dy) < (-.85 - dx) * .75) return shade(f.c, .85);                          // the tail
+        if (dy > .45 && dy < .8 && dx > -.4 && dx < .35) return shade(f.c, .85); }                                       // the fin
+      if ([[6.5, 17.3], [6.8, 18.6], [6.4, 20], [6.9, 21.4], [6.6, 22.8]].some(([bx, by], i) => Math.hypot(X - bx, Y - by) < .18 + i * .03)) return 0xeaf6ff;   // bubbles
+      for (const [wx, top] of [[1.6, 21.8], [4.2, 20.2], [15.6, 22.6], [18.2, 21]]) if (Y > 16 && Y < top && Math.abs(X - wx - Math.sin(Y * 1.7) * .35) < .22) return K.leafD;   // weed fronds
+      return null; };
+    fsurf(P, V, '+z', 1, 16, 0, 19, 24, 9, (x, y, z, i, j) => fish(x + (i + .5) / 4, y + (j + .5) / 4));
   } });
 
 export const EXTRAS = [acWindow, diningSet, wardrobe, medicineCabinet, sinkBath, fishTank];

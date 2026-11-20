@@ -12,12 +12,17 @@ import {
   danger, deal, jobOdds, jobPay, jumpBand, jumpContest, jumpTakes, morningEnergy, ownsAll, clamp, namedLabel, whoOf, cap,
   placeOf, tierOf, homeId, streetOf, heatPlace, drawSupply, supplyLeft, robOdds, binsFinds, shopOf, fullEnergy,
   soldTo, doorChance, regularsOf, grudgeLeft, countToday, trustOf, trustAfter, trustBand, offDays, tellRisk, jobTrust,
-  homeOfPerson, placeHeat, isHot, streetPlaces, canHeat,
+  homeOfPerson, placeHeat, isHot, streetPlaces, canHeat, foodToday, isFood,
   goodsOn, goodsHome, withGood, connectOf, goodsTakes, someGoods, goodsText, connectFor,
   supplied, routesFrom, dealHand, cardOf, wayHours,
   homeStreet, atHome, pressureOf, warnChance, restUntil, defencesOf, raidTakes, doorContest, guardOf, raidCast, peopleOf,
+  fightsOnFail, doorFights, fightOut, duelBand,
+  markOn, fears, fightsNow, markWords, pronouns as pronounsOf,
+  jumpsFight, jumpOut, sentFor, armOf, armLabel, armsOf, taughtAt,
+  personOf, defVal, defBy, dogOf, raidKind, earlWayOf, earlWayWords, crewOut, sixesOf, sixesStateOf, sixesGround, sixesJob, taxOf, taxPctOf, pctWords, jumpOf,
 } from './rules.mjs';
 import { earn, lose, spend, bank, withdraw, burgle } from './ledger.mjs';
+import { raidOut, raidCrew, crewFoes, raidSize, raidAtOf, stakeOf, holdOf, holdLabel, gunHeat, shareTaken, hiddenOf, roundsOf, thingsAtRisk, thingsToKnock } from './raid.mjs';
 
 /** A roll 0–99: the rig's next chance roll if a test set one, else the seeded dice. */
 const d100 = (state, keys) => (state.rig?.chances?.length ? state.rig.chances.shift() : Math.floor(rng(state.seed, ...keys)() * 100));
@@ -42,10 +47,15 @@ export function step(cfg, input, choice) {
 
   // a way along a route (config.mjs `ways`: its `do` is the choice)
   const way = Object.keys(cfg.ways ?? {}).find(w => cfg.ways[w].do === choice.do);
-  if (way) setOut(cfg, state, way, choice, at, push);
+  // (sixes-1: leaving the Sixes' ground, they may be waiting by the steps: Dutch for the tax, or two of them)
+  const stopped = (!!way || choice.do === 'subway') && sixesStop(cfg, state, at, push);
+  if (stopped) { /* (you are still where you were: choose again) */ }
+  else if (way) setOut(cfg, state, way, choice, at, push);
   else act(cfg, state, choice, at, push);
   // an attempt on your crib due today: it starts once you are away, from its hour on, and is met or settled (home-1)
   homeWatch(cfg, state, at, push);
+  // whoever comes to your door tomorrow says so this evening (memory-1)
+  if (cfg.memory && state.hour >= cfg.memory.due.warnHour) warnDue(cfg, state, at, push);
   return { state, events };
 }
 
@@ -121,6 +131,12 @@ function act(cfg, state, choice, at, push) {
       break;
     }
     case 'guard': setGuard(cfg, state, choice.on, at, push); break;
+    case 'learn': learn(cfg, state, choice.style, at, push); break;
+    case 'fightWith': fightWith(cfg, state, choice.with, at, push); break;
+    case 'earlWay': tellEarl(cfg, state, choice.way, at, push); break;
+    case 'tax': answerTax(cfg, state, !!choice.pay, at, push); break;
+    case 'ammo': buyAmmo(cfg, state, choice.item, at, push); break;
+    case 'holdWith': holdWith(cfg, state, choice.with, at, push); break;
     default: throw new Error(`unknown choice ${choice.do}`);
   }
 }
@@ -134,6 +150,12 @@ function sameChoice(a, b) {
   if (a.do === 'buy' || a.do === 'shop' || a.do === 'get' || a.do === 'wear' || a.do === 'unwear') return a.item === b.item;
   if (a.do === 'pack') return a.good === b.good;
   if (a.do === 'guard') return !!a.on === !!b.on;
+  if (a.do === 'learn') return a.style === b.style;
+  if (a.do === 'fightWith') return a.with === b.with;
+  if (a.do === 'earlWay') return a.way === b.way;
+  if (a.do === 'tax') return !!a.pay === !!b.pay;
+  if (a.do === 'ammo') return a.item === b.item;
+  if (a.do === 'holdWith') return a.with === b.with;
   return true; // inside, out (any amount, checked in step), sleep, morning, rob, bins, rough, give, refuse
 }
 
@@ -170,6 +192,7 @@ function work(cfg, state, choice, at, push) {
   }
   const odds = jobOdds(cfg, state, job); // before acting: tired is energy 2 or less now
   const pay0 = jobPay(cfg, state, job); // before acting: with you or not
+  const energy0 = state.energy; // before acting: what you bring to a fight
   const keys = ['run-job', state.day, state.hour, place, job.id];
   const r = odds.pct >= 100 ? { hit: true, roll: null, chance: 100 } : rollChance(state, odds.pct, keys);
   const scenes = job.scene ?? {};
@@ -207,16 +230,49 @@ function work(cfg, state, choice, at, push) {
     }
     const trust = who ? moveTrust(cfg, state, who, jobTrust(job).win, 'job', moodWhy(cfg, mood)) : null;
     const pressure = press(cfg, state, place, job.pressure?.win, job.id, `${label} (day ${state.day})`, who);
-    push({ ...base, outcome: 'win', pay, heat: job.winHeat ?? 0, placeHeat: heatNow, mood, outToday: out, ...extra, ...(trust ? { trust } : {}), ...(pressure ? { pressure } : {}), text: `${label}: +$${pay}${job.winHeat ? `, heat +${job.winHeat}` : ''}.${after}${leftText}`, money: [moved], scene: scenes.win ?? { action: 'idle' } });
+    // (memory-1: taken off them to their face, a week's mark, unless they hold one already; paid up out of fear, said)
+    const mark = job.mark?.win && who ? markPerson(cfg, state, who, job.mark.win, place) : null;
+    const six = sixesWork(cfg, state, place, job, pay, label);
+    const feared = !!odds.feared;
+    const scared = feared ? ` ${cap(who.name)} fears you and paid up without a fight.` : '';
+    push({ ...base, outcome: 'win', pay, heat: job.winHeat ?? 0, placeHeat: heatNow, mood, outToday: out, ...extra, ...(trust ? { trust } : {}), ...(pressure ? { pressure } : {}), ...(mark ? { mark } : {}), ...(feared ? { fear: true } : {}), ...(six.note ? { sixes: six.note } : {}),
+      text: `${label}: +$${pay}${job.winHeat ? `, heat +${job.winHeat}` : ''}.${scared}${after}${leftText}`, money: [moved], scene: scenes.win ?? { action: 'idle' } });
+    for (const e of six.then) push(at(e));
     return canHeat(job); // a job that can heat the place can be seen, whichever way it went
   } else {
-    state.heat = clamp(state.heat + (job.failHeat ?? 0), 0, cfg.heat.max);
-    const heatNow = heatPlace(cfg, state, place, job.failHeat ?? 0);
-    state.energy = Math.max(0, state.energy - (job.failEnergy ?? 0));
-    const cost = [job.failHeat ? `heat +${job.failHeat}` : null, job.failEnergy ? `energy −${job.failEnergy}` : null].filter(Boolean).join(', ');
+    // (duel-1: gone wrong to their face, they fight you, and the fight decides it: rules.mjs fightOut)
+    // (memory-1: a job that says `feared` is no fight with somebody who fears you: rules.mjs fightsNow)
+    const duel = who && fightsNow(cfg, state, job, who) ? fightOut(cfg, state, who, keys, energy0) : null;
+    const gaveWay = !!who && !duel && fightsOnFail(cfg, job);
+    const won = duel?.result === 'won';
+    const energyLost = duel ? cfg.duel.cost[won ? 'win' : 'lose'] : job.failEnergy ?? 0; // (the fight's cost replaces failEnergy)
+    let pay = 0;
+    let moved = null;
+    if (won) {
+      // won: the job pays as a win; the rest (their trust, the heat, the pressure at home) is a failure's
+      pay = payIn(state, pay0, ['run-pay', ...keys.slice(1)]);
+      moved = earn(state, pay);
+    }
+    // (bigman-1: a job's `wonHeat`, the heat when it went wrong and you won the fight; else its failHeat)
+    const heat = (won ? job.wonHeat : null) ?? job.failHeat ?? 0;
+    state.heat = clamp(state.heat + heat, 0, cfg.heat.max);
+    const heatNow = heatPlace(cfg, state, place, heat);
+    state.energy = Math.max(0, state.energy - energyLost);
+    const cost = [heat ? `heat +${heat}` : null, energyLost ? `energy −${energyLost}` : null].filter(Boolean).join(', ');
     const trust = who ? moveTrust(cfg, state, who, jobTrust(job).fail, 'job', moodWhy(cfg, mood)) : null;
     const pressure = press(cfg, state, place, job.pressure?.fail, job.id, `${label}, and it went wrong (day ${state.day})`, who);
-    push({ ...base, outcome: 'fail', heat: job.failHeat ?? 0, placeHeat: heatNow, energyLost: job.failEnergy ?? 0, mood, outToday: out, ...(trust ? { trust } : {}), ...(pressure ? { pressure } : {}), text: `${label}: it went wrong${cost ? ` (${cost})` : ''}${sold ? `, and the ${sold.label} went with it` : ''}.${after}${leftText}`, money: [], scene: scenes.fail ?? scenes.win ?? { action: 'idle' } });
+    const fought = duel ? ` ${cap(who.name)} came at you: ${won ? `you beat them${pay ? ` and took it: +$${pay}` : ''}` : 'they beat you'}${cost ? ` (${cost})` : ''}.` : '';
+    // (memory-1: a fight leaves a mark either way: you beat them, they fear you a week; they beat you, every fear you
+    // hold at this place ends at once, and they will not give way to you for the week)
+    const ended = duel && !won ? breakFears(cfg, state, place, who.id) : [];
+    const mark = duel ? markPerson(cfg, state, who, won ? 'beat' : 'beaten', place, { force: true }) : null;
+    const six = sixesWork(cfg, state, place, job, pay, label);
+    const gave = gaveWay ? ` ${cap(who.name)} fears you: no fight.` : '';
+    const text = duel ? `${label}: it went wrong.${fought}${sold ? ` The ${sold.label} went with it.` : ''}${after}${leftText}`
+      : `${label}: it went wrong${cost ? ` (${cost})` : ''}${sold ? `, and the ${sold.label} went with it` : ''}.${gave}${after}${leftText}`;
+    push({ ...base, outcome: 'fail', heat, placeHeat: heatNow, energyLost, mood, outToday: out, ...(duel ? { duel, pay } : {}), ...(trust ? { trust } : {}), ...(pressure ? { pressure } : {}), ...(mark ? { mark } : {}), ...(gaveWay ? { gaveWay: true } : {}), ...(six.note ? { sixes: six.note } : {}), text, money: moved ? [moved] : [], scene: scenes.fail ?? scenes.win ?? { action: 'idle' } });
+    for (const e of ended) push(at(e));
+    for (const e of six.then) push(at(e));
     return canHeat(job);
   }
 }
@@ -369,8 +425,12 @@ function buyHere(cfg, state, item, at, push) {
   });
   const keeper = keeperOf(cfg, place, it.keeper);
   const left = it.perDay ? Math.max(0, it.perDay - (it.bought + 1)) : null;
+  // (the day's one count across every food and drink: config `food`)
+  const food = isFood(it) ? foodToday(cfg, state) : null;
+  const dayText = food?.full ? ` ${cap(cfg.food.full)}.` : '';
   push(at({ type: 'shop', by: 'you', item, price: it.price, gives: { ...(it.gives ?? {}) }, kind: it.kind ?? 'food', keeper, spot: it.spot ?? null, perDay: it.perDay ?? null, left, used: true,
-    text: `You bought ${it.label.toLowerCase()} for $${it.price}${keeper ? ` from ${keeper.name}` : ''}${did.length ? `: ${did.join(', ')}` : ''}.${left !== null ? ` ${left ? `${left} more` : 'No more'} today.` : ''}`, money: [moved], scene: { action: 'hand_off' } }));
+    ...(food ? { food: { eaten: food.eaten, perDay: food.perDay, left: food.left, full: food.full } } : {}),
+    text: `You bought ${it.label.toLowerCase()} for $${it.price}${keeper ? ` from ${keeper.name}` : ''}${did.length ? `: ${did.join(', ')}` : ''}.${left !== null ? ` ${left ? `${left} more` : 'No more'} today.` : ''}${dayText}`, money: [moved], scene: { action: 'hand_off' } }));
 }
 
 /** The person of a place who keeps an errand (null: nobody named). */
@@ -458,6 +518,7 @@ function sleepRough(cfg, state, at, push) {
 /** Give the regular at your door what they ask, from banked: they go, friendly, and will be back. */
 function give(cfg, state, at, push) {
   const d = state.door;
+  if (d.kind === 'due') return payOff(cfg, state, at, push);
   const moved = spend(state, d.wants, { on: 'door' });
   const sold = Math.max(0, soldTo(state, d.id) - cfg.regulars.giveEases);
   state.regulars[d.id] = sold;
@@ -472,6 +533,7 @@ function give(cfg, state, at, push) {
 /** Refuse the regular at your door (shut it, or walk out past them): a fight, or their grudge. Their count starts over. */
 function refuse(cfg, state, at, push, how) {
   const d = state.door;
+  if (d.kind === 'due') return fightDue(cfg, state, at, push, how);
   const R = cfg.regulars;
   const who = { id: d.id, name: d.name, role: d.role };
   state.door = null;
@@ -480,8 +542,28 @@ function refuse(cfg, state, at, push, how) {
   const trust = moveTrust(cfg, state, who, cfg.trust.refuse, 'refused', 'you refused them at your door');
   const pressure = press(cfg, state, homeStreet(cfg), cfg.pressure?.refuse, 'refuse', `You shut the door on ${d.name} (day ${state.day})`, who);
   push(at({ type: 'refused', by: 'you', who, how, ...(trust ? { trust } : {}), ...(pressure ? { pressure } : {}), text: how === 'past' ? `You walked out past ${d.name}.` : `You shut the door on ${d.name}.`, scene: how === 'past' ? { action: 'walk', spot: 'door' } : { action: 'shove' } }));
-  const r = rollChance(state, R.fightPct, ['run-door-fight', state.day, d.id]);
-  if (r.hit) {
+  const r0 = rollChance(state, R.fightPct, ['run-door-fight', state.day, d.id]);
+  // (memory-1: one who fears you does not swing at your door)
+  const scared = fears(cfg, state, d.id);
+  const r = scared ? { ...r0, hit: false } : r0;
+  if (r.hit && doorFights(cfg)) {
+    // THE FIGHT AT YOUR DOOR (duel-1): a one-on-one, and it decides it. Lost is their win as the contest had it (their
+    // clean win while they have more than doorClean percent of their health left, else the scuffle); won, their losing
+    const duel = fightOut(cfg, state, who, [state.day, d.id, how]);
+    const outcome = duelBand(cfg, duel);
+    const hurt = R.hurt[outcome] ?? 0;
+    state.energy = Math.max(0, state.energy - hurt);
+    state.people[d.id] = { mood: 'sour', out: true, job: null };
+    // (memory-1: the fight leaves its mark; lost, every fear you hold on your own street ends)
+    const street = homeStreet(cfg);
+    const ended = duel.result === 'won' ? [] : breakFears(cfg, state, street, d.id);
+    const mark = markPerson(cfg, state, who, duel.result === 'won' ? 'beat' : 'beaten', street, { force: true });
+    const text = outcome === 'clean' ? `${cap(d.name)} would not take no and laid into you: energy −${hurt}.`
+      : outcome === 'messy' ? `${cap(d.name)} swung at you, a scuffle at your door, and they had the better of it: energy −${hurt}.`
+        : `${cap(d.name)} swung at you and you saw them off.`;
+    push(at({ type: 'fight', by: d.id, who, roll: r.roll, chance: r.chance, duel, outcome, energyLost: hurt, ...(mark ? { mark } : {}), text, scene: { kind: `fight:${outcome}` } }));
+    for (const e of ended) push(at(e));
+  } else if (r.hit) {
     // the fight at your door (rules.mjs doorContest: the same one an attempt on your crib is met with)
     const { P } = doorContest(cfg, state, R.strength);
     const roll = contestRoll(state, ['run-door-contest', state.day, d.id]);
@@ -495,12 +577,14 @@ function refuse(cfg, state, at, push, how) {
     push(at({ type: 'fight', by: d.id, who, roll: r.roll, chance: r.chance, contest: { P, roll, outcome }, outcome, energyLost: hurt, text, scene: { kind: `fight:${outcome}` } }));
   } else if (trustBand(cfg, trustOf(state, d.id)) === 'against') {
     // the grudge: against you (off your table while it lasts), and they call the police on where they live
-    const days = offDays(cfg, state, d.id);
     const heatNow = heatPlace(cfg, state, d.place, R.grudgeHeat);
     state.people[d.id] = { mood: 'sour', out: true, job: null };
-    push(at({ type: 'grudge', by: d.id, who, roll: r.roll, chance: r.chance, days, at: d.place, heat: R.grudgeHeat, placeHeat: heatNow, called: true,
+    // (memory-1: the door shut on them is remembered for the week: no sales to them while it lasts)
+    const mark = markPerson(cfg, state, who, 'shut', d.place);
+    const days = Math.max(offDays(cfg, state, d.id), markOn(cfg, state, d.id)?.kind === 'shut' ? markOn(cfg, state, d.id).left : 0);
+    push(at({ type: 'grudge', by: d.id, who, roll: r.roll, chance: r.chance, days, at: d.place, heat: R.grudgeHeat, placeHeat: heatNow, called: true, ...(mark ? { mark } : {}), ...(scared ? { scared: true } : {}),
       ...(state.place === d.place ? {} : { notice: callNotice(cfg, state, d.place) }), // (from your door: you are not standing there)
-      text: `${cap(d.name)} goes off cursing you: no sales to them for ${days} day${days > 1 ? 's' : ''}, and the police come round ${placeOf(cfg, d.place).where ?? placeOf(cfg, d.place).label} (heat +${R.grudgeHeat} there).`, scene: { kind: 'say' } }));
+      text: `${cap(d.name)} ${scared ? 'fears you too much to swing, and ' : ''}goes off cursing you: no sales to them for ${days} day${days > 1 ? 's' : ''}, and the police come round ${placeOf(cfg, d.place).where ?? placeOf(cfg, d.place).label} (heat +${R.grudgeHeat} there).`, scene: { kind: 'say' } }));
   } else {
     // with you before you refused them: sore, no grudge (they go back far enough with you)
     state.people[d.id] = { mood: 'sour', out: true, job: null };
@@ -538,17 +622,25 @@ function notice(cfg, state, risk, hour, at, push) {
   if (!risk.jump.chance) return false;
   const r = rollChance(state, risk.jump.chance, ['run-jump', state.day, hour]);
   if (!r.hit) return false;
-  const roll = contestRoll(state, ['run-jump-contest', state.day, hour]);
-  const outcome = jumpBand(cfg, risk.jump.strength, roll);
+  // (styles-1) GETTING JUMPED IS A FIGHT YOU WATCH: two at once, what you fight with, fresh or tired as at the start of
+  // the hour (the odds shown are the odds fought); the fight decides it: lost, the bad one; won only just, the
+  // scuffle; won, nothing. (A test that rigs a contest roll still gets the dice: their bands are the same shares.)
+  const fought = jumpsFight(cfg) && !state.rig?.rolls?.length;
+  const duel = fought ? jumpOut(cfg, state, state.place, [state.day, hour], { tired: risk.jump.tired ?? null, arm: risk.jump.fight?.arm ?? null }) : null;
+  const roll = fought ? null : contestRoll(state, ['run-jump-contest', state.day, hour]);
+  const outcome = fought ? duel.band : jumpBand(cfg, risk.jump.strength, roll);
   const takes = jumpTakes(cfg, state, state.carried)[outcome]; // from what you carry now, this hour's pay included
   const moved = takes ? [lose(state, takes, 'jumped')] : [];
   const goodsTaken = takeGoods(cfg, state, outcome);
   const what = [takes ? `$${takes}` : null, Object.keys(goodsTaken).length ? goodsText(cfg, goodsTaken) : null].filter(Boolean).join(' and ');
   const took = what ? `they took ${what}` : 'they found nothing to take';
-  const text = outcome === 'clean' ? `You were jumped, a bad one: ${took}.`
-    : outcome === 'messy' ? `You were jumped, a scuffle: ${took}.`
-      : 'Somebody tried to jump you and got nothing.';
-  push(at({ ...where, type: 'jumped', by: 'jumpers', roll: r.roll, chance: r.chance, contest: { P: risk.jump.strength, roll, outcome }, outcome, taken: takes, goodsTaken, goodsLeft: someGoods(state.goods), text, money: moved, scene: { kind: `npc:robbers:${outcome === 'disaster' ? 'fail' : outcome}` } }));
+  const text = fought ? (outcome === 'clean' ? `Two of them jumped you and beat you: ${took}.`
+    : outcome === 'messy' ? (duel.result === 'won' ? `Two of them jumped you; you saw them off, only just: ${took}.` : `Two of them jumped you and had the better of it, but you hurt them: ${took} and ran.`)
+      : 'Two of them jumped you and you saw them off.')
+    : outcome === 'clean' ? `You were jumped, a bad one: ${took}.`
+      : outcome === 'messy' ? `You were jumped, a scuffle: ${took}.`
+        : 'Somebody tried to jump you and got nothing.';
+  push(at({ ...where, type: 'jumped', by: 'jumpers', roll: r.roll, chance: r.chance, ...(fought ? { duel } : { contest: { P: risk.jump.strength, roll, outcome } }), outcome, taken: takes, goodsTaken, goodsLeft: someGoods(state.goods), text, money: moved, scene: { kind: `npc:robbers:${outcome === 'disaster' ? 'fail' : outcome}` } }));
   if (outcome === 'clean') {
     endDay(cfg, state, 'clinic', at, push);
     return true;
@@ -673,7 +765,9 @@ function playCard(cfg, state, id, at, push) {
   const heatNow = heatPlace(cfg, state, stop, heat);
   if (r.hit) {
     const pay = payIn(state, card.pay, ['run-card-pay', ...keys.slice(1)]);
-    push({ ...base, outcome: 'win', pay, heat, placeHeat: heatNow, text: `${card.label}: +$${pay}${heat ? `, heat +${heat}` : ''}.${leftText}`, money: [earn(state, pay)], scene: scenes.win ?? { action: 'idle' } });
+    // (batch-1: a card may pay nothing and cool you, the barber: "heat −1", never "heat +-1")
+    const heatWords = heat ? `heat ${heat > 0 ? '+' : '−'}${Math.abs(heat)}` : '';
+    push({ ...base, outcome: 'win', pay, heat, placeHeat: heatNow, text: `${card.label}: ${[pay ? `+$${pay}` : null, heatWords || null].filter(Boolean).join(', ') || 'done'}.${leftText}`, money: pay ? [earn(state, pay)] : [], scene: scenes.win ?? { action: 'idle' } });
   } else {
     state.energy = Math.max(0, state.energy - (card.failEnergy ?? 0));
     const cost = [heat ? `heat +${heat}` : null, card.failEnergy ? `energy −${card.failEnergy}` : null].filter(Boolean).join(', ');
@@ -698,15 +792,26 @@ function endDay(cfg, state, where, at, push) {
 function morning(cfg, state, night, push) {
   // an attempt due today that has not come yet (or not been settled) comes in the night: home, you meet it at the
   // door; anywhere else, your defences settle it (home-1)
+  // (raid-1: the Sixes come for your crib in the night: settled first; lost at home, you wake in the clinic)
+  const sx = cfg.sixesRaid ? sixesRaidNight(cfg, state, night, push) : null;
+  if (sx?.clinic) night = 'clinic';
   const raid = state.home?.raid;
   let hurtNight = 0;
   if (raid && raid.day === state.day) {
     const dayAt = (extra = {}) => ({ day: state.day, hour: state.hour, place: state.place, block: placeOf(cfg, state.place).block ?? null, to: 'you', ...extra });
-    hurtNight = resolveRaid(cfg, state, night === 'home' ? 'door' : 'away', dayAt, push, { night: true });
+    hurtNight = raid.kind === 'crew' ? resolveCrew(cfg, state, night === 'home' ? 'door' : 'away', dayAt, push, { night: true, held: night !== 'home' && night !== 'street' })
+      : resolveRaid(cfg, state, night === 'home' ? 'door' : 'away', dayAt, push, { night: true });
   } else if (raid && raid.day < state.day) state.home.raid = null;
+  // (memory-1: whoever comes to your door tomorrow has said so by the end of today)
+  if (cfg.memory) warnDue(cfg, state, (extra = {}) => ({ day: state.day, hour: state.hour, place: state.place, block: placeOf(cfg, state.place).block ?? null, to: 'you', ...extra }), push);
   const pressed = (state.home?.marks ?? []).some(m => m.day === state.day && m.n > 0);
   if (night === 'home') state.heat = Math.max(0, state.heat - cfg.heat.nightDrop);
   for (const id of Object.keys(state.placeHeat)) state.placeHeat[id] = Math.max(0, state.placeHeat[id] - (tierOf(cfg, id)?.cool ?? 1));
+  // (raid-1: a night of gunfire at your door: the heat lands after the night's cooling, on you and on your street)
+  if (sx?.heat) {
+    state.heat = Math.min(cfg.heat.max, state.heat + sx.heat);
+    heatPlace(cfg, state, homeStreet(cfg), sx.heat);
+  }
   state.energy = morningEnergy(cfg, state, night);
   state.day += 1;
   state.hour = cfg.start.hour;
@@ -741,9 +846,14 @@ function morning(cfg, state, night, push) {
   else if (street) push({ ...base, type: 'morning', text: `Day ${state.day}. You wake on the street ${placeOf(cfg, state.place).where ?? ''}, energy ${state.energy}${state.carried ? `, carrying $${state.carried}` : ''}.`.replace(' ,', ','), money: [], scene: { notice: true } });
   else push({ ...base, type: 'released', text: `Day ${state.day}. Out of the ${night} and home${kept ? ` with $${kept}, banked` : ''}, energy ${state.energy}.`, money: moved, scene: { kind: `release:${night}` } });
   if (drift.length) pushDrift(cfg, state, base, drift, push);
+  // (memory-1: a week's marks that ran out overnight; whoever feared you is due at your door this morning)
+  if (cfg.memory) expireMarks(cfg, state, base, push);
   if (!street) atTheDoor(cfg, state, base, push);
   if (hurtNight) state.energy = Math.max(cfg.energy.minMorning, state.energy - hurtNight);
+  if (sx?.hurt) state.energy = Math.max(cfg.energy.minMorning, state.energy - sx.hurt);
   homeMorning(cfg, state, base, push, pressed);
+  if (cfg.sixes && !cfg.sixes.rest) sixesMorning(cfg, state, base, push);
+  if (cfg.sixesRaid && cfg.sixes && !cfg.sixes.rest) sixesRaidMorning(cfg, state, base, push);
 }
 
 // ── home pressure (RUN.md, "Home pressure (home-1)") ────────────────────────────────────────────────────────────────
@@ -783,10 +893,12 @@ function fadeMarks(state, n) {
 }
 
 /** What could stop an attempt, as a warning lists it: each thing that defends, the guard, being home. */
-function couldDo(cfg, state) {
+function couldDo(cfg, state, kind = 'sneak') {
   const out = [];
   for (const [item, t] of Object.entries(cfg.things ?? {})) {
     if (!t.defends) continue;
+    // (sixes-1: only what does a job against this visitor)
+    if (t.against && !t.against.includes(kind)) continue;
     const keeper = (placeOf(cfg, t.at).people ?? []).find(p => p.id === t.keeper);
     out.push({ what: 'thing', item, label: t.label, price: t.price, at: t.at, spot: t.spot ?? null, keeper: keeper ? whoOf(keeper) : null, does: t.does, owned: !!state.things?.[item],
       text: state.things?.[item] ? `${cap(t.label)}: yours` : `${cap(t.label)} ($${t.price}${keeper ? `, ${keeper.name}` : ''} ${placeOf(cfg, t.at).where ?? `at ${placeOf(cfg, t.at).label}`}): ${t.does.toLowerCase()}` });
@@ -794,7 +906,7 @@ function couldDo(cfg, state) {
   const g = guardOf(cfg, state);
   if (g) out.push({ what: 'guard', who: g.who, wage: g.wage, price: g.price, days: g.days, until: g.until, on: g.on, available: g.available, why: g.why,
     text: g.on ? `${cap(g.who.name)} is on your step (through day ${g.until})` : g.available ? `Hire ${g.who.name} to ${g.label ?? 'watch your door'}: $${g.price} for ${g.days} days, paid up front (at the crib)` : g.why });
-  out.push({ what: 'home', text: 'Be home when they come: you meet them at the door' });
+  out.push({ what: 'home', text: kind === 'crew' ? 'Be home that night: you meet them at your door, in a fight' : 'Be home when they come: you meet them at the door' });
   const low = cfg.pressure.warnAt - (cfg.pressure.callOff ?? 1);
   out.push({ what: 'lay low', to: low, text: `Lay low: with the pressure down to ${low} by tomorrow morning, they think better of it` });
   return out;
@@ -811,6 +923,19 @@ function homeMorning(cfg, state, base, push, pressed) {
   state.home = state.home ?? { marks: [], raid: null, last: null, guard: null, raids: [] };
   // what you did fades: a step after a day you added to it, two after a quiet one
   if (state.home.marks?.length) fadeMarks(state, pressed ? P.fade : P.quietFade);
+  // (sixes-1) the guard dog is fed every morning from what is banked; unfed mornings in a row and it guards nothing
+  const dog = dogOf(cfg, state);
+  if (dog) {
+    const d = { hungry: 0, ...(state.home.dog ?? {}) };
+    if (state.banked >= dog.feed) {
+      if (dog.feed) push({ ...base, type: 'dogFed', by: 'you', paid: dog.feed, hungryWas: d.hungry, text: `You fed the dog ($${dog.feed}).`, money: [spend(state, dog.feed, { on: 'dog' })], scene: { notice: true } });
+      d.hungry = 0;
+    } else {
+      d.hungry += 1;
+      push({ ...base, type: 'dogFed', by: 'you', paid: 0, hungry: d.hungry, text: d.hungry >= (cfg.dog?.hungryDays ?? 2) ? `Nothing banked to feed the dog: ${d.hungry} days unfed, it sulks on its bed and guards nothing.` : 'Nothing banked to feed the dog today.', money: [], scene: { notice: true } });
+    }
+    state.home.dog = d;
+  }
   // the guard's stretch: past its last day he is gone; on its last day, a notice (keep him on at the crib, or not)
   const G = cfg.guard;
   const g0 = state.home.guard;
@@ -842,25 +967,44 @@ function homeMorning(cfg, state, base, push, pressed) {
   }
   // the warning
   if (state.home.raid) return;
+  // (sixes-1: the camera, `lead`: they are seen casing it that many days sooner; the attempts come no more often, the
+  // quiet days counted from the attempt as ever)
+  const lead = 1 + (defVal(cfg, state, 'lead') ?? 0);
   const rest = restUntil(cfg, state);
-  if (rest !== null && state.day <= rest) return;
+  if (rest !== null && state.day + lead - 1 <= rest) return;
   const p = pressureOf(cfg, state);
-  const chance = warnChance(cfg, p.value);
+  // (sixes-1: from crew.at it is a crew that comes, not a sneak; the dog sign puts a sneak off casing you, `warn`)
+  const kind = raidKind(cfg, p.value);
+  const base0 = warnChance(cfg, p.value);
+  const sign = kind === 'sneak' && base0 ? defVal(cfg, state, 'warn') ?? 0 : 0;
+  const chance = Math.max(0, base0 - sign);
   if (!chance) return;
   const r = rollChance(state, chance, ['run-case', state.day]);
   if (!r.hit) return;
   const who = raidCast(cfg, state);
   const R = cfg.raid;
+  const raidDay = state.day + lead;
   const hour = payIn(state, R.hours, ['run-raid-hour', state.day + 1]);
-  state.home.raid = { who: { id: who.id, name: who.name, role: who.role }, why: who.why, day: state.day + 1, hour, warned: state.day, started: null };
-  const stake = raidTakes(cfg, state);
-  const could = couldDo(cfg, state);
+  state.home.raid = { who: { id: who.id, name: who.name, role: who.role }, why: who.why, day: raidDay, hour, warned: state.day, started: null, ...(kind === 'crew' ? { kind } : {}) };
+  const stake = kind === 'crew' ? crewTakes(cfg, state) : raidTakes(cfg, state);
+  const could = couldDo(cfg, state, kind);
   const street = homeStreet(cfg);
   const seen = { grudge: 'with a grudge against you', against: 'who is against you', hooked: 'who wants more from you', stranger: '' }[who.why];
-  push({ ...base, type: 'casing', by: who.id, who: { id: who.id, name: who.name, role: who.role }, why: who.why, at: street, day: state.day, raidDay: state.day + 1, roll: r.roll, chance: r.chance,
+  const when = lead > 1 ? `in ${lead} days (day ${raidDay}: the camera caught them)` : 'tomorrow';
+  const told = kind === 'crew'
+    ? `${cap(who.name)}${seen ? `, ${seen},` : ''} and a friend were seen looking at your door: a crew of two, coming ${lead > 1 ? `on the night of day ${raidDay} (the camera caught them a day early)` : 'tomorrow night'}. Home, it is a fight at your door; out, they kick it in. At stake: $${stake.home.takes} of the $${stake.banked} you have banked (${stake.home.share}%) if they beat you at your door${stake.share < stake.home.share ? `; $${stake.takes} (${stake.share}%) if you are out` : ''}.`
+    : `${cap(who.name)}${seen ? `, ${seen},` : ''} was seen hanging round your crib, looking at the door: they will try it ${when} while you are out. At stake: $${stake.takes} of the $${stake.banked} you have banked (${stake.share}%).`;
+  push({ ...base, type: 'casing', by: who.id, who: { id: who.id, name: who.name, role: who.role }, why: who.why, at: street, day: state.day, raidDay, lead, kind, roll: r.roll, chance: r.chance, ...(sign ? { sign } : {}),
     pressure: { value: p.value, max: p.max, reasons: p.reasons.map(x => ({ ...x })) }, stake, could,
-    text: `${cap(who.name)}${seen ? `, ${seen},` : ''} was seen hanging round your crib, looking at the door: they will try it tomorrow while you are out. At stake: $${stake.takes} of the $${stake.banked} you have banked (${stake.share}%). You could: ${could.filter(c => !c.owned && !c.on && c.available !== false).map(c => c.text.replace(/^./, s => s.toLowerCase())).join('; ')}.`,
+    text: `${told} You could: ${could.filter(c => !c.owned && !c.on && c.available !== false).map(c => c.text.replace(/^./, s => s.toLowerCase())).join('; ')}.`,
     scene: { action: 'watch' } });
+}
+
+/** (sixes-1) What a crew would take now: crew.share of what is banked, or the safe's crewShare while you are out. */
+function crewTakes(cfg, state) {
+  const C = cfg.crew;
+  const share = defVal(cfg, state, 'crewShare', Math.min) ?? C.share;
+  return { banked: state.banked, share, takes: shareTaken(cfg, state, share), home: { share: C.share, takes: shareTaken(cfg, state, C.share) } };
 }
 
 /**
@@ -899,6 +1043,8 @@ function homeWatch(cfg, state, at, push) {
   if (!raid || raid.day !== state.day) return;
   const held = !!placeOf(cfg, state.place).held;
   const home = atHome(cfg, state);
+  // (sixes-1: a crew comes after dark, whoever is in: settled with the night, morning() above)
+  if (raid.kind === 'crew') return;
   if (!raid.started) {
     if (held) { resolveRaid(cfg, state, 'away', at, push, { held: true }); return; }
     // they wait for you to be gone: from its hour, the first time you are away from home (home all day: the night)
@@ -941,6 +1087,20 @@ function resolveRaid(cfg, state, how, at, push, { night = false, held = false } 
   const g = guardOf(cfg, state);
   const parts = [];
   let taken = 0, gotIn = false, by = how, guard = null, fight = null, roll = null, energyLost = 0, scene = null;
+  // (sixes-1: the guard dog, home and fed: a sneak who comes while you are out and hears it gives up `sneakOff` of the time)
+  const dog = dogOf(cfg, state);
+  if (how === 'away' && !g?.on && dog?.works) {
+    const r = rollChance(state, dog.off, ['run-raid-dog', ...keys]);
+    if (r.hit) {
+      H.raids = [...(H.raids ?? []), { day: raid.day, who, how: 'dog', outcome: 'held', taken: 0 }];
+      H.last = raid.day;
+      H.raid = null;
+      push(at({ type: 'raid', by: who.id, who, why: raid.why ?? null, at: street, how: 'dog', outcome: 'held', gotIn: false, taken: 0, share: d.share, banked: before, bankedAfter: state.banked, night, held,
+        hour: raid.started?.at ?? raid.hour, guard: null, fight: null, roll: r.roll, chance: r.chance, defences: { pct: d.pct, share: d.share, pctBy: d.pctBy, shareBy: d.shareBy, dog: true },
+        text: `${cap(who.name)} came for your crib${night ? ' in the night' : ''}. The dog heard them and barked the lane awake: they gave up. Nothing taken.`, money: [], scene: { action: 'watch', dog: true } }));
+      return 0;
+    }
+  }
   if (g?.on) {
     const r = contestRoll(state, ['run-raid-guard', ...keys]);
     const band = jumpBand(cfg, g.P, r);
@@ -1009,9 +1169,20 @@ function pushDrift(cfg, state, base, drift, push) {
   push({ ...base, type: 'drift', by: 'time', changes, text, scene: { notice: true } });
 }
 
-/** A regular you have leaned on may be at your door this morning, wanting more. */
+/**
+ * This morning's visit to your door (memory-1: ONE A MORNING). Who wants to come: anyone due (somebody who feared
+ * you, come for another go) or still waiting from a morning the door was taken, and a regular you have leaned on, who
+ * may turn up wanting more. The earliest due goes first (at a tie, whoever was due before this morning's roll); the
+ * others wait a day, and say so.
+ */
 function atTheDoor(cfg, state, base, push) {
+  const queued = (state.visits ?? []).filter(x => x.due <= state.day)
+    // (a regular who has turned against you since does not come asking)
+    .filter(x => x.kind !== 'regular' || !offDays(cfg, state, x.id));
+  const waiting = new Set(queued.map(x => x.id));
+  const rolled = [];
   for (const r of regularsOf(cfg)) {
+    if (waiting.has(r.id)) continue; // (already coming)
     if (offDays(cfg, state, r.id)) continue; // against you: they do not come asking
     const sold = soldTo(state, r.id);
     const chance = doorChance(cfg, sold);
@@ -1020,9 +1191,631 @@ function atTheDoor(cfg, state, base, push) {
     if (!roll.hit) continue;
     const more = (cfg.regulars.wantsUp ?? 0) * (sold - cfg.regulars.doorAt); // the more hooked, the more they want
     const wants = payIn(state, cfg.regulars.wants.map(x => x + more), ['run-door-wants', state.day, r.id]);
-    state.door = { id: r.id, name: r.name, role: r.role, place: r.place, wants };
-    push({ ...base, type: 'door', by: r.id, who: whoOf(r), wants, sold, roll: roll.roll, chance: roll.chance, money: [],
-      text: `${cap(r.name)} is at your door wanting more: they ask for $${wants}.`, scene: { action: 'crave' } });
+    rolled.push({ kind: 'regular', id: r.id, name: r.name, role: r.role, place: r.place, wants, due: state.day, sold, roll: roll.roll, chance: roll.chance });
+    break;
+  }
+  state.visits = (state.visits ?? []).filter(x => x.due > state.day);
+  const all = [...queued.map((x, i) => ({ x, i })), ...rolled.map((x, i) => ({ x, i: queued.length + i }))].sort((a, b) => a.x.due - b.x.due || a.i - b.i).map(o => o.x);
+  if (!all.length) return;
+  const [first, ...later] = all;
+  for (const x of later) {
+    state.visits.push({ ...x });
+    push({ ...base, type: 'coming', by: x.id, who: { id: x.id, name: x.name, role: x.role }, visit: x.kind, on: state.day + 1, waited: true, money: [],
+      text: `${cap(x.name)} came by your door too, but ${first.name} was there first: ${x.kind === 'due' ? 'back tomorrow for another go' : 'back tomorrow wanting more'}.`, scene: { notice: true } });
+  }
+  const who = { id: first.id, name: first.name, role: first.role };
+  if (first.kind === 'due') {
+    const D = cfg.memory.due;
+    // (styles-1: from somebody not of your street, or who keeps a shop or a stall, it is somebody they sent)
+    const sent = sentFor(cfg, state, who);
+    state.door = { kind: 'due', id: first.id, name: first.name, role: first.role, place: first.place, wants: D.price, tougher: D.tougher, since: first.since ?? null, due: first.due, ...(sent ? { sent } : {}) };
+    const them = sent ? 'him' : pronounsOf(cfg, first.id).them;
+    push({ ...base, type: 'door', by: first.id, who, due: true, wants: D.price, since: first.since ?? null, ...(first.due < state.day ? { waited: true } : {}), ...(sent ? { sent } : {}), money: [],
+      text: sent ? `${cap(first.name)} sent somebody round for another go: ${sent.says}. Pay him $${D.price} to call it square, or fight him: rested and ready, tougher than ${first.name}.`
+        : `${cap(first.name)} is at your door for another go. Pay ${them} $${D.price} to call it square, or fight ${them}: rested and ready, tougher than before.`, scene: { action: 'talk' } });
     return;
   }
+  state.door = { id: first.id, name: first.name, role: first.role, place: first.place, wants: first.wants };
+  push({ ...base, type: 'door', by: first.id, who, wants: first.wants, sold: first.sold ?? soldTo(state, first.id), ...(first.roll !== undefined ? { roll: first.roll, chance: first.chance } : { waited: true }), money: [],
+    text: `${cap(first.name)} is at your door wanting more: they ask for $${first.wants}.`, scene: { action: 'crave' } });
+}
+
+// ── people remember (memory-1, RUN.md "People remember"; config.mjs `memory`) ───────────────────────────────────────
+/**
+ * A BIG act leaves a mark on a person for the week: `kind` (config memory.kinds), made today at `place`. One a person:
+ * `force` (a fight, won or lost) always makes it anew; anything else only when they hold none. A visit of theirs still
+ * waiting is off. Returns the note the event carries ({ who, kind, day, until, left, fear, did, words, text }), or null.
+ */
+function markPerson(cfg, state, who, kind, place, { force = false } = {}) {
+  const M = cfg.memory;
+  if (!M?.kinds?.[kind] || !who) return null;
+  if (!force && markOn(cfg, state, who.id)) return null;
+  state.marks = { ...(state.marks ?? {}), [who.id]: { kind, day: state.day, place, who: { id: who.id, name: who.name, role: who.role } } };
+  state.visits = (state.visits ?? []).filter(x => !(x.kind === 'due' && x.id === who.id));
+  return markNote(cfg, state, markOn(cfg, state, who.id));
+}
+function markNote(cfg, state, m) {
+  const did = markWords(cfg, state, m.did, m);
+  const words = markWords(cfg, state, m.words, m);
+  return { who: { ...m.who }, kind: m.kind, day: m.day, until: m.day + cfg.memory.days - 1, left: m.left, fear: !!m.fear, hates: !!m.hates, holds: !!m.holds,
+    ...(m.comesDue ? { due: m.day + cfg.memory.days } : {}), did, words, text: `${did} · ${words}` };
+}
+
+/** You lost a fight at `place`: every fear its people hold of you ends at once (the winner's own mark is made after). */
+function breakFears(cfg, state, place, winner) {
+  const out = [];
+  for (const id of Object.keys(state.marks ?? {})) {
+    const m = markOn(cfg, state, id);
+    if (!m?.fear || m.place !== place) continue;
+    delete state.marks[id];
+    out.push({ type: 'markEnd', by: id, who: { ...m.who }, kind: m.kind, why: 'broken', beatBy: winner, money: [],
+      text: `${markWords(cfg, state, m.gone, m)}: they saw you beaten.`, scene: { notice: true } });
+  }
+  return out;
+}
+
+/** Overnight: marks that ran out end (said), and whoever feared you is due at your door this morning, for another go. */
+function expireMarks(cfg, state, base, push) {
+  const M = cfg.memory;
+  for (const [id, m] of Object.entries(state.marks ?? {})) {
+    if (m.day + M.days > state.day) continue;
+    delete state.marks[id];
+    const k = M.kinds[m.kind] ?? {};
+    const due = !!k.comesDue && !!k.fear;
+    if (due) state.visits = [...(state.visits ?? []).filter(x => x.id !== id), { kind: 'due', id, name: m.who.name, role: m.who.role, place: m.place, due: state.day, since: m.day }];
+    push({ ...base, type: 'markEnd', by: id, who: { ...m.who }, kind: m.kind, why: 'ran out', since: m.day, ...(due ? { comesDue: true } : {}), money: [],
+      text: `${markWords(cfg, state, k.gone ?? '{Name} has let it go', { ...m, left: 0 })}.`, scene: { notice: true } });
+  }
+}
+
+/** The evening before: whoever is due at your door tomorrow says so (once). */
+function warnDue(cfg, state, at, push) {
+  const M = cfg.memory;
+  for (const [id, m] of Object.entries(state.marks ?? {})) {
+    const k = M.kinds[m.kind] ?? {};
+    if (!k.comesDue || !k.fear || m.warned || m.day + M.days !== state.day + 1) continue;
+    state.marks[id] = { ...m, warned: true };
+    const pr = pronounsOf(cfg, id);
+    const sent = sentFor(cfg, state, m.who);
+    push(at({ type: 'coming', by: id, who: { ...m.who }, visit: 'due', on: state.day + 1, since: m.day, price: M.due.price, ...(sent ? { sent } : {}), money: [],
+      text: sent ? `${cap(m.who.name)} is sending somebody round tomorrow: another go at your door, unless you pay $${M.due.price} to call it square.`
+        : `${cap(m.who.name)} says ${pr.they === 'they' ? 'they are' : `${pr.they} is`} coming by tomorrow: another go at your door, unless you pay ${pr.them} $${M.due.price} to call it square.`, scene: { notice: true } }));
+  }
+}
+
+/** Pay off whoever came due at your door: from banked, no fight, no mark. */
+function payOff(cfg, state, at, push) {
+  const d = state.door;
+  const who = { id: d.id, name: d.name, role: d.role };
+  const moved = spend(state, d.wants, { on: 'door' });
+  state.door = null;
+  state.people[d.id] = { mood: 'sour', out: true, job: null };
+  push(at({ type: 'gave', by: 'you', who, due: true, amount: d.wants, paidOff: true, ...(d.sent ? { sent: d.sent } : {}),
+    text: d.sent ? `You paid the one ${d.name} sent $${d.wants} to call it square. He goes.` : `You paid ${d.name} $${d.wants} to call it square. ${cap(pronounsOf(cfg, d.id).they === 'they' ? 'they go' : `${pronounsOf(cfg, d.id).they} goes`)}.`, money: [moved], scene: { action: 'hand_off' } }));
+}
+
+/**
+ * Fight whoever came due at your door (refused the pay-off, or walked out or slept past them): one-on-one, them rested
+ * and ready (toughness + due.tougher). Won: they fear you another week (and come due again). Lost: their win as the
+ * regular's at the door (regulars.hurt by the band), every fear you hold on your own street ends, and they hold it.
+ */
+function fightDue(cfg, state, at, push, how) {
+  const d = state.door;
+  const who = { id: d.id, name: d.name, role: d.role };
+  state.door = null;
+  // (styles-1: somebody they sent fights as his own style, at their toughness and the same + tougher)
+  const fighter = d.sent ? { ...who, name: d.sent.name, style: d.sent.style } : who;
+  const duel = fightOut(cfg, state, fighter, ['due', state.day, d.id, how], state.energy, d.tougher ?? cfg.memory.due.tougher);
+  const outcome = duelBand(cfg, duel);
+  const hurt = cfg.regulars.hurt[outcome] ?? 0;
+  state.energy = Math.max(0, state.energy - hurt);
+  state.people[d.id] = { mood: 'sour', out: true, job: null };
+  const street = homeStreet(cfg);
+  const won = duel.result === 'won';
+  const ended = won ? [] : breakFears(cfg, state, street, d.id);
+  const mark = markPerson(cfg, state, who, won ? 'beat' : 'beaten', d.place ?? street, { force: true });
+  const name = d.sent ? cap(d.sent.name) : cap(d.name);
+  const text = won ? `${name} came for another go and you beat ${d.sent ? 'him' : `${pronounsOf(cfg, d.id).them} again`}.`
+    : outcome === 'clean' ? `${name} came for another go and laid into you: energy −${hurt}.` : `${name} came for another go and had the better of a scuffle at your door: energy −${hurt}.`;
+  push(at({ type: 'fight', by: d.id, who, due: true, how, duel, outcome, energyLost: hurt, ...(d.sent ? { sent: d.sent } : {}), ...(mark ? { mark } : {}), text: `${text}${mark ? ` ${cap(mark.text)}.` : ''}`, scene: { kind: `fight:${outcome}` } }));
+  for (const e of ended) push(at(e));
+}
+
+// ── styles-1: a punch style learned, and what you fight with ─────────────────────────────────────────────────────────
+/** A punch style learned where it is taught, from what you carry, kept for the run; no hour. What you fight with is not changed. */
+function learn(cfg, state, style, at, push) {
+  const t = taughtAt(cfg, style);
+  const moved = spend(state, t.price, { from: 'carried', on: 'lessons' });
+  state.styles = { ...(state.styles ?? {}), [style]: true };
+  push(at({ type: 'lesson', by: 'you', style, label: cfg.styles[style].label, price: t.price, keeper: t.keeper, spot: t.spot,
+    text: `${t.keeper ? cap(t.keeper.name) : 'Somebody'} showed you ${cfg.styles[style].label} for $${t.price}. It's yours: fight with it from You, any time.`, money: [moved], scene: { action: 'hand_off' } }));
+}
+
+/** What you fight with, one-on-one and jumped: one of what you own (bare hands, a style you know, the box cutter); no hour. */
+function fightWith(cfg, state, arm, at, push) {
+  const was = armOf(cfg, state);
+  state.fightWith = arm;
+  push(at({ type: 'fightWith', by: 'you', arm, was, label: armLabel(cfg, arm), text: `You'll fight with ${armLabel(cfg, arm)}${was !== arm ? ` (not ${armLabel(cfg, was)})` : ''}.`, money: [], scene: { notice: true } }));
+}
+
+// ── sixes-1: the first slice (RUN.md "The Sixes and a home that scales: the first slice") ─────────────────────────
+/**
+ * A CREW THAT KICKS THE DOOR, in the night. Home: the door fight you watch (rules.mjs crewOut: you with what you fight
+ * with, at the health a night's sleep gives; Earl beside you if he is on, told his way; the door bar's head start; the
+ * dog shut in the back). Won: they run (energy crew.hurt.won off the morning). Lost: they are in (crew.hurt.lost), and
+ * they make you open the safe: crew.share of what is banked. Earl down in it: off guard.doorHurtDays, his stretch goes
+ * on. Away for the night: Earl on the step first (the contest at crew.strength less his), then the door: a kick,
+ * crew.kickPct (the chain and locks: `kick`); in, crew.share (the safe: `crewShare`). Half the goods at the crib go
+ * with them either way they get in (crew.stockPct). Never all of it. Returns the energy lost at the door.
+ */
+function resolveCrew(cfg, state, how, at, push, { night = true, held = false } = {}) {
+  const H = state.home;
+  const raid = H.raid;
+  const C = cfg.crew;
+  const who = { ...raid.who };
+  const keys = [raid.day, who.id];
+  const before = state.banked;
+  const street = homeStreet(cfg);
+  const g = guardOf(cfg, state);
+  let gotIn = false, by = how, duel = null, guard = null, roll = null, energyLost = 0, share = C.share, shareBy = null;
+  if (how === 'door') {
+    duel = crewOut(cfg, state, keys);
+    gotIn = duel.result !== 'won';
+    energyLost = gotIn ? C.hurt.lost : C.hurt.won;
+    if (duel.earl?.down) {
+      // (down in a door fight: off the next day, and his stretch goes on when he is up)
+      H.guard = { ...(H.guard ?? {}), hurt: raid.day + (cfg.guard.doorHurtDays ?? 1) };
+      guard = { who: g.who, beaten: true, door: true, hurtDays: cfg.guard.doorHurtDays ?? 1, until: g.until, lostDays: 0 };
+    } else if (duel.earl) guard = { who: g.who, beaten: false, door: true, hurtDays: 0, until: g.until, lostDays: 0 };
+  } else {
+    if (g?.on) {
+      const P = clamp(C.strength - cfg.guard.strength, cfg.contest.min, cfg.contest.max);
+      const r = contestRoll(state, ['run-raid-guard', ...keys]);
+      const band = jumpBand(cfg, P, r);
+      const beaten = band === 'clean';
+      const lostDays = beaten ? g.until - raid.day : 0;
+      guard = { who: g.who, P, roll: r, outcome: band, beaten, hurtDays: beaten ? cfg.guard.hurtDays : 0, until: g.until, lostDays };
+      if (beaten) H.guard = { ...(H.guard ?? {}), on: false, until: null, hurt: raid.day + cfg.guard.hurtDays };
+      else by = 'guard';
+    }
+    if (by !== 'guard') {
+      const pct = defVal(cfg, state, 'kick', Math.min) ?? C.kickPct;
+      const r = rollChance(state, pct, ['run-raid', ...keys]);
+      roll = { roll: r.roll, chance: r.chance, kickBy: defBy(cfg, state, 'kick', Math.min) };
+      gotIn = r.hit;
+      const safe = defVal(cfg, state, 'crewShare', Math.min);
+      if (safe != null) {
+        share = safe;
+        shareBy = defBy(cfg, state, 'crewShare', Math.min);
+      }
+    }
+  }
+  // (raid-1: the cereal box's cash is never found; the false wall keeps the goods)
+  const taken = gotIn ? shareTaken(cfg, state, share) : 0;
+  const goodsTaken = {};
+  if (gotIn && C.stockPct && !hiddenOf(cfg, state).goods) {
+    for (const [gd, n] of Object.entries(state.stash ?? {})) {
+      const k = Math.floor((n * C.stockPct) / 100);
+      if (k > 0) {
+        goodsTaken[gd] = k;
+        state.stash[gd] = n - k;
+        if (!state.stash[gd]) delete state.stash[gd];
+      }
+    }
+  }
+  const moved = taken ? [burgle(state, taken)] : [];
+  const outcome = taken || Object.keys(goodsTaken).length ? 'taken' : 'held';
+  H.raids = [...(H.raids ?? []), { day: raid.day, who, how: by, outcome, taken, kind: 'crew' }];
+  H.last = raid.day;
+  H.raid = null;
+  const name = `${cap(who.name)} and a friend`;
+  const parts = [];
+  if (duel) {
+    parts.push(duel.result === 'won' ? `You met them at your door and saw them off (energy −${energyLost})` : `They beat you at your door and got in (energy −${energyLost}); they made you open ${shareFrom(cfg, state)}`);
+    if (guard?.beaten) parts.push(`${cap(g.who.name)} went down in it: off tomorrow, back on your step the day after`);
+  } else if (by === 'guard') parts.push(`${cap(g.who.name)} was on your step and saw them off`);
+  else {
+    if (guard?.beaten) parts.push(`They beat ${g.who.name} on your step (he is hurt: off ${cfg.guard.hurtDays} days${guard.lostDays ? `; the ${guard.lostDays} day${guard.lostDays > 1 ? 's' : ''} left of his stretch ${guard.lostDays > 1 ? 'are' : 'is'} lost` : ''})`);
+    parts.push(gotIn ? `They kicked your door in while you were ${held ? `in ${placeOf(cfg, state.place).label}` : 'out'}` : `They kicked at your door while you were ${held ? `in ${placeOf(cfg, state.place).label}` : 'out'} and it held${roll?.kickBy ? ` (${cfg.things[roll.kickBy].label})` : ''}`);
+  }
+  const gw = Object.keys(goodsTaken).length ? ` and ${goodsText(cfg, goodsTaken)}` : '';
+  const took = !gotIn ? 'Nothing taken.' : taken || gw ? `They took $${taken}${gw} (${share}% of the $${before} banked${shareBy ? `: the rest was in ${cfg.things[shareBy].label}` : ''}).` : 'They found nothing banked to take.';
+  push(at({ type: 'raid', by: who.id, who, why: raid.why ?? null, kind: 'crew', at: street, how: by, outcome, gotIn, taken, goodsTaken, share, shareBy, banked: before, bankedAfter: state.banked, night, held,
+    guard, ...(duel ? { duel, fight: { result: duel.result, energyLost } } : { fight: null }), ...(roll ? roll : {}), energyLost,
+    text: `Last night ${who.name} and a friend came for your crib. ${parts.join('. ')}. ${took}`, money: moved,
+    scene: duel ? { kind: duel.result === 'won' ? 'fight:fail' : 'fight:clean', crew: true } : gotIn ? { kind: 'breakin:clean' } : { kind: 'breakin:fail' } }));
+  return how === 'door' ? energyLost : 0;
+}
+/** Where the money comes from when they make you open it: the safe if you own one, else the floorboard. */
+const shareFrom = (cfg, state) => (defBy(cfg, state, 'crewShare', Math.min) ? `your ${cfg.things[defBy(cfg, state, 'crewShare', Math.min)].label.replace(/^an? /, '')}` : 'the floorboard');
+
+/** Tell Cousin Earl how to fight at your door (a way of guard.ways); no hour. */
+function tellEarl(cfg, state, way, at, push) {
+  const was = earlWayOf(cfg, state);
+  state.earlWay = way;
+  const W = earlWayWords(way);
+  push(at({ type: 'earlWay', by: 'you', way, was, name: W.name, says: W.says, text: `You told Cousin Earl how to fight at your door: ${W.name} (${W.says}).`, money: [], scene: { action: 'talk' } }));
+}
+
+// ── the Sixes' meter ──
+const signedS = n => (n > 0 ? `+${n}` : `−${-n}`);
+/** The Sixes' state on the run, made if missing (an older state). */
+function sixesHere(state) {
+  state.sixes = sixesStateOf(state);
+  state.sixes.marks = state.sixes.marks.map(m => ({ ...m }));
+  return state.sixes;
+}
+/** `n` points on the meter for `why` (kept at its cap: the oldest go first); the note an event carries. */
+function sixesRaise(cfg, state, n, why, text) {
+  const X = cfg.sixes;
+  const s = sixesHere(state);
+  const from = sixesOf(cfg, state).value;
+  s.marks.push({ why, text, n, day: state.day });
+  let over = s.marks.reduce((a, m) => a + m.n, 0) - (X.cap ?? X.max);
+  while (over > 0 && s.marks.length) {
+    const cut = Math.min(over, s.marks[0].n);
+    s.marks[0].n -= cut;
+    over -= cut;
+    if (!s.marks[0].n) s.marks.shift();
+  }
+  const to = sixesOf(cfg, state).value;
+  return { from, to, change: to - from, n, why, value: to, max: X.max, cap: X.cap ?? X.max, text: `The Sixes ${signedS(n)} (${to} of ${X.max}${to >= (X.cap ?? X.max) && to < X.max ? ', as high as it goes for now' : ''}).` };
+}
+/** `n` points off the oldest; `alsoToday`: and today's marks of that kind. */
+function sixesEase(cfg, state, n, alsoToday = null) {
+  const s = sixesHere(state);
+  const from = sixesOf(cfg, state).value;
+  if (alsoToday) s.marks = s.marks.filter(m => !(m.why === alsoToday && m.day === state.day));
+  let off = n;
+  while (off > 0 && s.marks.length) {
+    const cut = Math.min(off, s.marks[0].n);
+    s.marks[0].n -= cut;
+    off -= cut;
+    if (!s.marks[0].n) s.marks.shift();
+  }
+  const to = sixesOf(cfg, state).value;
+  return { from, to, change: to - from, value: to, max: cfg.sixes.max };
+}
+/**
+ * A job on their ground: what it adds to the meter (a sale once a day, a grab), what you made there today, and
+ * Dutch's word the first time the meter is at `word` or more. → { note, then: [events] }.
+ */
+function sixesWork(cfg, state, place, job, pay, label) {
+  const out = { note: null, then: [] };
+  if (!sixesGround(cfg, place)) return out;
+  const X = cfg.sixes;
+  const s = sixesHere(state);
+  if (s.madeDay !== state.day) {
+    s.madeDay = state.day;
+    s.made = 0;
+  }
+  s.made += pay ?? 0;
+  const n = sixesJob(cfg, state, job, place);
+  if (!n) return out;
+  s.did = state.day;
+  const why = (X.grabs ?? []).includes(job.id) ? 'grab' : 'sell';
+  out.note = sixesRaise(cfg, state, n, why, `${label} at their market (day ${state.day})`);
+  const v = out.note.value;
+  if (v >= X.word && !s.word) {
+    s.word = state.day;
+    const D = personOf(cfg, X.dutch);
+    out.then.push({ type: 'sixes', what: 'word', by: X.dutch, who: D ? whoOf(D) : null, value: v, max: X.max, at: place, raised: { why, n, text: out.note.text }, next: { at: X.tax, what: 'the tax' }, money: [],
+      text: `${D?.name ?? 'Dutch'} stops you by the stalls: "Nice ${why === 'grab' ? 'grab' : 'stall work'}. Shame if it turned into till work." Nothing is taken. The Sixes think this market is theirs (${v} of ${X.max}). At ${X.tax} they will want a cut of what you make here.`,
+      scene: { action: 'talk' } });
+  }
+  return out;
+}
+/**
+ * The morning: a day with nothing done on their ground eases it (`quietFade`); under `word` she will have a word again
+ * the next time; a jump due yesterday that never came is off; and at `jump` or more (nobody of the two afraid of you),
+ * the warning: they will be waiting by the subway steps at the market tomorrow.
+ */
+function sixesMorning(cfg, state, base, push) {
+  const X = cfg.sixes;
+  const s = sixesHere(state);
+  const yesterday = state.day - 1;
+  const was = sixesOf(cfg, state).value;
+  if (s.did !== yesterday && s.marks.length) {
+    const e = sixesEase(cfg, state, X.quietFade);
+    if (e.change) push({ ...base, type: 'sixes', what: 'ease', by: 'time', from: was, value: e.value, max: X.max, money: [], text: `A day off their market: the Sixes ease off a step (${e.value} of ${X.max}).`, scene: { notice: true } });
+  }
+  const now = sixesOf(cfg, state);
+  if (now.value < X.word) s.word = null;
+  if (s.madeDay !== state.day) {
+    s.madeDay = state.day;
+    s.made = 0;
+  }
+  if (s.tax && s.tax.day < state.day) s.tax = null;
+  if (s.jump && s.jump.day < state.day) {
+    push({ ...base, type: 'sixes', what: 'jumpOff', by: 'sixes', day: s.jump.day, value: now.value, max: X.max, money: [], text: 'You stayed off their market: the two who waited for you on the kerb went home.', scene: { notice: true } });
+    s.jump = null;
+  }
+  if (!s.jump && now.value >= X.jump && !now.fear.length && !(s.truce != null && s.truce >= state.day)) {
+    s.jump = { day: state.day + 1, warned: state.day };
+    push({ ...base, type: 'sixes', what: 'jumpWarned', by: X.dutch, day: state.day + 1, value: now.value, max: X.max, money: [],
+      text: `Word from the market: the Sixes will be looking for you there tomorrow (${now.value} of ${X.max}). Two of them will be waiting on the kerb when you leave for the subway. Stay away, or go and win it.`, scene: { notice: true } });
+  }
+}
+/**
+ * Leaving their ground (a ride or a walk out): two of them waiting by the steps on the day they said (the jumped
+ * fight, their two), else Dutch for the tax on a day you sold or grabbed there with the meter at `tax`. Either stops
+ * the move: you are still at the market, and choose again. → true when it stopped you.
+ */
+function sixesStop(cfg, state, at, push) {
+  const X = cfg.sixes;
+  if (!X || !sixesGround(cfg, state.place)) return false;
+  const s = sixesHere(state);
+  const now = sixesOf(cfg, state);
+  // (raid-1: beaten at your door, they leave you be: no tax, nobody on the kerb, while the truce lasts)
+  if (s.truce != null && s.truce >= state.day) return false;
+  if (s.jump && s.jump.day === state.day && !now.fear.length) {
+    sixesJump(cfg, state, at, push);
+    return true;
+  }
+  if (s.tax) return false;
+  if (now.value >= X.tax && s.did === state.day && s.taxDay !== state.day && s.madeDay === state.day && s.made > 0) {
+    // (raid-1, the push: the days in a row they have stopped you for it, this one counted)
+    const streak = (s.streakDay === state.day - 1 ? s.streak ?? 0 : 0) + 1;
+    s.streak = streak;
+    s.streakDay = state.day;
+    const wants = taxOf(cfg, s.made, streak);
+    const D = personOf(cfg, X.dutch);
+    const pct = taxPctOf(cfg, streak);
+    s.tax = { wants, made: s.made, day: state.day, value: now.value, pct, streak };
+    push(at({ type: 'sixes', what: 'tax', by: X.dutch, who: D ? whoOf(D) : null, wants, made: s.made, value: now.value, max: X.max, canPay: state.carried >= wants, pct, streak, money: [],
+      text: `${D?.name ?? 'Dutch'} is waiting on the kerb, on your way to the subway: "${pct === X.taxPct ? 'A fifth' : `${cap(pctWords(pct))}: ${streak} days running you've worked my market. That's ${pctWords(pct)}`} of what you made here today. $${wants}." You made $${s.made} at the market today. Pay her (the Sixes −${X.pay}, and today's selling doesn't count), or refuse (the Sixes +${X.raise.refuse}${now.value + X.raise.refuse >= X.jump ? `: at ${X.jump} two of them come for you here` : ''}).`,
+      scene: { action: 'talk' } }));
+    return true;
+  }
+  return false;
+}
+/** The tax answered: paid from what you carry (the meter down, today's selling not counted), or refused (up). */
+function answerTax(cfg, state, pay, at, push) {
+  const X = cfg.sixes;
+  const s = sixesHere(state);
+  const t = s.tax;
+  const D = personOf(cfg, X.dutch);
+  const name = D?.name ?? 'Dutch';
+  s.tax = null;
+  s.taxDay = state.day;
+  if (pay) {
+    const moved = spend(state, t.wants, { from: 'carried', on: 'sixes' });
+    const e = sixesEase(cfg, state, X.pay, 'sell');
+    push(at({ type: 'sixes', what: 'paid', by: 'you', who: D ? whoOf(D) : null, amount: t.wants, made: t.made, from: t.value, value: e.value, max: X.max, money: [moved],
+      text: `You paid ${name} $${t.wants}. She steps aside. The Sixes ease off: ${e.value} of ${X.max}.`, scene: { action: 'hand_off' } }));
+    return;
+  }
+  const note = sixesRaise(cfg, state, X.raise.refuse, 'refuse', `you refused ${name} the tax (day ${state.day})`);
+  push(at({ type: 'sixes', what: 'refused', by: 'you', who: D ? whoOf(D) : null, amount: t.wants, made: t.made, from: t.value, value: note.value, max: X.max, sixes: note, money: [],
+    text: `You told ${name} no. She lets you by and says nothing. ${note.text}${note.value >= X.jump ? ' They will come for you.' : ''}`, scene: { action: 'shove' } }));
+}
+/**
+ * TWO OF THE SIXES BY THE STEPS (the meter at `jump`, warned yesterday): the jumped fight (rules.mjs jumpOut), their
+ * two. Won: you keep all you carry, they fear you for a week (`seenOff`: no more waiting for you while it lasts), the
+ * meter up `raise.beat`. Lost: what a jump takes (all you carry and the clinic; a scrape, half), and the meter down to
+ * `afterJump`: they made their point. No tax that day either way.
+ */
+function sixesJump(cfg, state, at, push) {
+  const X = cfg.sixes;
+  const s = state.sixes;
+  const place = state.place;
+  const duel = jumpOut(cfg, state, place, ['sixes', state.day]);
+  const outcome = duel.band;
+  const takes = jumpTakes(cfg, state, state.carried)[outcome];
+  const moved = takes ? [lose(state, takes, 'jumped')] : [];
+  const goodsTaken = takeGoods(cfg, state, outcome);
+  const two = X.jumpers.map(id => personOf(cfg, id)).filter(Boolean);
+  const won = duel.result === 'won';
+  s.jump = null;
+  s.taxDay = state.day;
+  s.jumps = [...(s.jumps ?? []), { day: state.day, result: duel.result, band: outcome, taken: takes }];
+  const marks = won ? two.map(p => markPerson(cfg, state, whoOf(p), 'seenOff', place, { force: true })).filter(Boolean) : [];
+  let note = null;
+  if (won) note = sixesRaise(cfg, state, X.raise.beat, 'beat', `you saw off the two on the kerb (day ${state.day})`);
+  else {
+    const v = sixesOf(cfg, state).value;
+    if (v > X.afterJump) sixesEase(cfg, state, v - X.afterJump);
+  }
+  const value = sixesOf(cfg, state).value;
+  const what = [takes ? `$${takes}` : null, Object.keys(goodsTaken).length ? goodsText(cfg, goodsTaken) : null].filter(Boolean).join(' and ');
+  const text = won ? `Two of the Sixes were waiting on the kerb, on your way to the subway. ${outcome === 'messy' ? `You saw them off, only just: they got $${takes} first.` : 'You saw them off and kept every dollar.'} They will keep off you for ${cfg.memory.days} days. ${note.text}`
+    : `Two of the Sixes were waiting on the kerb, on your way to the subway, and beat you: they took ${what || 'nothing'}. They made their point (${value} of ${X.max}).`;
+  push(at({ type: 'jumped', by: 'sixes', sixes: true, who: two.map(whoOf), duel, outcome, taken: takes, goodsTaken, goodsLeft: someGoods(state.goods), value, max: X.max, ...(marks.length ? { marks } : {}), ...(note ? { note } : {}),
+    text, money: moved, scene: { kind: `npc:robbers:${outcome === 'disaster' ? 'fail' : outcome}`, sixes: true } }));
+  if (outcome === 'clean') endDay(cfg, state, 'clinic', at, push);
+}
+
+// ── the raid on your home (raid-1, RUN.md "The raid on your home (raid-1)") ─────────────────────────────────────────
+/** (raid-1) The truce after you beat them at your door: through day `truce`, none of theirs happens. */
+const truceOn = (state, day = state.day) => state.sixes?.truce != null && state.sixes.truce >= day;
+
+/**
+ * The morning's word of a raid: with their meter at sixes.raid (and no truce, nothing due, the quiet mornings after
+ * the last one gone by), the Sixes come for your crib on the night of tomorrow (the camera: a day later, so two days
+ * to answer). Who comes is set now: the size by what is at stake at your crib, the crew by the dice.
+ */
+function sixesRaidMorning(cfg, state, base, push) {
+  const X = cfg.sixes;
+  const Y = cfg.sixesRaid;
+  const s = sixesHere(state);
+  if (s.raid || truceOn(state) || X.raid == null) return;
+  if (s.raidLast != null && state.day <= s.raidLast + (Y.rest ?? 0)) return;
+  const v = sixesOf(cfg, state).value;
+  const stake = stakeOf(cfg, state);
+  const size = stake.size;
+  if (v < raidAtOf(cfg)) return;
+  const lead = 1 + (defVal(cfg, state, 'lead') ?? 0);
+  const crew = raidCrew(cfg, state, state.day);
+  const c = crewFoes(cfg, crew, size);
+  const day = state.day + lead;
+  s.raid = { day, warned: state.day, crew, size, n: c.n, stake: stake.total };
+  const D = personOf(cfg, X.dutch);
+  const when = lead > 1 ? `on the night of day ${day} (the camera caught them looking a day early)` : 'tomorrow night';
+  push({ ...base, type: 'sixes', what: 'raidWarned', by: X.dutch, who: D ? whoOf(D) : null, day, raidNight: day, lead, value: v, max: X.max, crew, size, n: c.n, count: { ...c.count }, says: c.says,
+    stake: { ...stake, hidden: { ...stake.hidden } }, money: [],
+    text: `Word from the market: the Sixes are coming for your crib ${when}. ${cap(c.text)} (${c.says}): they saw $${stake.total} worth at your place. Be home and meet them with what you hold, or be out and leave it to your door.`,
+    scene: { notice: true, sixesRaid: true } });
+}
+
+/**
+ * The night of the raid (morning(), before anything else): home, the raid fight with what you hold; out, Earl on the
+ * step, then the door, and the safe's share. → { hurt: energy off the morning, heat: from gunfire, clinic: knocked out }.
+ */
+function sixesRaidNight(cfg, state, night, push) {
+  const s = state.sixes?.raid ? sixesHere(state) : null;
+  const R = s?.raid;
+  if (!R || R.day !== state.day) {
+    if (R && R.day < state.day) s.raid = null;
+    return null;
+  }
+  const X = cfg.sixes;
+  const Y = cfg.sixesRaid;
+  const at = (extra = {}) => ({ day: state.day, hour: state.hour, place: state.place, block: placeOf(cfg, state.place).block ?? null, to: 'you', ...extra });
+  const keys = [R.day, R.crew];
+  const before = state.banked;
+  const g = guardOf(cfg, state);
+  const c = crewFoes(cfg, R.crew, R.size);
+  const home = night === 'home';
+  let fight = null, guard = null, roll = null, share = 0, shareBy = null, gotIn = false, lostGun = null, hurt = 0, heat = 0, clinic = false, how = home ? 'door' : 'away';
+  if (home) {
+    fight = raidOut(cfg, state, keys);
+    gotIn = fight.result !== 'won';
+    if (fight.gun && fight.spent) {
+      state.ammo = { ...(state.ammo ?? {}), [fight.gun]: Math.max(0, roundsOf(state, fight.gun) - fight.spent) };
+      heat = gunHeat(cfg, state, fight.gun, fight.spent);
+    }
+    if (fight.earl?.down) {
+      state.home.guard = { ...(state.home.guard ?? {}), hurt: R.day + (cfg.guard.doorHurtDays ?? 1) };
+      guard = { who: g.who, beaten: true, door: true, hurtDays: cfg.guard.doorHurtDays ?? 1, until: g.until, lostDays: 0 };
+    } else if (fight.earl) guard = { who: g.who, beaten: false, door: true, hurtDays: 0, until: g.until, lostDays: 0 };
+    if (gotIn) {
+      // (the decoy safe: you open the wrong one)
+      share = Math.round((Y.share * (100 - (defVal(cfg, state, 'decoy') ?? 0))) / 100);
+      clinic = true;
+      // (the gun in your hands goes with them, and what is left of its rounds)
+      if (fight.gun) {
+        lostGun = { item: fight.gun, label: cfg.things[fight.gun].label, rounds: roundsOf(state, fight.gun) };
+        state.things = { ...state.things, [fight.gun]: false };
+        delete state.things[fight.gun];
+        state.ammo = { ...state.ammo, [fight.gun]: 0 };
+        if (state.holdWith === fight.gun) state.holdWith = null;
+      }
+    } else hurt = fight.hurt ? Y.hurt.hurt : Y.hurt.won;
+  } else {
+    if (g?.on) {
+      const P = clamp(cfg.crew.strength - cfg.guard.strength, cfg.contest.min, cfg.contest.max);
+      const r = contestRoll(state, ['run-sixes-raid-guard', ...keys]);
+      const band = jumpBand(cfg, P, r);
+      const beaten = band === 'clean';
+      const lostDays = beaten ? g.until - R.day : 0;
+      guard = { who: g.who, P, roll: r, outcome: band, beaten, hurtDays: beaten ? cfg.guard.hurtDays : 0, until: g.until, lostDays };
+      if (beaten) state.home.guard = { ...(state.home.guard ?? {}), on: false, until: null, hurt: R.day + cfg.guard.hurtDays };
+      else how = 'guard';
+    }
+    if (how !== 'guard') {
+      const pct = defVal(cfg, state, 'kick', Math.min) ?? cfg.crew.kickPct;
+      const r = rollChance(state, pct, ['run-sixes-raid', ...keys]);
+      roll = { roll: r.roll, chance: r.chance, kickBy: defBy(cfg, state, 'kick', Math.min) };
+      gotIn = r.hit;
+      share = defVal(cfg, state, 'crewShare', Math.min) ?? Y.outShare;
+      shareBy = defBy(cfg, state, 'crewShare', Math.min);
+    }
+  }
+  const taken = gotIn ? shareTaken(cfg, state, share) : 0;
+  const hidden = hiddenOf(cfg, state, { held: lostGun?.item ?? null });
+  // (things at risk, by their own `raid`, each its own roll: carried off (never what is hidden), or knocked out for days
+  // (seen smashed, mended after: `home.out`, its last day out); a thing knocked out is never taken)
+  const thingsTaken = [], thingsOut = [];
+  if (gotIn) {
+    for (const x of thingsAtRisk(cfg, state)) {
+      if (hidden.things.includes(x.item) || !state.things?.[x.item]) continue;
+      const r = rollChance(state, x.take, ['run-sixes-raid-thing', ...keys, x.item]);
+      if (!r.hit) continue;
+      thingsTaken.push({ item: x.item, label: x.label, worth: x.worth });
+      state.things = { ...state.things };
+      delete state.things[x.item];
+      if (cfg.things[x.item]?.gun) state.ammo = { ...(state.ammo ?? {}), [x.item]: 0 };
+      if (state.holdWith === x.item) state.holdWith = null;
+    }
+    for (const x of thingsToKnock(cfg, state)) {
+      const r = rollChance(state, x.pct, ['run-sixes-raid-out', ...keys, x.item]);
+      if (!r.hit) continue;
+      const until = state.day + x.out;
+      state.home.out = { ...(state.home.out ?? {}), [x.item]: until };
+      thingsOut.push({ item: x.item, label: x.label, days: x.out, until });
+    }
+  }
+  const goodsTaken = {};
+  if (gotIn && Y.stockPct && !hidden.goods) {
+    for (const [gd, n] of Object.entries(state.stash ?? {})) {
+      const k = Math.floor((n * Y.stockPct) / 100);
+      if (k > 0) {
+        goodsTaken[gd] = k;
+        state.stash[gd] = n - k;
+        if (!state.stash[gd]) delete state.stash[gd];
+      }
+    }
+  }
+  const moved = taken ? [burgle(state, taken)] : [];
+  // (held at your door: what was in the pockets of each of them you put down, banked)
+  let spoils = 0;
+  if (home && !gotIn && Y.spoils) {
+    fight.them.each.forEach((q, i) => { if (q.down) spoils += payIn(state, Y.spoils, ['run-sixes-raid-spoils', ...keys, i]); });
+    if (spoils) {
+      moved.push(earn(state, spoils));
+      moved.push(bank(state, spoils));
+    }
+  }
+  // what it does to them: won at your door, a truce; beaten, their point made; out and in, the same; out and held, nothing
+  const won = home && !gotIn;
+  if (won) s.truce = state.day + Y.truce;
+  const outcome = won ? (fight.hurt ? 'hurt' : 'held') : home ? 'beaten' : gotIn ? 'taken' : 'held';
+  s.raid = null;
+  s.raidLast = R.day;
+  s.raids = [...(s.raids ?? []), { day: R.day, crew: R.crew, size: R.size, n: c.n, how, outcome, taken, hold: fight?.hold ?? null, spent: fight?.spent ?? 0, ...(fight ? { result: fight.result } : {}) }];
+  // (last: easing the meter makes the Sixes' state anew)
+  const v0 = sixesOf(cfg, state).value;
+  const to = won ? Y.afterWin : home ? Y.afterLoss : gotIn ? Y.afterTake : null;
+  if (to != null && v0 > to) sixesEase(cfg, state, v0 - to);
+  const value = sixesOf(cfg, state).value;
+  const gw = Object.keys(goodsTaken).length ? goodsText(cfg, goodsTaken) : null;
+  const what = [taken ? `$${taken}` : null, gw, lostGun ? lostGun.label : null, ...thingsTaken.map(x => x.label)].filter(Boolean);
+  const keep = [hidden.cash && gotIn ? `the $${Math.min(hidden.cash, before)} in the cereal box` : null, hidden.goods && gotIn && Object.keys(state.stash ?? {}).length ? 'the goods behind the false wall' : null,
+    ...(gotIn ? hidden.things.filter(k => state.things?.[k]).map(k => `${cfg.things[k].label} behind the false wall`) : [])].filter(Boolean);
+  const parts = [];
+  if (fight) {
+    parts.push(won ? `You met them at your door with ${fight.you.label} and held it${fight.hurt ? ', only just: hurt' : ''}${fight.spent ? ` (${fight.spent} round${fight.spent > 1 ? 's' : ''} fired)` : ''}`
+      : `They beat you at your door and knocked you out${fight.spent ? ` (${fight.spent} round${fight.spent > 1 ? 's' : ''} fired)` : ''}: you woke in the clinic`);
+    if (guard?.beaten) parts.push(`${cap(g.who.name)} went down in it: off tomorrow`);
+  } else if (how === 'guard') parts.push(`You were out. ${cap(g.who.name)} was on your step and saw them off`);
+  else {
+    if (guard?.beaten) parts.push(`You were out. They beat ${g.who.name} on your step (off ${cfg.guard.hurtDays} days)`);
+    parts.push(gotIn ? `They kicked your door in while you were ${night === 'street' ? 'out' : `in ${placeOf(cfg, night === 'jail' ? 'jail' : 'clinic').label}`}` : `They kicked at your door and it held${roll?.kickBy ? ` (${cfg.things[roll.kickBy].label})` : ''}`);
+  }
+  const took = gotIn ? `They took ${what.length ? what.join(', ') : 'nothing they could find'}${thingsOut.length ? `, and smashed ${thingsOut.map(x => `${x.label} (no use for ${x.days} day${x.days > 1 ? 's' : ''}, until it is mended)`).join(', ')}` : ''}${keep.length ? `; they never found ${keep.join(' or ')}` : ''}.` : 'Nothing taken.';
+  const pockets = spoils ? ` You went through their pockets: $${spoils}, banked.` : '';
+  const after = won ? `They will leave you be for ${Y.truce} days (the Sixes ${value} of ${X.max}).` : home || gotIn ? `They made their point (the Sixes ${value} of ${X.max}).` : `They will be back (the Sixes ${value} of ${X.max}).`;
+  push(at({ type: 'raid', by: 'sixes', sixes: true, kind: 'sixes', who: c.foes.map(f => ({ id: f.id, name: f.name, kind: f.kind })), crew: R.crew, size: R.size, n: c.n, says: c.says, how, outcome, gotIn,
+    taken, goodsTaken, lostGun, thingsTaken, thingsOut, share, shareBy, hidden: { ...hidden, things: [...hidden.things] }, banked: before, bankedAfter: state.banked, night: true, home, guard, ...(roll ? roll : {}),
+    ...(fight ? { duel: fight, fight: { result: fight.result, hurt: fight.hurt, spent: fight.spent } } : { fight: null }), energyLost: hurt, heat, value, max: X.max, truce: won ? s.truce : null,
+    spoils,
+    text: `Last night the Sixes came for your crib: ${c.text}. ${parts.join('. ')}. ${took}${pockets} ${after}${heat ? ` The shots carried: heat +${heat}.` : ''}`,
+    money: moved, scene: fight ? { kind: won ? 'fight:fail' : 'fight:clean', sixesRaid: true } : gotIn ? { kind: 'breakin:clean', sixesRaid: true } : { kind: 'breakin:fail', sixesRaid: true } }));
+  return { hurt, heat, clinic };
+}
+
+/** (raid-1) A box of rounds for a gun you own, from its seller where you stand (from what you carry, no hour). */
+function buyAmmo(cfg, state, item, at, push) {
+  const t = cfg.things[item];
+  const moved = spend(state, t.ammo.price, { from: 'carried', on: 'ammo' });
+  state.ammo = { ...(state.ammo ?? {}), [item]: roundsOf(state, item) + t.ammo.n };
+  const keeper = keeperOf(cfg, state.place, t.keeper);
+  push(at({ type: 'ammo', by: 'you', item, label: t.ammo.label, n: t.ammo.n, rounds: state.ammo[item], price: t.ammo.price, keeper, spot: t.spot ?? null,
+    text: `You bought ${t.ammo.label} for $${t.ammo.price}${keeper ? ` from ${keeper.name}` : ''}: ${state.ammo[item]} rounds for ${t.label}.`, money: [moved], scene: { action: 'hand_off' } }));
+}
+/** (raid-1) What you hold at your door when the Sixes come: a gun you own with rounds, or what you fight with; no hour. */
+function holdWith(cfg, state, h, at, push) {
+  const was = holdOf(cfg, state);
+  state.holdWith = h;
+  push(at({ type: 'holdWith', by: 'you', with: h, was, label: holdLabel(cfg, h), text: `If the Sixes come, you meet them at your door with ${holdLabel(cfg, h)}.`, money: [], scene: { notice: true } }));
 }

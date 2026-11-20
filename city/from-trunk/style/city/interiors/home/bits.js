@@ -24,20 +24,27 @@ function cylZ2(V, cx, cy, r, z0, z1, c) { for (let z = z0; z < z1; z++) for (let
 
 // an ornate gilded frame (w × h cubes, 3 deep at the corners): bead, cove and corner scrolls in metal gold; the picture 2 back
 export function gilded(V, w, h, img, l = 2) {
-  const G1 = K.gold, G2 = shade(K.gold, .78), G3 = shade(K.gold, 1.12);
+  // (third pass) a carved moulding in three steps, an outer lip, a raised crown of beads, a shadowed cove, with a rosette at each
+  // corner and a shell at the middle of each side; gold drawn glossy (../fine.js gild). The picture sits in it from 3 voxels in
+  const G1 = K.gold, G2 = shade(K.gold, .74), G3 = shade(K.gold, 1.14);
   for (let i = 0; i < w; i++) for (let j = 0; j < h; j++) { const e = Math.min(i, j, w - 1 - i, h - 1 - j);
     if (e >= 3) { V.set(i, j, 0, img(i - 3, j - 3, w - 6, h - 6)); continue; }
-    V.box(i, j, 0, i + 1, j + 1, e === 1 ? 3 : 2, e === 2 ? G2 : (e === 1 && (i + j) % 3 === 0) ? G3 : G1, l); }   // outer lip, a beaded crown, the inner cove
-  for (const [cx, cy] of [[2, 2], [w - 3, 2], [2, h - 3], [w - 3, h - 3]]) for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) { const x = cx + a, y = cy + b; if (Math.abs(a) + Math.abs(b) <= 2 && Math.min(x, y, w - 1 - x, h - 1 - y) <= 2) V.box(x, y, 2, x + 1, y + 1, Math.abs(a) + Math.abs(b) < 2 ? 4 : 3, G3, l); }   // corner scrolls
-  const mx = w >> 1; for (const y of [0, h - 1]) for (let a = -2; a <= 2; a++) V.set(mx + a, y, 2, G3, l);                   // cartouches
+    const along = e === i || e === w - 1 - i ? j : i;
+    V.box(i, j, 0, i + 1, j + 1, e === 1 ? 3 : 2, e === 0 ? G1 : e === 2 ? G2 : along % 2 ? G3 : G1, l); }      // lip, the crown's beads, the cove
+  const boss = (cx, cy, r) => { for (let a = -r; a <= r; a++) for (let b = -r; b <= r; b++) { const x = cx + a, y = cy + b, d = Math.abs(a) + Math.abs(b); if (d > r + (r > 1 ? 0 : 0)) continue;
+    V.box(x, y, 2, x + 1, y + 1, d === 0 ? 5 : d < r ? 4 : 3, d === 0 ? G3 : d < r ? G1 : G2, l); } };
+  for (const [cx, cy] of [[1, 1], [w - 2, 1], [1, h - 2], [w - 2, h - 2]]) boss(cx, cy, 2);                        // corner rosettes
+  const mx = w >> 1, my = h >> 1; for (const [cx, cy] of [[mx, 1], [mx, h - 2], [1, my], [w - 2, my]]) boss(cx, cy, w > 20 ? 2 : 1);   // shells mid-side
 }
 // a plinth (box with a darker base and a lighter lip), top at y1
 export function plinth(V, x0, z0, x1, z1, y1, c, l = 0) { V.box(x0, 0, z0, x1, 1, z1, shade(c, .7), l); V.box(x0 + 1, 1, z0 + 1, x1 - 1, y1 - 1, z1 - 1, c, l); V.box(x0, y1 - 1, z0, x1, y1, z1, shade(c, 1.12), l); }
-// a vitrine: four glass edges, a lid with a light under it, a glint across the front (the look of grails-case)
+// a vitrine: four glass edges, a CLEAR lid (third pass: only its rim is drawn, so what is inside shows from above, as the room's
+// camera sees it; the light is a bar under the back rail), a glint across the front (the look of grails-case)
 export function vitrine(V, x0, z0, x1, z1, y0, y1, trim = K.gold, l = 2) {
   for (const x of [x0, x1 - 1]) for (const z of [z0, z1 - 1]) V.box(x, y0, z, x + 1, y1, z + 1, trim, l);
-  V.box(x0, y1 - 1, z0, x1, y1, z1, trim, l); V.box(x0 + 1, y1 - 2, z0 + 1, x1 - 1, y1 - 1, z1 - 1, K.cream, 1);
-  const n = Math.min(x1 - x0 - 4, y1 - y0 - 3); for (let k = 0; k < n; k++) { V.set(x0 + 1 + k, y0 + k, z1 - 1, K.glint, 1); V.set(x0 + 1 + k, y0 + 1 + k, z1 - 1, K.glint, 1); }
+  for (const z of [z0, z1 - 1]) V.box(x0, y1 - 1, z, x1, y1, z + 1, trim, l); for (const x of [x0, x1 - 1]) V.box(x, y1 - 1, z0, x + 1, y1, z1, trim, l);   // the lid's rim
+  V.box(x0 + 1, y1 - 2, z0 + 1, x1 - 1, y1 - 1, z0 + 2, K.cream, 1);                                                     // its light, under the back rail
+  const n = Math.min(x1 - x0 - 4, y1 - y0 - 3, 6); for (let k = 0; k < n; k++) { V.set(x0 + 1 + k, y0 + k, z1 - 1, K.glint, 1); V.set(x0 + 1 + k, y0 + 1 + k, z1 - 1, K.glint, 1); }   // (a short glint: a long one reads as a stick)
 }
 // velvet: a cushion with tassel corners
 export function cushion(V, x0, z0, x1, z1, y0, c, tassel = K.gold) {

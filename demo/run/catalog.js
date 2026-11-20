@@ -13,9 +13,11 @@
 //   marksOf(p, v)               { owned, worn, today, here, wall }: what a tile marks
 //   ctx: { cfg, v, choosing }
 import { HOME } from '../../src/run/library-data.mjs';
+import { RUN_CONFIG } from '../../src/run/config.mjs';
 
 /** The three kinds of thing, in the Library's order. */
-export const KINDS = [{ id: 'wear', label: 'Wear' }, { id: 'home', label: 'Home' }, { id: 'ride', label: 'Ride' }];
+// (styles-1: and the ways to fight: the punch styles and the box cutter, each with what it does and where it is had)
+export const KINDS = [{ id: 'wear', label: 'Wear' }, { id: 'home', label: 'Home' }, { id: 'ride', label: 'Ride' }, { id: 'fight', label: 'Fight' }];
 /** The run's six slots to wear, in plain words. */
 export const SLOTS = [
   { id: 'head', label: 'Head' }, { id: 'eyewear', label: 'Eyewear' }, { id: 'top', label: 'Top' },
@@ -83,6 +85,25 @@ export function order(list, sort = 'price') {
   return (list ?? []).slice().sort((a, b) => by(a, b) || nameOf(a).localeCompare(nameOf(b)) || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 }
 /** "38 of 299": how many the filter shows, of every piece of that kind. */
+/**
+ * (styles-1) THE WAYS TO FIGHT, as the Library lists them (its Fight kind): each punch style (what it does, who teaches
+ * it where, its price, whether it is yours, the Learn button when it is taught here and now) and the box cutter (sold at
+ * your crib); what you fight with now marked. From the view (v.fight, v.shop) alone.
+ *   → [{ key, name, does, where, price, owned, chosen, learn: { key, can, why } | null }]
+ */
+export function fightWays(v) {
+  const F = v?.fight;
+  if (!F) return [];
+  const cutter = (v.shop ?? []).find(s => s.item === 'cutter');
+  const ways = F.styles.map(s => ({
+    key: s.style, name: cap(s.label), does: s.does, price: s.price, owned: s.known, chosen: F.arm === s.style,
+    where: `${s.keeper ? `${s.keeper.name} teaches it ` : 'Taught '}${s.where}`,
+    learn: s.known ? null : { key: s.key, can: !!s.available, why: s.available ? null : s.why },
+  }));
+  if (cutter) ways.push({ key: 'cutter', name: 'Box cutter', does: `${cutter.does}. A blade in a one-on-one: the answer to a knife.`, price: cutter.price, owned: !!cutter.owned, chosen: F.arm === 'cutter', where: 'Sold at your crib (B there)', learn: null });
+  return ways;
+}
+
 export function countLine(shown, pieces, f = FILTER0) {
   const all = (pieces ?? []).filter(p => p.kind === f.kind).length;
   return `${Array.isArray(shown) ? shown.length : shown} of ${all}`;
@@ -100,7 +121,7 @@ export function slotsOf(pieces) {
 }
 
 // ── WHERE AND WHO ─────────────────────────────────────────────────────────────────────────────────────────────────────
-const SPOT = { 'clothes-rail': 'clothes rail', 'yard-sale': 'yard sale' };
+const SPOT = { 'clothes-rail': 'clothes rail', 'yard-sale': 'swap meet' };
 const spotWord = spot => SPOT[spot] ?? (String(spot ?? '').startsWith('stall') ? 'stall' : 'shelf');
 /** A keeper's name, from the view's own errands (each names its keeper). */
 function keeperName(v, id) {
@@ -177,6 +198,11 @@ export function marksWords(m) {
 const SLOT_LINE = { head: 'Worn on the head', eyewear: 'Worn over the eyes', top: 'A top', bottom: 'Worn on the legs', feet: 'Worn on the feet', acc: 'An accessory' };
 const m = cells => `${+(cells * 0.25).toFixed(2)} m`;
 /** The slot it is worn in, or how it stands or hangs in the trailer and its size. */
+/** (sixes-1) A piece that defends your crib: its one job and whom it is against, in a sentence; else null. */
+export function jobLine(p) {
+  const T = p?.named ? RUN_CONFIG.things?.[p.key] : null;
+  return T?.job ? `Defends your crib${T.against ? ` against ${T.against.map(a => (a === 'crew' ? 'a crew' : 'a sneak')).join(' and ')}` : ''}: ${T.job}.` : null;
+}
 export function fitLine(p) {
   if (p.kind === 'wear') return SLOT_LINE[p.slot] ?? 'To wear';
   if (p.kind === 'ride') return 'A ride: faster than walking, and no energy';

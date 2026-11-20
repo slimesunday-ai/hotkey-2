@@ -6,7 +6,9 @@ import { Vol, downVol, textMask } from '../../vox.js';
 import { hash, shade, rng } from '../../style.js';
 import { TOD } from '../../kit.js';
 import { mask3 } from '../../simassets/lib.js';
-export { hash, shade, rng, TOD, mask3 };
+// the fine pass below the voxel (../fine.js: the traits' painter on a kit piece): run after build, folded into the far tier
+import { FINE, fineOf, foldFine, frect, fdisc, fline, ftxt, fsurf, fprint, inkOf, hbox, fcolour, BILL, billTex } from '../fine.js';
+export { hash, shade, rng, TOD, mask3, FINE, fineOf, frect, fdisc, fline, ftxt, fsurf, fprint, inkOf, hbox, fcolour, BILL, billTex };
 
 export const G = 0.05, CELL = 5;                    // grain (m) · cubes per 0.25 m cell
 export const LIT = 3;                               // screens, LEDs, neon: always unlit (STYLE §3)
@@ -29,9 +31,27 @@ export const K = {
 };
 export const SAFE = { body: 0x1f5c4a, lid: mix(0x1f5c4a, 0xffffff, .12) };   // the simassets safe (security.js): green body, gold pinstripe, OAK plate
 
-// ── the Vol an object draws into (near: 0.05, far: 0.1). Footprint cells × 5 cubes; height rounded up to whole cubes.
+// ── THE FINE GRAIN FOR SMALL THINGS (second art pass, 2026-11-17). A pistol, a can, a camera: under ~40 cm, a 5 cm block gives it
+// four blocks of length and paint cannot draw a cylinder, a trigger guard or a rim. Such a piece may say `grain: 0.025` (half the
+// block, the grain of the city's held gun and tools: anim/cast/clips/gun-prop.js) or `grain: 0.0125` (a quarter: a fine-paint texel),
+// and its WHOLE volume is built at that grain: the same footprint and height in metres, 10 or 20 cubes a 0.25 m cell. Its fine pass
+// paints the finer voxels' faces (texels a quarter of its own grain). The limits (home/fine-check.mjs gates on them, per variant and
+// state): a footprint of at most SMALL.cells cells and SMALL.h m tall, and at most SMALL.tris triangles in its near mesh, fine pass and
+// all. The far tier stays 0.1 (farOf downsamples by 4 or 8); the mid tier is untouched (kit pieces are meshed near).
+export const SMALL = { grains: [0.025, 0.0125], cells: 4, h: 0.4, tris: 3000 };
+// ── THE HALF GRAIN FOR SHAPED THINGS (third art pass, 2026-11-18). Some pieces past SMALL have a shape the 5 cm block cannot draw
+// either: a vase's neck and the stems in it, a monstera's split leaves, a lamp's drum shade, a stool's thin legs, a beanbag's slump, a
+// tiger's head on a rug, the teeth of a grill, the guns on a rack, the sneakers in a tower. Such a piece may be built at HALF the block
+// (0.025) if it says why (`shaped: 'a vase of flowers: the neck, the stems, the blooms'`), within these limits (home/fine-check.mjs gates
+// on them, per variant and state): the box it fills at most SHAPED.vol cell-metres (its footprint in cells × its height in metres; a
+// wall piece: its cells on the wall × how far it stands off it), so at most 96,000 half-grain cubes; at most SHAPED.h m tall; and at
+// most SHAPED.tris triangles in its near mesh, fine pass and all. The quarter grain stays for SMALL things only. The far tier is the
+// same 0.1 (farOf downsamples by 4).
+export const SHAPED = { grain: 0.025, vol: 24, h: 2.0, tris: 6000 };
+// ── the Vol an object draws into (near: 0.05, or the piece's own fine grain; far: 0.1). Footprint cells × 5 cubes (× 10 or 20 at a
+// fine grain); height rounded up to whole cubes.
 export function volFor(o, far = false) {
-  const k = far ? 2 : 1, s = G * k, [a, b] = o.foot, n = c => Math.ceil(c * CELL / k), ny = Math.max(1, Math.ceil(o.h / s - 1e-6));
+  const s = far ? G * 2 : (o.grain ?? G), k = s / G, [a, b] = o.foot, n = c => Math.ceil(c * CELL / k - 1e-9), ny = Math.max(1, Math.ceil(o.h / s - 1e-6));
   if (o.place === 'wall') return new Vol(n(a), n(b), ny, { s, org: [0, 0, 0], ground: false });
   if (o.place === 'ceiling') return new Vol(n(a), ny, n(b), { s, org: [0, -ny * s, 0], ground: false });
   return new Vol(n(a), ny, n(b), { s, org: [0, 0, 0], ground: true });
@@ -39,7 +59,9 @@ export function volFor(o, far = false) {
 // far: the object's own voxels downsampled 2× (0.05 → 0.1), weighted toward the faces you'd see (vox.js downVol), so the tier is the
 // same object at the city's grain, never a different model (STYLE §9)
 export function farOf(o) {
-  return (V, opt = {}) => { const N = volFor(o); o.build(N, opt); const D = downVol(N, 2, 2), dy = Math.round((D.org[1] - V.org[1]) / V.s);
+  // (a piece with a fine pass: its paint folded into the voxels first, so the far tier shows each painted face's average)
+  // (a fine-grain piece is downsampled by 4 or 8 to the far tier's 0.1, a coarse cell solid at the same quarter full)
+  return (V, opt = {}) => { const N = volFor(o); o.build(N, opt); if (o.fine) { fineOf(o, N, opt); foldFine(N); } const f = Math.round(V.s / N.s), D = downVol(N, f, Math.max(2, f ** 3 / 4)), dy = Math.round((D.org[1] - V.org[1]) / V.s);
     for (let y = 0; y < D.ny; y++) for (let z = 0; z < D.nz; z++) for (let x = 0; x < D.nx; x++) { const c = D.d[x + z * D.nx + y * D.sxz]; if (c) V.set(x, y + dy, z, D.pal[c], D.lay[c]); }
     return V; };
 }
@@ -59,6 +81,31 @@ export function cylZ(V, cx, cy, r, z0, z1, c, l = 0) {   // lying along z (a dis
   for (let z = z0; z < z1; z++) for (let x = Math.floor(cx - r - 1); x <= cx + r; x++) for (let y = Math.floor(cy - r - 1); y <= cy + r; y++)
     if (Math.hypot(x + .5 - cx, y + .5 - cy) <= r) V.set(x, y, z, typeof c === 'function' ? c(x, y, z) : c, l);
 }
+// a solid of revolution about the vertical axis through (cx, cz): rows y0..y1, radius rAt(y + .5) (≤ 0: none), hollow inside rIn(y + .5)
+// when given; c is a colour or (x, y, z, r, th) => colour (r the distance from the axis, th the angle; null: leave)
+export function lathe(V, cx, cz, y0, y1, rAt, c, l = 0, rIn = null) {
+  for (let y = y0; y < y1; y++) { const r = rAt(y + .5), ri = rIn ? rIn(y + .5) : -1; if (!(r > 0)) continue;
+    for (let x = Math.floor(cx - r - 1); x <= cx + r; x++) for (let z = Math.floor(cz - r - 1); z <= cz + r; z++) {
+      const d = Math.hypot(x + .5 - cx, z + .5 - cz); if (d > r || d < ri) continue;
+      V.set(x, y, z, typeof c === 'function' ? c(x, y, z, d, Math.atan2(z + .5 - cz, x + .5 - cx)) : c, l); } }
+}
+// a radius profile through [y, r] points, linear between them (for lathe)
+export const prof = P => y => { if (y <= P[0][0]) return P[0][1]; for (let k = 1; k < P.length; k++) if (y <= P[k][0]) { const [y0, r0] = P[k - 1], [y1, r1] = P[k]; return r0 + (r1 - r0) * (y - y0) / (y1 - y0); } return P[P.length - 1][1]; };
+// an ellipsoid, centre (cx, cy, cz) and radii (rx, ry, rz); c a colour or (x, y, z, u, v, w) => colour (u, v, w: −1..1 across it)
+export function ball(V, cx, cy, cz, rx, ry, rz, c, l = 0) {
+  for (let y = Math.floor(cy - ry); y <= cy + ry; y++) for (let z = Math.floor(cz - rz); z <= cz + rz; z++) for (let x = Math.floor(cx - rx); x <= cx + rx; x++) {
+    const u = (x + .5 - cx) / rx, v = (y + .5 - cy) / ry, w = (z + .5 - cz) / rz; if (u * u + v * v + w * w > 1) continue;
+    V.set(x, y, z, typeof c === 'function' ? c(x, y, z, u, v, w) : c, l); }
+}
+// a flat thing one voxel thick (a leaf, a petal, a cloth's fold): centre o, running along unit d for len each way, wid each way along
+// unit s (across), in(u, v) → true where it is (u, v: −1..1 along and across); c a colour or (x, y, z, u, v) => colour
+export function plate(V, o, d, sv, len, wid, inside, c, l = 0, curl = 0) {
+  // sampled across its face a third of a voxel apart, so a tilted plate is one closed sheet, never a sieve; curl bends its tip down
+  const nu = Math.ceil(len * 6), nv = Math.ceil(wid * 6);
+  for (let a = -nu; a <= nu; a++) for (let b = -nv; b <= nv; b++) { const u = a / nu, v = b / nv; if (!inside(u, v)) continue;
+    const k = curl * u * u * len, x = o[0] + d[0] * u * len + sv[0] * v * wid, y = o[1] + d[1] * u * len + sv[1] * v * wid - (u > 0 ? k : 0), z = o[2] + d[2] * u * len + sv[2] * v * wid;
+    V.set(Math.floor(x), Math.floor(y), Math.floor(z), typeof c === 'function' ? c(Math.floor(x), Math.floor(y), Math.floor(z), u, v) : c, l); }
+}
 // a 6-connected line (every step shares a face with the last, so a rod, a cord or a leg is never loose)
 export function line(V, x0, y0, z0, x1, y1, z1, c, l = 0) {
   const p = [Math.round(x0), Math.round(y0), Math.round(z0)], q = [Math.round(x1), Math.round(y1), Math.round(z1)], n = Math.max(1, Math.abs(q[0] - p[0]) + Math.abs(q[1] - p[1]) + Math.abs(q[2] - p[2]));
@@ -76,6 +123,7 @@ export function prune(V) {
       if (X < 0 || Y < 0 || Z < 0 || X >= nx || Y >= ny || Z >= nz) continue; const k = X + Z * nx + Y * nx * nz; if (d[k] && !keep[k]) { keep[k] = 1; st.push(k); } } }
   for (let i = 0; i < d.length; i++) if (!keep[i]) d[i] = 0; return V;
 }
+// ── FINE-PASS HELPERS: frect, fdisc, fline, ftxt, fsurf, fprint, inkOf, hbox (../fine.js, shared with the shop kit)
 // ── lettering: a mask (3×5 small print, or vox.js's 5×7) on the +z face at depth z, reading left → right from the front
 export const M3 = s => mask3(s), M5 = s => textMask(s);
 export function txt(V, M, x0, ytop, z, c, l = 0, sc = 1) {

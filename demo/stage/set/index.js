@@ -94,6 +94,8 @@ export function useStarter({ pad, owned }) {
   pads.starter.use({ pad, owned });
   return true;
 }
+/** (sixes-1) For the tools: what the run's crib shows now ({ bed, things, door, bar, … }), or null. */
+export const starterShows = () => pads?.starter?.shows?.() ?? null;
 /** For the tools: which arrangement the starter builds ('a' or 'b'), or null. */
 export const starterVariant = () => pads?.starter?.variant ?? null;
 /** The inside view's lamps by night, [[x, y, z] …], the only ones lit while it is up (light.js setInside); null takes them away. */

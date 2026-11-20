@@ -5,12 +5,21 @@ import assert from 'node:assert/strict';
 import { createFight, step, runFight, PRESETS, TICK, WEAPONS } from '../src/fight/index.mjs';
 import { FIGHT_CLIPS, CAST_CLIPS, CONTACT, fightGlsl, installClips } from '../demo/fight/clips/index.js';
 import { lookFor, lookOf, gunPose, gunMuzzle, FIRE_D } from '../demo/fight/clips/gun.js';
-import { predictBlows, windAt, LOOK, BLOW } from '../demo/fight/anim.js';
+import { predictBlows, windAt, LOOK, BLOW, GUN_CLIPS } from '../demo/fight/anim.js';
+import { longPose, longMuzzle, longHands, HOLD, LONG_GLSL, LONG_FIRE_D } from '../demo/fight/clips/long.js';
 
 test("the fight's clips are in the cast's clip format, and every weapon of the rules has its move", () => {
   for (const c of FIGHT_CLIPS) {
     assert.match(c.name, /^fight_[a-z_]+$/);
     assert.ok(c.dur > 0 && typeof c.glsl === 'string' && c.note.length > 20, c.name);
+    // (anim-1: a body posed by hand from the page, demo/fight/puppet/clip.js: it stands on its own feet, which the
+    // page plants, so it is NOT a walking overlay; it loops and never ends by itself)
+    if (c.puppet) {
+      assert.equal(c.loop, true, `${c.name} never ends by itself`);
+      assert.ok(!c.moving, `${c.name} stands on feet the page plants`);
+      assert.match(c.glsl, /fBody\(P, \d+\)/);
+      continue;
+    }
     // (walking overlays: the legs are the walk's, so one who fights while moving keeps walking)
     assert.equal(c.moving, true, `${c.name} is a walking overlay`);
     assert.equal(c.speed, 0);
@@ -117,4 +126,25 @@ test('a blow seen coming starts its wind-up so that its contact is the damage ti
     }
   }
   assert.ok(LOOK * TICK > Math.max(...Object.values(CONTACT)), 'the page looks far enough ahead for the longest wind-up');
+});
+
+test('the long guns (fight-3) sit in both hands: up, at the chest and on them; ready, low across the body; the kick lifts them', () => {
+  assert.deepEqual(GUN_CLIPS, { doorman: ['fight_doorman', 'fight_doorman_fire'], longeye: ['fight_longeye', 'fight_longeye_fire'] });
+  for (const names of Object.values(GUN_CLIPS)) for (const n of names) assert.ok(FIGHT_CLIPS.some(c => c.name === n && c.prop), `${n}, with the gun as its prop`);
+  const up = longPose(lookFor(0, 1));
+  const { R, L } = longHands(lookFor(0, 1));
+  const apart = Math.hypot(L[0] - R[0], L[1] - R[1], L[2] - R[2]);
+  assert.ok(apart > 0.15 && apart < 0.35, `the two hands ${apart.toFixed(2)} m apart along it`);
+  assert.ok(R[1] > 0.65 && R[1] < 0.9 && L[2] > R[2] + 0.15, 'at the chest, the −x hand out in front');
+  assert.ok(up.dir[2] > 0.9, `pointing ahead: ${up.dir.map(v => v.toFixed(2))}`);
+  assert.ok(longMuzzle('longeye', lookFor(0, 1)).p[2] > 0.85 && longMuzzle('doorman', lookFor(0, 1)).p[2] > 0.6, 'the barrels reach out past the big head');
+  const low = longPose(lookFor(0, 0));
+  assert.ok(low.dir[1] < -0.15 && low.p[1] < up.p[1] - 0.1, 'ready: low, pointing down across the body');
+  assert.ok(longPose(lookFor(0.8, 1)).dir[0] > 0.5, 'on someone off to the +x side, it turns to them');
+  assert.ok(longPose(lookFor(0, 1), 1).dir[1] > up.dir[1] + 0.2, 'the kick lifts the barrel');
+  // (the shader's numbers are the JS twin's: the hold's angles are written into its GLSL)
+  for (const v of [...HOLD.aim.R, ...HOLD.aim.L, ...HOLD.ready.R]) assert.ok(LONG_GLSL.includes(v.toFixed(4)), `${v} in the shader`);
+  assert.ok(fightGlsl(100).fns.includes('void fLong('));
+  assert.ok(LONG_FIRE_D.longeye > LONG_FIRE_D.doorman, 'the Long-eye\'s kick is the slower');
+  assert.ok(LONG_FIRE_D.doorman < 1 / 1.6 && LONG_FIRE_D.longeye < 1 / 0.75, 'each kick is done before its next shot');
 });

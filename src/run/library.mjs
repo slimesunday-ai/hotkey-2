@@ -83,7 +83,8 @@ export function libraryOf(cfg) {
   // the sellers: a keeper of things to wear or for the trailer at a place that is open, one shelf per kind they sell
   const sellers = [];
   for (const t of Object.values(cfg.things ?? {})) {
-    if (!t.keeper || !(t.kind === 'wear' || t.kind === 'home') || cfg.places[t.at]?.locked || !L.shelf[t.kind]) continue;
+    // (sixes-1: a keeper of the slice's late pieces only, the defences, keeps no shelf of the library's)
+    if (!t.keeper || t.late || !(t.kind === 'wear' || t.kind === 'home') || cfg.places[t.at]?.locked || !L.shelf[t.kind]) continue;
     if (sellers.some(s => s.place === t.at && s.keeper === t.keeper && s.kind === t.kind)) continue;
     sellers.push({ place: t.at, keeper: t.keeper, spot: t.spot ?? null, kind: t.kind, size: L.shelf[t.kind] });
   }

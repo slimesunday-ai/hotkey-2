@@ -84,6 +84,12 @@ function headOf(e, { cfg, before, state, v0, v1, words }) {
         ? { tone: 'loss', big: true, icon: 'warn', kicker: 'Robbed in your sleep', head: `They took ${taken(e.taken, e.goodsTaken)}`, body: '' }
         : { tone: 'good', icon: 'check', kicker: 'The night', head: 'Nobody touched you', body: '' };
     case 'raid': {
+      // (raid-1: the Sixes at your crib: their own words)
+      if (e.kind === 'sixes') {
+        const won = e.outcome === 'held' || e.outcome === 'hurt';
+        if (e.home) return won ? { tone: 'good', big: true, icon: 'homerisk', kicker: 'The Sixes, in the night', head: 'You held your door', body: e.text } : { tone: 'loss', big: true, icon: 'homerisk', kicker: 'The Sixes, in the night', head: `They beat you at your door${e.taken ? `: ${money(e.taken)} gone` : ''}`, body: e.text };
+        return e.gotIn ? { tone: 'loss', big: true, icon: 'homerisk', kicker: 'The Sixes, while you were out', head: `They got in${e.taken ? `: ${money(e.taken)} gone` : ''}`, body: e.text } : { tone: 'good', icon: 'homerisk', kicker: 'The Sixes, while you were out', head: e.how === 'guard' ? 'Earl saw them off' : 'Your door held', body: e.text };
+      }
       const who = cap(e.who?.name ?? 'somebody');
       if (e.taken) return { tone: 'loss', big: true, icon: 'homerisk', kicker: e.night ? 'Your crib, in the night' : 'Your crib was hit', head: `They got in: ${money(e.taken)} gone`, body: `${who} came for what you had banked. ${e.text}` };
       if (e.how === 'guard') return { tone: 'good', icon: 'homerisk', kicker: 'Your crib held', head: `${cap(e.guard?.who?.name ?? 'Your guard')} saw them off`, body: e.text };
@@ -99,12 +105,26 @@ function headOf(e, { cfg, before, state, v0, v1, words }) {
       return { tone: 'news', icon: 'homerisk', kicker: 'Warning', head: `${cap(e.who?.name ?? 'Somebody')} was casing your crib`, body: e.text };
     case 'calledOff':
       return { tone: 'good', icon: 'homerisk', kicker: 'Called off', head: 'They thought better of it', body: e.text };
+    // (memory-1: somebody who feared you is coming to your door tomorrow; a mark ran out, or broke)
+    case 'coming':
+      return { tone: 'news', icon: 'person', kicker: 'Coming tomorrow', head: cap(String(e.text).split(/:\s/)[0]), body: e.text };
+    case 'markEnd':
+      return { tone: e.kind === 'beaten' || e.kind === 'shut' ? 'good' : 'news', icon: 'person', kicker: e.why === 'broken' ? 'They saw you beaten' : 'A week gone', head: cap(String(e.text).split(/:\s/)[0].replace(/\.$/, '')), body: e.text };
     case 'job':
     case 'card': {
       const label = e.type === 'card' ? words.card(e.card) : e.label;
       const odds = e.chance !== null && e.chance !== undefined && e.chance < 100 ? `${e.chance}% chance · ${e.outcome === 'win' ? 'it came up' : 'it missed'}` : e.chance >= 100 ? 'a sure thing' : null;
+      // (duel-1: gone wrong to their face, a fight decided it: won, it paid; lost, the failure and the fight's cost)
+      if (e.duel) {
+        const won = e.duel.result === 'won';
+        const cost = [e.heat ? `heat +${e.heat}` : null, e.energyLost ? `energy −${e.energyLost}` : null].filter(Boolean).join(', ');
+        const who = cap(e.who?.name ?? 'they');
+        return won
+          ? { tone: 'win', icon: 'cash', kicker: 'A fight: you won', chance: odds, head: `${cap(label)}: +${money(e.pay)}`, body: `It went wrong and ${who} came at you; you beat them and took it${cost ? ` (${cost})` : ''}. ${e.duel.chance?.text ? `The card said ${e.duel.chance.text}.` : ''}`.trim() }
+          : { tone: 'fail', icon: 'warn', kicker: 'A fight: you lost', chance: odds, head: `${cap(label)}: ${who} beat you`, body: `It went wrong and ${who} came at you${cost ? ` (${cost})` : ''}. ${e.duel.chance?.text ? `The card said ${e.duel.chance.text}.` : ''}`.trim() };
+      }
       return e.outcome === 'win'
-        ? { tone: 'win', icon: 'cash', kicker: 'It worked', chance: odds, head: `${cap(label)}: +${money(e.pay)}`, body: after(e.text, label) }
+        ? { tone: 'win', icon: 'cash', kicker: 'It worked', chance: odds, head: e.pay || !e.heat ? `${cap(label)}: +${money(e.pay)}` : `${cap(label)}: heat ${e.heat > 0 ? '+' : '−'}${Math.abs(e.heat)}`, body: after(e.text, label) }
         : { tone: 'fail', icon: 'warn', kicker: 'It didn\'t work', chance: odds, head: `${cap(label)}: it went wrong`, body: after(e.text, label).replace(/^it went wrong[^.]*\.\s*/, '') };
     }
     case 'rob':
@@ -129,6 +149,8 @@ function headOf(e, { cfg, before, state, v0, v1, words }) {
     case 'gave':
     case 'refused':
     case 'fight':
+      if (e.due) return { tone: e.type === 'gave' ? 'quiet' : e.duel?.result === 'won' ? 'win' : 'fail', icon: 'person', kicker: e.type === 'gave' ? 'Paid off' : e.duel?.result === 'won' ? 'A fight: you won' : 'A fight: you lost', head: cap(e.text.split(/(?<=\.)\s/)[0].replace(/\.$/, '')), body: e.text.split(/(?<=\.)\s/).slice(1).join(' ') };
+      // falls through
     case 'grudge':
     case 'sore':
       return { tone: e.type === 'gave' ? 'quiet' : e.type === 'fight' && e.energyLost ? 'fail' : 'news', icon: 'person', kicker: 'At your door', head: cap(e.text.split(/(?<=\.)\s/)[0].replace(/\.$/, '')), body: e.text.split(/(?<=\.)\s/).slice(1).join(' ') };
@@ -155,6 +177,8 @@ function headOf(e, { cfg, before, state, v0, v1, words }) {
 /** Every change the step made, as chips: money, goods, energy, time, heat, home risk, trust, things owned. */
 export function chipsOf({ cfg, before, state, events, v0, v1, words = plainWords(cfg) }) {
   const out = [];
+  // (duel-1: a fight, first: how it went, as the rules' fight and the stage's had it)
+  for (const e of events) if (e.duel) out.push({ tone: e.duel.result === 'won' ? 'gain' : 'loss', icon: 'person', text: e.duel.result === 'won' ? 'won the fight' : 'lost the fight' });
   const same = state.day === before.day;
   const dc = state.carried - before.carried;
   const db = state.banked - before.banked;
@@ -162,7 +186,7 @@ export function chipsOf({ cfg, before, state, events, v0, v1, words = plainWords
   const lost = events.filter(e => (e.type === 'stopped' && e.seized) || ((e.type === 'jumped' || e.type === 'robbed') && e.taken) || (e.type === 'raid' && e.taken));
   if (lost.length) {
     for (const e of events) {
-      const pay = (e.type === 'job' || e.type === 'rob' || e.type === 'card') && e.outcome === 'win' ? e.pay : e.type === 'bins' ? e.pay : 0;
+      const pay = (e.type === 'job' || e.type === 'rob' || e.type === 'card') && (e.outcome === 'win' || e.duel?.result === 'won') ? e.pay ?? 0 : e.type === 'bins' ? e.pay : 0;
       if (pay) out.push({ tone: 'gain', icon: 'cash', text: `+${money(pay)}` });
     }
     for (const e of lost) out.push({ tone: 'loss', icon: e.type === 'raid' ? 'bank' : 'cash', text: `−${money(e.seized ?? e.taken)} ${e.type === 'stopped' ? 'seized' : e.type === 'raid' ? 'from the bank' : 'taken'}` });
@@ -204,6 +228,12 @@ export function chipsOf({ cfg, before, state, events, v0, v1, words = plainWords
       out.push({ tone: turned && t.band === 'against' ? 'loss' : 'trust', icon: 'trust', text: turned ? `${who}: ${t.band === 'against' ? 'against you' : t.band === 'with' ? 'with you' : 'deals again'}` : `${who} ${t.change > 0 ? '+' : '−'}${Math.abs(t.change)}` });
     }
   }
+  // (memory-1: a mark made, for the week, and one that ended: who, and what it means)
+  for (const e of events) {
+    const short = n => cap(String(n ?? 'someone').replace(/^(an? [a-z]+) (at|in|with) .*$/i, '$1'));
+    if (e.mark) out.push({ tone: e.mark.fear ? 'gain' : 'loss', icon: 'person', text: `${short(e.mark.who?.name)}: ${e.mark.fear ? 'fears you' : e.mark.kind === 'beaten' ? 'holds it' : 'remembers'} ${e.mark.left}d` });
+    if (e.type === 'markEnd' && (e.kind === 'beat' || e.kind === 'robbed')) out.push({ tone: 'loss', icon: 'person', text: `${short(e.who?.name)}: not scared` });
+  }
   for (const k of Object.keys(state.owned ?? {})) if (state.owned[k] && !before.owned?.[k]) out.push({ tone: 'gain', icon: 'star', text: `yours: ${String(cfg.shop?.[k]?.label ?? k).replace(/^an? /i, '')}` });
   return out;
 }
@@ -232,7 +262,7 @@ export { hourWord };
  * what the night brought (robbed asleep, an attempt on your crib, somebody seen casing it, a regular at the door,
  * Cousin Earl's last day or his going) is a line of the new day's journal, at "Night".
  */
-const NIGHT = new Set(['robbed', 'raid', 'casing', 'calledOff', 'door', 'guard']);
+const NIGHT = new Set(['robbed', 'raid', 'casing', 'calledOff', 'door', 'guard', 'coming', 'markEnd']);
 export function nightOf({ cfg, before, state, events, v0, v1, words = plainWords(cfg) }) {
   return events.filter(e => NIGHT.has(e.type)).map(e => {
     const h = headOf(e, { cfg, before, state, v0, v1, words });

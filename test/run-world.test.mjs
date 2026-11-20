@@ -43,8 +43,8 @@ test('world: a job heats you and the place; heat here is the higher of the two; 
   assert.equal(v.danger.thisHour.stop.chance, 40);
   const market = v.places.find(p => p.place === 'market');
   assert.deepEqual([market.heat, market.hot, market.police, market.here], [4, true, true, true]);
-  assert.match(market.text, /^The flea market is hot today \(heat 4\): the police are about\.$/);
-  assert.match(viewText(v), /The city: .*The flea market is hot today/);
+  assert.match(market.text, /^The Jay St night market is hot today \(heat 4\): the police are about\.$/);
+  assert.match(viewText(v), /The city: .*The Jay St night market is hot today/);
   // the market's heat stays at the market: in the trailer park only yours counts, and nobody stops you there
   const park = view(cfg, { ...hot, place: 'park' });
   assert.equal(park.heat, 0);
@@ -106,7 +106,7 @@ test('world: robbing somebody passing needs the box cutter, pays, heats only the
 
 test('world: what a place has to use up is the place\'s, drawn down and refilled each morning at its own rate', () => {
   const s0 = newRun({ seed: 3, cfg });
-  assert.deepEqual(s0.supply, { park: { strangers: 2, bins: 3, custom: 2 }, market: { strangers: 3, bins: 4 } });
+  assert.deepEqual(s0.supply, { park: { strangers: 2, bins: 3, custom: 2 }, market: { strangers: 3, bins: 4 }, docks: { strangers: 2, bins: 2 }, plaza: { strangers: 2, bins: 2 } });
   let s = at('park', { energy: 9, owned: { cutter: true } }, 1, CALM);
   for (let i = 0; i < 2; i++) s = step(CALM, { ...s, placeHeat: {} }, { do: 'rob' }).state;
   const v = view(CALM, { ...s, placeHeat: {} });
@@ -208,8 +208,9 @@ test('world: a regular keeps count and pays more; past a point they turn up at y
   assert.equal(gave.state.regulars[dee], 3 - cfg.regulars.giveEases);
   assert.equal(gave.state.door, null);
   assert.ok(checkRunBooks(gave.state).ok);
-  // refuse, and they swing at you (the fight roll 0, the contest roll 10: a clean win of theirs)
-  const fought = step(cfg, { ...r.state, rig: { chances: [0], rolls: [10] } }, { do: 'refuse' });
+  // refuse, and they swing at you (the fight roll 0, the contest roll 10: a clean win of theirs). (duel-1: with the
+  // fights switched off, as here, the contest decides it; on, a one-on-one does: test/run-duel.test.mjs)
+  const fought = step(withRunConfig({ duel: { door: false } }), { ...r.state, rig: { chances: [0], rolls: [10] } }, { do: 'refuse' });
   assert.deepEqual(fought.events.map(e => e.type), ['refused', 'fight']);
   assert.equal(fought.events[1].scene.kind, 'fight:clean');
   assert.equal(fought.state.energy, r.state.energy - cfg.regulars.hurt.clean);
@@ -237,7 +238,7 @@ test('world: energy has stakes: stay out to nothing and sleep rough, likelier ro
   assert.ok(one.options.every(o => o.available));
   const zero = view(CALM, at('market', { energy: 0 }, 1, CALM));
   assert.deepEqual(zero.choices.filter(c => c.available).map(c => c.choice.do), ['rough']);
-  assert.match(zero.stranded.text, /^Out of energy at the flea market: sleep rough here/);
+  assert.match(zero.stranded.text, /^Out of energy at the Jay St night market: sleep rough here/);
   assert.equal(move(view(cfg, at('park')), 'rough'), undefined, 'not at home\'s door: you go inside');
   // robbed in the night (the chance roll 0, the contest roll 10: asleep, they win clean and take it all)
   const s = { ...carrying(at('market', { energy: 0, placeHeat: { market: 3 }, heat: 2 }), 90), rig: { chances: [0], rolls: [10] } };

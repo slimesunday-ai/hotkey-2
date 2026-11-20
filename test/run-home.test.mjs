@@ -53,7 +53,7 @@ test('home: the home is whatever the config says: the crib and the street its do
   assert.equal(homeStreet(cfg), cfg.places.crib.inside);
   assert.ok(atHome(cfg, at('crib')) && atHome(cfg, at('park')));
   assert.ok(!atHome(cfg, at('market')) && !atHome(cfg, at('jail')));
-  // move the crib's door to the flea market, and home is the flea market (no rule names a place)
+  // move the crib's door to the Jay St night market, and home is the Jay St night market (no rule names a place)
   const moved = withRunConfig({ places: { crib: { inside: 'market' }, market: { door: 'crib' }, park: { door: null } } }, CALM);
   assert.equal(homeStreet(moved), 'market');
   const s = dealtAt(moved, 'market', 'wallet');
@@ -73,9 +73,11 @@ test('home: what you do on your own street moves the pressure, said on the event
   // caught: +2 (and the mark turns against you: +1 more while they are)
   const fail = step(CALM, { ...s, rig: { chances: [99] } }, { do: 'job', id: 'wallet' });
   assert.equal(fail.events.find(e => e.type === 'job').pressure.n, 2);
-  assert.equal(pressureOf(CALM, fail.state).value, 3);
+  // (memory-1: a fight won on the way leaves them afraid of you, and fear eases it by memory.fear.pressure)
+  const scared = Object.values(fail.state.marks ?? {}).some(m => m.kind === 'beat');
+  assert.equal(pressureOf(CALM, fail.state).value, 3 + (scared ? CALM.memory.fear.pressure : 0));
   assert.ok(pressureOf(CALM, fail.state).reasons.some(r => r.why === 'against' && r.n === 1));
-  // the same lift at the flea market: nothing at home
+  // the same lift at the Jay St night market: nothing at home
   const m = dealtAt(CALM, 'market', 'wallet');
   const away = step(CALM, { ...m, rig: { chances: [0] } }, { do: 'job', id: 'wallet' });
   assert.equal(away.events.find(e => e.type === 'job').pressure, undefined);
@@ -88,7 +90,7 @@ test('home: what you do on your own street moves the pressure, said on the event
   const odd = step(CALM, o, { do: 'job', id: 'odd' });
   assert.equal(odd.events.find(e => e.type === 'job').pressure.n, -1);
   assert.equal(pressureOf(CALM, odd.state).value, 2);
-  // the view says it on each option at home, and not at the flea market
+  // the view says it on each option at home, and not at the Jay St night market
   const v = view(CALM, s);
   assert.deepEqual(v.options.find(x => x.id === 'wallet').pressure, { ifWin: 1, ifFail: 2 });
   assert.deepEqual(v.options.find(x => x.id === 'odd').pressure, { ifWin: -1, ifFail: 0 });
@@ -160,7 +162,8 @@ test('home: high enough, a morning brings a warning: who (a real person first), 
   const low = step(cfg, { ...at('crib', { home: { marks: marks(P.warnAt - 1, 0) } }), rig: { chances: [0] } }, { do: 'sleep' });
   assert.ok(!low.events.some(e => e.type === 'casing'));
   // high, the roll hits: Shaky Dee, with a grudge, cases your crib (preferred over Benny, who is also against you)
-  const s = banked(at('crib', { trust: { [DEE]: -3, [BENNY]: -3 }, home: { marks: marks(6) } }), 400);
+  // (sixes-1: under crew.at, a sneak: from 7 it is a crew, below)
+  const s = banked(at('crib', { trust: { [DEE]: -3, [BENNY]: -3 }, home: { marks: marks(4) } }), 400);
   const r = step(cfg, { ...s, rig: { chances: [0] } }, { do: 'sleep' });
   const c = r.events.find(e => e.type === 'casing');
   assert.ok(c, r.events.map(e => e.type).join());
@@ -168,7 +171,9 @@ test('home: high enough, a morning brings a warning: who (a real person first), 
   assert.equal(c.why, 'grudge');
   assert.equal(c.raidDay, r.state.day + 1);
   assert.deepEqual([c.stake.banked, c.stake.share, c.stake.takes], [400, cfg.raid.share, Math.floor(400 * cfg.raid.share / 100)]);
-  assert.deepEqual(c.could.map(x => x.what), ['thing', 'thing', 'guard', 'home', 'lay low']);
+  // (sixes-1: each piece that does a job against a sneak: the deadbolt, the floor safe, the dog, the camera, the sign)
+  assert.deepEqual(c.could.map(x => x.what), [...Object.values(cfg.things).filter(t => t.defends && (!t.against || t.against.includes('sneak'))).map(() => 'thing'), 'guard', 'home', 'lay low']);
+  assert.equal(c.kind, 'sneak');
   assert.match(c.text, /Shaky Dee, with a grudge against you, was seen hanging round your crib/);
   assert.match(c.text, /At stake: \$120 of the \$400/);
   assert.equal(r.state.home.raid.day, r.state.day + 1);
@@ -191,7 +196,7 @@ test('home: the attempt waits until you are away, a notice reaches you with the 
   let s = banked(at('crib', { day: 2, hour: 12, home: { raid: due(2, 13) } }, 1, CALM), 300);
   let r = run(CALM, s, [{ do: 'out', take: 10 }]);
   assert.ok(!r.events.some(e => e.type === 'alarm'));
-  // the subway to the flea market: away, past its hour: the notice
+  // the subway to the Jay St night market: away, past its hour: the notice
   r = run(CALM, r.state, [{ do: 'subway', to: 'market', hop: false }]);
   const alarm = r.events.find(e => e.type === 'alarm');
   assert.ok(alarm);
@@ -416,8 +421,9 @@ test('home: the deadbolt and the floor safe are bought on the street like the th
   const park = view(cfg, { ...at('park'), carried: 30, books: { ...at('park').books, earned: 30 } });
   const bolt = park.choices.find(c => c.choice.do === 'get' && c.choice.item === 'deadbolt');
   assert.ok(bolt.available);
-  assert.equal(bolt.key, String(park.choices.filter(c => !c.shelf).length)); // last of all but today's shelves (lib-1)
-  assert.deepEqual(bolt.defends, { pct: cfg.things.deadbolt.defends.pct });
+  assert.equal(bolt.key, String(park.choices.filter(c => !c.shelf && !(c.choice.do === 'subway' && cfg.places.park.links[c.choice.to]?.late) && c.choice.do !== 'learn' && c.choice.do !== 'fightWith' && !(c.choice.do === 'get' && cfg.things[c.choice.item]?.late)).length)); // last of all but today's shelves (lib-1), the rides added after (batch-1) and the lessons and fight-with (styles-1)
+  // (sixes-1: and its job against a crew kicking the door while you are out, `kick`)
+  assert.deepEqual(bolt.defends, { pct: cfg.things.deadbolt.defends.pct, kick: cfg.things.deadbolt.defends.kick });
   const got = step(cfg, { ...at('park'), carried: 30, books: { ...at('park').books, earned: 30 } }, bolt.choice);
   assert.ok(got.state.things.deadbolt);
   assert.equal(got.events[0].inTrailer, 'door');
@@ -450,7 +456,7 @@ test('condition 3: waves: never two days running, and two quiet days at least af
 });
 
 test('home: an older saved state (version 6) loads calm, with nothing due and nobody on the step, and plays on', () => {
-  assert.equal(RUN_STATE_VERSION, 8);
+  assert.equal(RUN_STATE_VERSION, 12);
   const v6 = { ...at('park'), v: 6 };
   delete v6.home;
   delete v6.books.burgled;

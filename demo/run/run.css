@@ -192,6 +192,10 @@
 #k .rn-pct.is-zero .rn-danger-pct { color: var(--k-ink-3); }
 #k .rn-danger-pct.is-new { animation: hk-stamp 260ms var(--k-ease) both; }
 #k .rn-pct-word { font-size: var(--k-fs-xs); text-transform: uppercase; color: var(--k-ink-3); }
+/* (batch-1: the number is labelled a RISK, "RISK 15% · COULD BE JUMPED"; with none, only "SAFE HERE") */
+#k .rn-pct .rn-risk-tag { margin-right: 0.25em; }
+#k .rn-pct .rn-danger-pct + .rn-pct-word { margin-left: 0.25em; white-space: nowrap; }
+#k .rn-pct .rn-pct-word + .rn-pct-heat { margin-left: 0.4em; }
 
 /* the choices: the dealt options (or the shop) as one row of tiles */
 #k .rn-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; min-width: 0; }
@@ -422,7 +426,7 @@ body.hk2-opening #k .rn-card { visibility: visible; }
 #k[data-skin] .rn-map .mp-card { width: calc(240 * var(--k-px)); padding: 8px 10px; gap: 6px; box-shadow: 3px 3px 0 var(--k-ink); }
 /* ours over the sheet: the stops' flags (each left of its point, a leader to it) and a stop's card */
 #k .rn-map-over { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
-#k .rn-flag { position: absolute; left: 0; top: 0; transform: translate(-100%, -50%); display: inline-flex; align-items: baseline; gap: 6px; padding: 2px 6px; border: 0;
+#k .rn-flag { position: absolute; left: 0; top: 0; transform: none; display: inline-flex; align-items: center; gap: 5px; padding: 3px 6px; border: 0;
   background: var(--zt-white, var(--hk-paper)); color: var(--k-ink); box-shadow: inset 0 0 0 1px var(--k-ink), 2px 2px 0 var(--k-ink); font: 400 var(--k-fs-xs)/1.2 var(--k-font);
   white-space: nowrap; cursor: pointer; pointer-events: auto; }
 #k .rn-flag b { font: 400 var(--zt-fs-label, var(--k-fs-xs))/1 var(--zt-font-label, var(--k-font)); text-transform: uppercase; }
@@ -431,6 +435,10 @@ body.hk2-opening #k .rn-card { visibility: visible; }
 #k .rn-flag.is-locked { background: var(--hk-paper); color: var(--k-ink-3); }
 #k .rn-flag.is-on { background: var(--k-ink); color: var(--hk-plate); }
 #k .rn-flag[hidden] { display: none; }
+/* (tree-1: a label is the stop's name and at most a mark: a lock, or hot) */
+#k .rn-flag .rn-flag-lock { display: inline-grid; padding: 0; box-shadow: none; line-height: 0; }
+#k .rn-flag .rn-flag-lock .u-ico { width: calc(11 * var(--k-px)); height: calc(11 * var(--k-px)); }
+#k .rn-flag.is-here b, #k .rn-flag.is-on b { font-weight: 700; }
 #k .rn-stopcard { position: absolute; left: 0; top: 0; z-index: 2; width: min(calc(290 * var(--k-px)), calc(100% - 16px)); display: grid; gap: 4px; padding: 6px 9px 8px;
   background: var(--zt-grid, none), var(--zt-bone, var(--hk-plate)); box-shadow: 3px 3px 0 var(--k-ink), inset 0 3px 0 var(--hk-yours); color: var(--k-ink); font: 400 var(--k-fs-xs)/1.35 var(--k-font); pointer-events: auto; }
 #k .rn-stopcard[hidden] { display: none; }
@@ -608,6 +616,16 @@ body.hk2-inside #k .rn-marks { visibility: hidden; }
 #k .rn-hooked-line { grid-column: 1 / -1; font-size: var(--k-fs-xs); line-height: 1.3; color: var(--k-ink-2); }
 #k .rn-hooked-line.is-hooked { color: var(--hk-hot-text); }
 #k .rn-people li.is-regular { row-gap: 1px; }
+/* (memory-1) WHAT THEY REMEMBER, under the row: a week's mark, in words; who fears you, who holds a fight over you */
+#k .rn-mark-line { grid-column: 1 / -1; display: block; white-space: normal; font-size: var(--k-fs-xs); line-height: 1.35; color: var(--k-ink); }
+#k .rn-mark-line i { margin-right: 4px; }
+#k .rn-mark-line i { font-style: normal; font-size: 0.8em; padding: 0 3px; background: var(--k-ink); color: var(--hk-clean); }
+#k .rn-mark-line em { font-style: normal; font-weight: 700; color: var(--k-ink-2); }
+#k .rn-mark-line.is-holds i, #k .rn-mark-line.is-hates i { background: var(--hk-hot); color: var(--zt-white, #fff); }
+#k .rn-mark-line.is-holds em, #k .rn-mark-line.is-hates em { color: var(--hk-hot-text); }
+#k .rn-coming { box-shadow: inset 3px 0 0 var(--hk-hot); padding-left: 6px; }
+/* (memory-1) an option done to somebody who fears you: "fears you: pays up" */
+#k .rn-fear-tag { font-weight: 700; background: var(--k-ink); color: var(--hk-clean); }
 
 /* cold: thinks less of you (seen in the bins). Slate, eyes down */
 #k .rn-mood.is-cold, #k .rn-who.is-cold em { background: var(--zt-slate, var(--k-ink-3)); color: var(--zt-white, var(--k-bg-solid)); box-shadow: none; }
@@ -876,3 +894,18 @@ body.hk2-inside #k .rn-marks { visibility: hidden; }
 #k .rn-dock.is-rail .rn-press .rn-pips i { width: 5px; min-width: 0; height: 11px; }
 #k .rn-dock.is-rail .rn-press-pips i.is-line { box-shadow: inset 0 0 0 1px var(--k-ink), 1px 0 0 0 var(--hk-fail); }
 #k .rn-dock.is-rail .rn-press em { white-space: nowrap; }
+
+/* ── STYLES-1: the You panel's Fight tab ──────────────────────────────────────────────────────────────────────── */
+#k .rn-fightwith-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+#k .rn-fightwith small { margin-left: 4px; font-weight: 600; opacity: .8; }
+#k .rn-styles { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+#k .rn-styles li { display: grid; gap: 2px; padding: 5px 8px 6px 10px; background: var(--zt-white, var(--hk-paper)); box-shadow: inset 0 0 0 1px var(--k-line); }
+#k .rn-styles li.is-known { box-shadow: inset 3px 0 0 var(--hk-yours), inset 0 0 0 1px var(--k-line); }
+#k .rn-style-top { display: flex; align-items: baseline; gap: 8px; }
+#k .rn-style-price { margin-left: auto; font-weight: 700; }
+#k .rn-styles .u-btn { justify-self: start; margin-top: 3px; }
+
+/* (smooth-1) THE ODDS STILL BEING WORKED OUT (odds.js): the meter's split not known yet, the whole chance drawn as a
+   waiting fill that breathes; a figure in words says "…" where it will stand */
+#k .rn-meter.is-odds-wait .rn-fill.is-tried { background: repeating-linear-gradient(90deg, var(--hk-fail) 0 5px, var(--hk-paper) 5px 8px); animation: rn-odds-wait 900ms ease-in-out infinite alternate; }
+@keyframes rn-odds-wait { from { opacity: 1; } to { opacity: 0.45; } }

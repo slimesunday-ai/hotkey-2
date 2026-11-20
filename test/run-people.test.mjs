@@ -44,20 +44,23 @@ test('people: a debt collected is named, the debtor is sour and out for the day,
   const option = view(cfg, state).options.find(o => o.id === 'collect');
   assert.deepEqual(option.who, { id: 'npc:debtor', name: 'Benny Two-Coats', role: 'debtor' });
   assert.equal(option.mood, 'calm');
-  assert.equal(option.label, 'Collect a debt from Benny Two-Coats for the park manager');
+  assert.equal(option.label, 'Collect a debt from Benny Two-Coats for Darlene at the office');
   const { state: after, events } = step(cfg, { ...state, rig: { chances: [0] } }, option.choice);
   const ev = events.find(e => e.type === 'job');
   assert.equal(ev.outcome, 'win');
   assert.deepEqual(ev.who, option.who);
   assert.equal(ev.mood, 'sour');
   assert.equal(ev.outToday, true);
-  assert.match(ev.text, /^Collect a debt from Benny Two-Coats for the park manager: \+\$\d+\. Benny Two-Coats is sour; not again today\.$/);
+  assert.match(ev.text, /^Collect a debt from Benny Two-Coats for Darlene at the office: \+\$\d+\. Benny Two-Coats is sour; not again today\.$/);
   const v = view(cfg, after);
   assert.ok(!v.options.some(o => o.id === 'collect'));
-  assert.deepEqual(v.people.find(p => p.id === 'npc:debtor'), {
+  // (memory-1: and he remembers it for the week: robbed to his face, he gives way)
+  const { mark, ...benny } = v.people.find(p => p.id === 'npc:debtor');
+  assert.deepEqual(benny, {
     id: 'npc:debtor', name: 'Benny Two-Coats', role: 'debtor', place: 'park', block: 'projects', here: true,
     mood: 'sour', moodText: 'is sour', outToday: true,
   });
+  assert.deepEqual([mark.kind, mark.fear, mark.left], ['robbed', true, cfg.memory.days]);
   for (let hour = after.hour; hour < after.hour + 24; hour++) assert.ok(!deal(cfg, { ...after, hour }).some(j => j.id === 'collect'));
   assert.throws(() => step(cfg, after, { do: 'job', id: 'collect' }), /not a choice here/);
   // refused: wary, and out all the same
@@ -150,19 +153,19 @@ test('people: a place worked dry says so and names the way on: the park the subw
   assert.ok(park.trail.every(t => t.view.dry === null), 'no note while somebody is left');
   const v = view(cfg, park.state);
   assert.deepEqual(v.options.map(o => o.id), ['odd']);
-  assert.deepEqual({ place: v.dry.place, to: v.dry.to, way: v.dry.way }, { place: 'park', to: 'market', way: 'the subway to the flea market' });
-  assert.equal(v.dry.text, 'Nobody left to work in the trailer park today, only odd jobs. The way on: the subway to the flea market.');
-  assert.match(viewText(v), /Nobody left to work in the trailer park today, only odd jobs\. The way on: the subway to the flea market\./);
+  assert.deepEqual({ place: v.dry.place, to: v.dry.to, way: v.dry.way }, { place: 'park', to: 'market', way: 'the subway to the Jay St night market' });
+  assert.equal(v.dry.text, 'Nobody left to work in the trailer park today, only odd jobs. The way on: the subway to the Jay St night market.');
+  assert.match(viewText(v), /Nobody left to work in the trailer park today, only odd jobs\. The way on: the subway to the Jay St night market\./);
   assert.ok(v.choices.some(c => c.choice.do === 'subway' && c.choice.to === 'market' && c.available), 'and the way on is open');
   assert.equal(v.dry.open, true);
   // too tired for the ride there and back: the note says so and sends you inside
   const tired = view(cfg, { ...park.state, energy: 1 });
   assert.equal(tired.dry.open, false);
-  assert.equal(tired.dry.text, 'Nobody left to work in the trailer park today, only odd jobs. The way on is the subway to the flea market, but you need energy 2 to get there and back: go inside for today.');
+  assert.equal(tired.dry.text, 'Nobody left to work in the trailer park today, only odd jobs. The way on is the subway to the Jay St night market, but you need energy 2 to get there and back: go inside for today.');
   const market = workDry(CALM, at('market', { energy: 40 }, 2, CALM));
   const m = view(CALM, market.state);
   assert.deepEqual({ place: m.dry.place, to: m.dry.to, way: m.dry.way }, { place: 'market', to: 'park', way: 'home' });
-  assert.match(m.dry.text, /^Nobody left to work at the flea market today, only the stall\. The way on: home\.$/);
+  assert.match(m.dry.text, /^Nobody left to work at the Jay St night market today, only the stall\. The way on: home\.$/);
   assert.equal(m.dry.open, true);
   assert.ok(market.trail.length > park.trail.length, 'the market has more people to work than the park, so it lasts longer');
   for (const s of [at('crib'), at('clinic'), at('jail'), at('park'), at('market')]) assert.equal(view(cfg, s).dry, null);
@@ -178,7 +181,7 @@ test('people: moods and who is out reset every morning, after home, the clinic o
   const morning = slept.events.find(e => e.type === 'morning');
   assert.deepEqual([...morning.settled].sort(), worked);
   assert.deepEqual(slept.state.people, {});
-  assert.deepEqual(slept.state.shifts, { park: 0, market: 0 });
+  assert.deepEqual(slept.state.shifts, Object.fromEntries(Object.keys(cfg.places).filter(p => cfg.places[p].jobs && !cfg.places[p].locked).map(p => [p, 0])));
   assert.ok(view(cfg, slept.state).people.every(p => p.mood === 'calm' && !p.outToday));
   const out = step(cfg, slept.state, { do: 'out', take: 0 }).state;
   assert.equal(view(cfg, out).options.length, 3);
@@ -217,7 +220,8 @@ test('people: additive to the page contract: every old field of the view, its op
     fail: ['heat', 'energyLost'],
     morning: ['night', 'money'],
   };
-  const WITH = { odd: 'a neighbour', loosies: 'the bus stop', collect: 'the park manager', stall: 'the shopkeeper', crowd: 'the crowd', wallet: 'a mark', till: 'the shopkeeper', stickup: 'a stallholder' };
+  const WITH = { odd: 'a neighbour', loosies: 'the bus stop', collect: 'Darlene at the office', stall: 'the shopkeeper', crowd: 'the crowd', wallet: 'a mark', till: 'the shopkeeper', stickup: 'a stallholder',
+    shift: 'the foreman', lift: 'a driver', flyers: 'the flyers man', phone: 'an office worker' };
   const has = (obj, keys, what) => { for (const k of keys) assert.ok(k in obj, `${what} lost ${k}`); };
   const counts = { option: 0, job: 0, morning: 0 };
   for (const seed of [1, 2, 3]) {

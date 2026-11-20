@@ -134,7 +134,12 @@ test('the run: the odds shown are the odds rolled, for jobs, the jumping and the
       const jumped = events.find(e => e.type === 'jumped');
       if (jumped) {
         assert.equal(jumped.chance, v.danger.thisHour.jump.chance);
-        assert.equal(jumped.contest.P, v.danger.thisHour.jump.strength);
+        // (styles-1: a fight, whose bands the view showed as a sample of the very same fight; the dice's P otherwise)
+        if (jumped.duel) {
+          assert.equal(jumped.duel.chance.bad, v.danger.thisHour.jump.bands.clean);
+          assert.equal(jumped.duel.chance.scuffle, v.danger.thisHour.jump.bands.messy);
+          assert.equal(jumped.outcome, jumped.duel.band);
+        } else assert.equal(jumped.contest.P, v.danger.thisHour.jump.strength);
         checked.jumped++;
       }
       state = next;
@@ -151,7 +156,11 @@ test('the run: the danger rises with hours there and money carried, and is visib
   assert.equal(v.danger.thisHour.jump.chance, 15);
   assert.equal(v.danger.oneMore.jump.chance, 19);
   assert.equal(v.danger.thisHour.jump.strength, 55);
-  assert.deepEqual(v.danger.thisHour.jump.bands, { clean: 35, messy: 20, fail: 20, disaster: 25 });
+  // (styles-1: getting jumped is a fight now; the dice's bands, which it was tuned to, under jumped.fight off)
+  assert.deepEqual(view(withRunConfig({ jumped: { fight: false } }), s).danger.thisHour.jump.bands, { clean: 35, messy: 20, fail: 20, disaster: 25 });
+  const b = v.danger.thisHour.jump.bands;
+  assert.ok(Math.abs(b.clean - 35) <= 3 && Math.abs(b.messy - 20) <= 3, JSON.stringify(b));
+  assert.equal(Math.round((b.clean + b.messy + b.fail) * 10) / 10, 100);
   assert.deepEqual(v.danger.thisHour.jump.takes, { bad: 65, scuffle: 33 });
   assert.equal(danger(START, carrying(at('market', { hoursThere: 30 }), 900)).jump.chance, 45); // at most 45%
   // the box cutter makes them weaker, being tired stronger; the contest clamp still holds

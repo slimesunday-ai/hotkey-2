@@ -48,7 +48,7 @@ test('trust: it moves up for work and sales, down for taking from people, and ri
   const v = view(CALM, till.state);
   assert.deepEqual(['against', -3, 2, "won't deal with you, 2 days"], ['band', 'trust', 'offDays', 'offText'].map(k => everyone(v, te.who.id)[k]));
   assert.ok(v.trustHere.offTable.some(p => p.id === te.who.id && p.days === 2));
-  assert.match(viewText(v), /Won't deal with you at the flea market: .*\(2 days\)/);
+  assert.match(viewText(v), /Won't deal with you at the Jay St night market: .*\(2 days\)/);
   // a sale that went wrong moves nothing; a wallet lifted clean moves nothing (they do not know yet)
   const crowd = step(CALM, { ...dealtAt(CALM, 'market', 'crowd', { goods: { discs: 4 } }), rig: { chances: [99] } }, { do: 'job', id: 'crowd' });
   assert.equal(crowd.events.find(e => e.type === 'job').trust, undefined);
@@ -126,7 +126,7 @@ test('trust: someone against you who is about may call in a crime done at their 
   const { state, events } = step(c, { ...s, placeHeat: { park: 1 }, rig: { chances: [0, 0] } }, o.choice);
   const w = events.find(e => e.type === 'witness');
   assert.deepEqual([w.called, w.who.id, w.at, w.heat, w.chance], [true, OKAFOR, 'market', T.tellHeat, o.tellRisk.pct]);
-  assert.match(w.text, /saw it and called the police: heat \+2 at the flea market\./);
+  assert.match(w.text, /saw it and called the police: heat \+2 at the Jay St night market\./);
   assert.equal(state.placeHeat.market, T.tellHeat);
   assert.equal(state.placeHeat.park, 1, 'the park is untouched');
   assert.equal(state.heat, 0, 'your own heat is untouched: a call heats the place');
@@ -178,12 +178,13 @@ test('trust: the grudge is a refusal that leaves a regular against you; refused 
   assert.deepEqual(g.events.map(e => e.type), ['refused', 'grudge']);
   const [refused, grudge] = g.events;
   assert.deepEqual([refused.trust.to, refused.trust.band, refused.trust.offDays], [T.min, 'against', 2]);
-  assert.deepEqual([grudge.days, grudge.at, grudge.heat, grudge.called], [2, 'park', cfg.regulars.grudgeHeat, true]);
+  // (memory-1: the door shut on him is remembered for the week: no sales to him while it lasts)
+  assert.deepEqual([grudge.days, grudge.at, grudge.heat, grudge.called], [cfg.memory.days, 'park', cfg.regulars.grudgeHeat, true]);
   assert.equal(g.state.placeHeat.park, cfg.regulars.grudgeHeat);
   assert.equal(view(cfg, g.state).people.find(p => p.id === DEE).regular.grudgeDays, 2);
   // a call at a place you are not standing in: a notice, with what to do
   assert.equal(grudge.notice.place, 'park');
-  assert.match(grudge.notice.text, /^The trailer park is at heat 2: 1 more and the police are about there\. Keep it clean there today, or work the flea market\.$/);
+  assert.match(grudge.notice.text, /^The trailer park is at heat 2: 1 more and the police are about there\. Keep it clean there today, or work the Jay St night market\.$/);
   assert.equal(grudge.notice.suggest.place, 'market');
   // he is not at the door while he holds it
   const morning = step(cfg, { ...g.state, rig: { chances: [0] } }, { do: 'sleep' });
@@ -196,7 +197,7 @@ test('trust: the grudge is a refusal that leaves a regular against you; refused 
   assert.equal(offDays(cfg, s.state, DEE), 0);
 });
 
-test('trust: it is local: liked or hated in the trailer park changes nothing at the flea market', () => {
+test('trust: it is local: liked or hated in the trailer park changes nothing at the Jay St night market', () => {
   const park = id => cfg.places.park.people.map(p => p.id).filter(x => x !== DEE).map(x => [x, id]);
   for (const t of [3, -3]) {
     const trust = Object.fromEntries(park(t).map(([x]) => [x, t]));

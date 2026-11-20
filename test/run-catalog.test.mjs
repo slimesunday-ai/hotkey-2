@@ -108,15 +108,15 @@ test('the Buy button: pressed only through the rules\' own choice; else it says 
   assert.match(bp.why, /^you carry \$3/);
   // the same piece seen from the trailer park: where it is today
   const park = view(cfg, carrying(at('park', { day: 2 }), 1e6));
-  assert.equal(buyOf(park.library.pieces.find(x => x.key === shelfKey), { cfg, v: park }).why, 'on a shelf at the flea market today');
+  assert.equal(buyOf(park.library.pieces.find(x => x.key === shelfKey), { cfg, v: park }).why, 'on a shelf at the Jay St night market today');
   // a piece on no shelf today
   const none = park.library.pieces.find(x => x.kind === 'wear' && !x.named && !x.onShelf);
   assert.deepEqual(buyOf(none, { cfg, v: park }), { can: false, key: null, label: `Buy ${money(none.price)}`, why: 'not on any shelf today' });
   assert.match(soldLine(none, { cfg, v: park }), /^Not on any shelf today/);
   // a named thing sold every day elsewhere, and one at the corner, which is not open
-  assert.equal(buyOf(park.library.pieces.find(x => x.key === 'visor'), { cfg, v: park }).why, 'sold at the flea market, every day');
+  assert.equal(buyOf(park.library.pieces.find(x => x.key === 'visor'), { cfg, v: park }).why, 'sold at the Jay St night market, every day');
   assert.match(buyOf(park.library.pieces.find(x => x.key === 'overcoat'), { cfg, v: park }).why, /not open yet/);
-  assert.match(soldLine(park.library.pieces.find(x => x.key === 'visor'), { cfg, v: park }), /every day at Mrs\. Kowalski's clothes rail, at the flea market/);
+  assert.match(soldLine(park.library.pieces.find(x => x.key === 'visor'), { cfg, v: park }), /every day at Mrs\. Kowalski's clothes rail, at the Jay St night market/);
   assert.match(soldLine(rich.library.pieces.find(x => x.key === shelfKey), { cfg, v: rich }), /^On sale today at .*, here\.$/);
   // owned: Yours
   const own = view(cfg, { ...carrying(s0, 1e6), things: { [shelfKey]: true } });

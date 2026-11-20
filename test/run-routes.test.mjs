@@ -1,4 +1,4 @@
-// Routes (RUN.md, "Routes (routes-1)"): a way on foot between the trailer park and the flea market, both directions,
+// Routes (RUN.md, "Routes (routes-1)"): a way on foot between the trailer park and the Jay St night market, both directions,
 // beside the subway: no fare, energy, and a stop on Fit Street outside DEAD AIR that deals a hand of cards to play or
 // pass by; a skateboard to buy, faster and less energy than walking. Routes and stops are data.
 import test from 'node:test';
@@ -34,7 +34,7 @@ function run(c, state, choices) {
   return { state, events };
 }
 
-test('routes: a way on foot from the trailer park to the flea market costs an energy and two hours, and no fare', () => {
+test('routes: a way on foot from the trailer park to the Jay St night market costs an energy and two hours, and no fare', () => {
   const s = at('park', { energy: 6 }, 1, CALM);
   const v = view(CALM, s);
   const walk = move(v, walkTo('market'));
@@ -177,11 +177,11 @@ test('routes: the danger on the way is in the view, and rises with what you carr
   assert.deepEqual(wayDanger(cfg, at$(60), 'foot', [{ from: 'market', to: 'fitst' }, { from: 'fitst', to: 'park' }]).jump, walk(60).jump);
 });
 
-test('routes: the skateboard is bought at the flea market, and goes the way in one hour for no energy, rolling nothing between', () => {
+test('routes: the skateboard is bought at the Jay St night market, and goes the way in one hour for no energy, rolling nothing between', () => {
   const v0 = view(cfg, at('market', { energy: 5 }));
   const sk = move(v0, skateTo('park'));
   assert.equal(sk.available, false);
-  assert.match(sk.why, /skateboard \(Mr\. Okafor sells one at the flea market, \$100\)/);
+  assert.match(sk.why, /skateboard \(Mr\. Okafor sells one at the Jay St night market, \$100\)/);
   const buy = v0.errands.find(x => x.item === 'board');
   assert.deepEqual([buy.kind, buy.price, buy.keeper.name, buy.spot], ['ride', 100, 'Mr. Okafor', 'stall:6']);
   const got = step(cfg, carrying(at('market', { energy: 5 }), 120), { do: 'get', item: 'board' });

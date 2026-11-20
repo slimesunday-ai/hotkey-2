@@ -143,6 +143,30 @@
 #k .u-journal.is-folded .u-je-chips { display: none; }
 #k .u-journal.is-folded .u-je-head { -webkit-line-clamp: 1; }
 
+/* ── THE FIGHT (duel-1; demo/run/duel.js): two bars with names over the picture's top while a fight is on, where the
+   result card comes after it; each says why it starts where it does; and a Skip button. Yours the run's YOU yellow,
+   theirs its risk pink; a bar low goes the loss red. */
+#k .rn-duel { position: absolute; z-index: 5; top: var(--u-m); left: calc(var(--u-m) + var(--u-where-w) + var(--u-gap) + 6px); right: calc(var(--u-m) + var(--u-side-w) + var(--u-gap) + 8px);
+  max-width: calc(600 * var(--k-px)); margin: 0 auto; padding: calc(8 * var(--k-px)) calc(12 * var(--k-px)) calc(9 * var(--k-px)); box-shadow: var(--u-shadow-l); border-top: 5px solid var(--u-risk);
+  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px 10px; }
+#k .rn-duel[hidden] { display: none; }
+#k .rn-duel-cap { grid-column: 1; }
+#k .rn-duel-skip { grid-column: 2; grid-row: 1; justify-self: end; }
+#k .rn-duel-sides { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; gap: 10px; }
+#k .rn-duel-vs { align-self: center; font-size: calc(18 * var(--k-px)); color: var(--u-mute); text-transform: uppercase; }
+#k .rn-duel-side { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+#k .rn-duel-side.is-them { text-align: right; }
+#k .rn-duel-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+#k .rn-duel-side.is-them .rn-duel-top { flex-direction: row-reverse; }
+#k .rn-duel-name { font: 700 var(--u-fs)/1.2 var(--u-ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#k .rn-duel-hp { font-size: calc(18 * var(--k-px)); line-height: 1; }
+#k .rn-duel-bar { position: relative; display: block; height: calc(12 * var(--k-px)); border: 1.5px solid var(--u-line); border-radius: 4px; background: var(--u-inset); overflow: hidden; }
+#k .rn-duel-fill { position: absolute; top: 0; bottom: 0; left: 0; background: var(--u-you); transition: width .12s linear; }
+#k .rn-duel-side.is-them .rn-duel-fill { left: auto; right: 0; background: var(--u-risk); }
+#k .rn-duel-side.is-low .rn-duel-fill { background: var(--u-loss); }
+#k .rn-duel-side.is-down .rn-duel-name { text-decoration: line-through; color: var(--u-mute); }
+#k .rn-duel-why { font-size: var(--u-fs-s); color: var(--u-ink-2); line-height: 1.3; }
+
 /* ── THE RESULT CARD, top middle: after every step, until the next one (or OK, Enter, Esc) ───────────────────── */
 #k .u-res { position: absolute; z-index: 4; top: var(--u-m); left: calc(var(--u-m) + var(--u-where-w) + var(--u-gap) + 6px); right: calc(var(--u-m) + var(--u-side-w) + var(--u-gap) + 8px);
   max-width: calc(560 * var(--k-px)); margin: 0 auto; padding: calc(10 * var(--k-px)) calc(14 * var(--k-px)) calc(10 * var(--k-px)); box-shadow: var(--u-shadow-l); border-top-width: 5px; }
@@ -583,3 +607,214 @@ body:has(.sbw) .hk2-bubbles, body:has(.sbw) #k .rn-marks { visibility: hidden; }
 #k .rn-stopcard .u-pill.u-trying { justify-self: start; }
 #k .rn-stopcard .rn-tryout-go { justify-self: start; margin-top: 3px; }
 
+
+/* ── STYLES-1: the line of advice after a fight lost, the Library's ways to fight, what you fight with ─────────── */
+#k .u-res-advice { display: flex; align-items: flex-start; gap: 6px; margin: 8px 0 0; padding: 6px 8px; background: var(--u-inset); border-left: 3px solid var(--u-you); font: 600 var(--u-fs-s)/1.35 var(--u-ui); color: var(--u-ink); }
+#k .u-res-advice .u-ico { flex: none; margin-top: 1px; color: var(--u-ink-2); }
+#k .u-lib-fight { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(230 * var(--k-px)), 1fr)); gap: 8px; margin: 0; padding: 4px 2px; list-style: none; }
+#k .u-lib-fightway { display: grid; gap: 4px; padding: 8px 10px; background: var(--u-paper, #fff); box-shadow: inset 0 0 0 1px var(--u-line); border-radius: 6px; }
+#k .u-lib-fightway.is-owned { box-shadow: inset 3px 0 0 var(--u-you), inset 0 0 0 1px var(--u-line); }
+#k .u-lib-fightway.is-chosen { box-shadow: inset 5px 0 0 var(--u-you), inset 0 0 0 1.5px var(--u-ink-2); }
+#k .u-lib-fight-top { display: flex; align-items: baseline; gap: 8px; }
+#k .u-lib-fight-top .u-lib-price { margin-left: auto; }
+#k .u-lib-fight-does, #k .u-lib-fight-where { margin: 0; font: 600 var(--u-fs-s)/1.35 var(--u-ui); color: var(--u-ink-2); }
+#k .u-lib-fight-where { display: flex; align-items: center; gap: 5px; }
+#k .u-lib-fightway .u-btn { justify-self: start; }
+#k .rn-with-plate { font-weight: 700; }
+#k .rn-style-tag { text-transform: none; }
+
+/* (sixes-1) THE SIXES' METER on your numbers, beside HOME: pressable like it; its steps built marked; the rest of it,
+   nothing built yet, faint. Six numbers: each a little tighter, and the sub line of the Sixes wraps under its pips */
+#k .u-stat.is-sixes { cursor: pointer; }
+#k .u-stat.is-sixes:hover { background: var(--u-inset); }
+#k .u-stats:has(.u-stat.is-sixes) .u-stat { padding-left: calc(5 * var(--k-px)); padding-right: calc(5 * var(--k-px)); }
+#k .u-stats:has(.u-stat.is-sixes) .u-stat .u-cap { font-size: 0.92em; }
+#k .u-stat.is-sixes .u-stat-sub { white-space: normal; line-height: 1.15; }
+#k .u-pips.is-sixes { display: flex; flex-wrap: wrap; gap: 2px; }
+#k .u-pips.is-sixes i.is-on { background: var(--u-risk); }
+#k .u-pips.is-sixes i.is-line { border-color: var(--u-risk-mark); border-width: 1.5px; }
+#k .u-pips.is-sixes i.is-later { opacity: 0.35; }
+#k .rn-sixes-print .rn-hp-list li.is-reached { font-weight: 700; }
+#k .rn-earl-ways { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+#k .rn-earlway.is-on { outline: 2px solid var(--u-risk-mark); }
+#k .u-lib-card-job { margin: 2px 0; font-weight: 600; }
+
+/* ── WHAT'S AHEAD (tree-1; ahead.js): four trees side by side, Fight · Gear · Home · Places, each node its NAME only (the
+   owner, 11-18: "can just be the title, then once you click it, it brings up the info"). A node is FILLED down its side
+   in yellow when it is yours, OUTLINED in ink when you could get it today, DASHED and grey while something stands in the
+   way; at most one small mark (a tick yours, a lime dot here now, a lock, a star of the goal). Its card comes up over
+   the trees on the side away from it, and Esc or its × puts it away. As wide as the map's panel; a phone: two columns ── */
+#k .rn .rn-sheet[data-sheet="ahead"] { width: min(calc(1000 * var(--k-px)), calc(100% - var(--rn-side) - 2 * var(--rn-m) - var(--rn-g)));
+  height: calc(100% - var(--rn-body-t) - var(--rn-m) - var(--rn-card-h, 0px) - var(--rn-g)); }
+#k .rn-sheet[data-sheet="ahead"] .rn-sheet-foot { display: none; }
+#k .rn-sheet[data-sheet="ahead"] .rn-sheet-scroll { padding: 0 8px 6px; }
+#k .rn-sheet:not([data-sheet="ahead"]) .u-ah-card { display: none; }
+#k .u-ah-head { flex: 1 1 auto; display: flex; justify-content: flex-end; min-width: 0; }
+#k .u-ah-lead { display: flex; align-items: center; flex-wrap: nowrap; gap: 6px 12px; min-width: 0; padding: 0 10px 7px; border-bottom: 1px solid var(--u-rule); font: 500 var(--u-fs)/1.3 var(--u-ui); }
+#k .u-ah-money { flex: none; display: flex; align-items: center; gap: 6px; margin: 0; color: var(--u-ink-2); font-weight: 600; }
+#k .u-ah-money b { color: var(--u-ink); }
+#k .u-ah-next { flex: 0 1 auto; display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; padding: 3px 9px 3px 3px; border: 1.5px solid var(--u-line); border-radius: 999px;
+  background: var(--u-inset); color: var(--u-ink); font: 600 var(--u-fs-s)/1.2 var(--u-ui); cursor: pointer; text-align: left; }
+#k .u-ah-next b { flex: none; padding: 3px 8px; border-radius: 999px; background: var(--u-mute-bg); font-weight: 700; }
+#k .u-ah-next.is-now b { background: var(--u-gain); color: var(--u-gain-on); }
+#k .u-ah-next span { min-width: 0; }
+#k .u-ah-next:hover { box-shadow: var(--u-key-shadow); }
+/* the four branches */
+#k .u-ah-tree { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 14px; align-items: start; padding: 2px 2px 4px; }
+@media (max-width: 720px) { #k .u-ah-tree { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+#k .u-ah-branch { min-width: 0; }
+#k .u-ah-bhead { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 6px; padding: 6px 2px 5px; background: var(--hk-plate, var(--u-panel)); border-bottom: 2px solid var(--u-line);
+  font: 700 var(--u-fs)/1.2 var(--u-ui); text-transform: uppercase; letter-spacing: .04em; }
+#k .u-ah-bhead .u-ico { width: calc(17 * var(--k-px)); height: calc(17 * var(--k-px)); }
+#k .u-ah-count { margin-left: auto; padding: 2px 7px; border-radius: 999px; background: var(--u-mute-bg); font: 700 var(--u-fs-s)/1.2 var(--u-ui); letter-spacing: 0; white-space: nowrap; font-variant-numeric: tabular-nums; }
+#k .u-ah-quiet { margin: 6px 2px 0; padding-top: 4px; border-top: 1px dashed var(--u-rule); font: 600 var(--u-fs-s)/1.3 var(--u-ui); color: var(--u-mute); }
+#k .u-ah-group { margin-top: 5px; }
+#k .u-ah-glabel { display: block; width: 100%; padding: 2px 4px 1px 2px; box-sizing: border-box; border: 0; border-radius: 5px; background: none; color: var(--u-ink);
+  font: 700 var(--u-fs-s)/1.2 var(--u-ui); text-align: left; cursor: pointer; }
+#k .u-ah-glabel:hover, #k .u-ah-glabel.is-picked { background: var(--u-inset); box-shadow: inset 0 0 0 1px var(--u-line); }
+/* the rails: a node that hangs off its group or its root */
+#k .u-ah-list { margin: 0; padding: 0; list-style: none; }
+#k .u-ah-li { position: relative; margin-top: 4px; }
+#k .u-ah-li.is-child { margin-left: 6px; padding-left: 12px; }
+#k .u-ah-li.is-child::before { content: ""; position: absolute; left: 0; top: -4px; bottom: 0; border-left: 2px solid var(--u-line); }
+#k .u-ah-li.is-child:last-child::before { bottom: auto; height: calc(50% + 4px); }
+#k .u-ah-li.is-child::after { content: ""; position: absolute; left: 0; top: 50%; width: 10px; border-top: 2px solid var(--u-line); }
+/* a node: its name, in full (it wraps at a space, never cut), and one small mark */
+#k .u-ah-node { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; min-height: calc(28 * var(--k-px)); padding: 4px 7px; box-sizing: border-box;
+  border: 1.5px solid var(--u-line); border-radius: 7px; background: var(--u-inset); color: var(--u-ink); font: 650 calc(13.5 * var(--k-px))/1.2 var(--u-ui); text-align: left; cursor: pointer; }
+#k .u-ah-node:hover { box-shadow: var(--u-key-shadow); }
+#k .u-ah-name { flex: 1 1 auto; min-width: 0; overflow-wrap: normal; word-break: normal; hyphens: none; }
+#k .u-ah-node.is-owned { box-shadow: inset 6px 0 0 var(--u-you); padding-left: 12px; }
+#k .u-ah-node.is-later { border-style: dashed; border-color: var(--u-slate); background: transparent; color: var(--u-ink-2); font-weight: 600; }
+#k .u-ah-node.is-picked { outline: 2.5px solid var(--u-you); outline-offset: 1px; box-shadow: var(--u-block); }
+#k .u-ah-node.is-owned.is-picked { box-shadow: inset 6px 0 0 var(--u-you), var(--u-block); }
+#k .u-ah-node:focus-visible { outline: 2.5px solid var(--u-focus); outline-offset: 2px; box-shadow: 0 0 0 5px var(--u-ink); }
+#k .u-ah-mark { flex: none; display: grid; place-items: center; width: calc(15 * var(--k-px)); height: calc(15 * var(--k-px)); line-height: 0; }
+#k .u-ah-mark .u-ico { width: 100%; height: 100%; }
+#k .u-ah-mark.is-owned { border-radius: 50%; background: var(--u-ink); color: var(--u-inset); }
+#k .u-ah-mark.is-owned .u-ico { width: 70%; height: 70%; stroke-width: 3; }
+#k .u-ah-mark.is-here { width: calc(11 * var(--k-px)); height: calc(11 * var(--k-px)); border-radius: 50%; background: var(--u-gain); box-shadow: 0 0 0 1.5px var(--u-line); }
+#k .u-ah-mark.is-locked, #k .u-ah-mark.is-goal { color: var(--u-mute); }
+#k .u-ah-mark.is-you { border-radius: 50%; background: var(--u-you); color: var(--u-ink); box-shadow: 0 0 0 1.5px var(--u-line); }
+#k .u-ah-mark.is-you .u-ico { width: 72%; height: 72%; }
+#k .u-ah-ico { display: grid; place-items: center; width: 100%; height: 100%; box-sizing: border-box; border: 1px solid var(--u-tile-edge); border-radius: 6px; background: var(--u-tile-bg); }
+#k .u-ah-ico .u-ico { width: 60%; height: 60%; }
+#k .u-ah-pill { flex: none; display: inline-flex; align-items: center; gap: 3px; min-height: calc(19 * var(--k-px)); padding: 0 calc(7 * var(--k-px)); border-radius: 999px; white-space: nowrap;
+  font: 700 var(--u-fs-s)/1 var(--u-ui); background: var(--u-mute-bg); color: var(--u-mute-on); }
+#k .u-ah-pill .u-ico { width: calc(12 * var(--k-px)); height: calc(12 * var(--k-px)); }
+#k .u-ah-pill .u-key { min-width: calc(15 * var(--k-px)); height: calc(15 * var(--k-px)); margin-left: 2px; font-size: calc(10.5 * var(--k-px)); }
+#k .u-ah-pill.is-owned { background: var(--u-ink); color: var(--u-inset); }
+#k .u-ah-pill.is-now, #k .u-ah-pill.is-here { background: var(--u-gain); color: var(--u-gain-on); }
+#k .u-ah-pill.is-here { box-shadow: inset 0 0 0 1.5px var(--u-line); }
+#k .u-ah-pill.is-later { background: transparent; box-shadow: inset 0 0 0 1px var(--u-slate); color: var(--u-ink-2); }
+/* the card: over the trees, on the side away from what was picked */
+#k .u-ah-card { position: absolute; z-index: 3; left: 10px; right: auto; width: min(calc(600 * var(--k-px)), calc(100% - 20px)); display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px;
+  overflow: hidden auto; padding: 9px 11px 10px; box-sizing: border-box; container-type: inline-size;
+  border: 1.5px solid var(--u-line); border-radius: 9px; background: var(--u-inset); box-shadow: var(--u-shadow); color: var(--u-ink); font: 500 var(--u-fs)/1.35 var(--u-ui);
+  scrollbar-width: thin; overscroll-behavior: contain; animation: rn-sheet-in 120ms var(--k-ease) both; }
+#k .u-ah-card.is-right { left: auto; right: 10px; }
+#k .u-ah-card[hidden] { display: none; }
+#k .u-ah-card-pic .u-tile, #k .u-ah-card-pic .u-ah-ico { width: calc(56 * var(--k-px)); height: calc(56 * var(--k-px)); --u-tile-s: calc(56 * var(--k-px)); }
+#k .u-ah-card-body { display: grid; gap: 5px 16px; min-width: 0; align-content: start; }
+#k .u-ah-card-main, #k .u-ah-card-side { display: grid; gap: 5px; min-width: 0; align-content: start; }
+@container (min-width: 520px) { #k .u-ah-card-body { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); } #k .u-ah-card-head, #k .u-ah-card-body > .is-wide { grid-column: 1 / -1; } }
+#k .u-ah-card-head { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; }
+#k .u-ah-card-name { font: 700 calc(16 * var(--k-px))/1.2 var(--u-ui); }
+#k .u-ah-card-price { font: 400 calc(17 * var(--k-px))/1 var(--u-sign); white-space: nowrap; }
+#k .u-ah-x { margin-left: auto; font: 700 var(--u-fs)/1 var(--u-ui); }
+#k .u-ah-short-big { margin: 0; font: 700 var(--u-fs)/1.3 var(--u-ui); }
+#k .u-ah-does { margin: 0; color: var(--u-ink-2); font-weight: 600; font-size: var(--u-fs-s); }
+#k .u-ah-facts, #k .u-ah-ul { margin: 0; padding-left: 16px; font: 500 var(--u-fs-s)/1.35 var(--u-ui); color: var(--u-ink-2); }
+#k .u-ah-sec h4 { margin: 2px 0 1px; font: 700 var(--u-fs-cap)/1.2 var(--u-ui); letter-spacing: .03em; text-transform: uppercase; color: var(--u-mute); }
+#k .u-ah-vs { width: 100%; table-layout: fixed; border-collapse: collapse; font: 500 var(--u-fs-s)/1.25 var(--u-ui); }
+#k .u-ah-vs th { padding: 1px 6px 2px 0; text-align: left; font-weight: 700; color: var(--u-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#k .u-ah-vs th:not(:first-child), #k .u-ah-vs td.is-num { width: calc(104 * var(--k-px)); }
+#k .u-ah-vs td { padding: 2px 6px 2px 0; border-top: 1px solid var(--u-rule); vertical-align: top; }
+#k .u-ah-vs td.is-who { overflow-wrap: anywhere; }
+#k .u-ah-vs td small { font-size: inherit; color: var(--u-mute); }
+#k .u-ah-vs td.is-num { white-space: nowrap; font-weight: 700; font-variant-numeric: tabular-nums; }
+#k .u-ah-vs td.is-up { color: var(--u-gain-text); }
+#k .u-ah-vs td.is-down { color: var(--u-loss-text); }
+#k .u-ah-vs tr.is-best td { background: rgba(255, 194, 26, .28); }
+#k .u-ah-wheretext { display: flex; align-items: flex-start; gap: 6px; margin: 0; font: 600 var(--u-fs-s)/1.35 var(--u-ui); }
+#k .u-ah-wheretext .u-ico { flex: none; margin-top: 1px; }
+#k .u-ah-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+#k .u-ah-needs { font: 700 var(--u-fs-s)/1 var(--u-ui); color: var(--u-mute); }
+#k .u-chip.u-ah-chip.is-later { border-style: dashed; color: var(--u-ink-2); }
+#k .u-chip.u-ah-chip .u-ico { width: calc(11 * var(--k-px)); height: calc(11 * var(--k-px)); }
+#k .u-ah-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 3px; }
+#k .u-ah-do { min-height: calc(32 * var(--k-px)); }
+#k .u-ah-do.is-no { opacity: .8; border-style: dashed; box-shadow: none; }
+#k .u-ah-do-t { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+#k .u-ah-do-t small { font: 600 var(--u-fs-s)/1.2 var(--u-ui); white-space: normal; }
+#k .u-ah-link .u-ico { width: calc(13 * var(--k-px)); height: calc(13 * var(--k-px)); }
+#k .u-ah-back { flex: none; }
+/* a tall window: the trees larger, read at a glance */
+@media (min-height: 821px) {
+  #k .u-ah-node { min-height: calc(33 * var(--k-px)); padding-top: 5px; padding-bottom: 5px; font-size: calc(15 * var(--k-px)); }
+  #k .u-ah-li { margin-top: 6px; }
+  #k .u-ah-group { margin-top: 8px; }
+  #k .u-ah-glabel { font-size: var(--u-fs); }
+  #k .u-ah-bhead { font-size: calc(14 * var(--k-px)); }
+}
+/* a short window (the smallest the page supports is 1280 × 720): nodes a little tighter, so all four trees stay in sight */
+@media (max-height: 820px) {
+  #k .u-ah-lead { padding-bottom: 5px; }
+  #k .u-ah-bhead { padding-top: 4px; padding-bottom: 4px; }
+  #k .u-ah-li { margin-top: 3px; }
+  #k .u-ah-group { margin-top: 3px; }
+  #k .u-ah-node { min-height: calc(25 * var(--k-px)); padding-top: 3px; padding-bottom: 3px; font-size: calc(13 * var(--k-px)); }
+  #k .u-ah-card { padding: 7px 9px 8px; gap: 8px; }
+  #k .u-ah-card-pic .u-tile, #k .u-ah-card-pic .u-ah-ico { width: calc(44 * var(--k-px)); height: calc(44 * var(--k-px)); --u-tile-s: calc(44 * var(--k-px)); }
+}
+
+/* ── RAID-1: THE RAID ON YOUR HOME (raid.js). The WORTH meter beside the Sixes'; the card of the one decision, a slip
+   as HOME's and the Sixes' are, a little wider; each thing you could hold a button with its odds; the plain beat at the
+   door over the picture's top; the night's card a list of what it cost; Dutch's cut on a job at their market ──────── */
+#k .u-stat.is-worth { cursor: pointer; }
+#k .u-stat.is-worth:hover { background: var(--u-inset); }
+#k .u-stat.is-worth .u-stat-sub { white-space: normal; line-height: 1.15; }
+#k .rn .rn-print.rn-raid-print { width: min(calc(460 * var(--k-px)), calc(100% - var(--rn-side) - 2 * var(--rn-m) - var(--rn-g))); box-shadow: var(--u-shadow-l, var(--rn-sh)); }
+#k .rn-raid-print .rn-print-head kbd { margin-right: 4px; }
+#k .rn-raid-who { margin: 2px 0 0; }
+#k .rn-raid-weak { margin: 3px 0 0; padding: 4px 6px; background: var(--u-inset); border-left: 3px solid var(--u-risk-mark); }
+#k .rn-raid-holds { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(128 * var(--k-px)), 1fr)); gap: 6px; margin-top: 4px; }
+#k[data-skin] .hk .k-btn.rn-raid-hold { display: grid; justify-items: start; gap: 1px; min-height: calc(44 * var(--k-px)); padding: 4px 8px; text-align: left; white-space: normal; }
+#k .rn-raid-hold b { font-weight: 700; }
+#k .rn-raid-hold span { font-size: var(--u-fs-s, 0.85em); color: var(--u-ink-2); }
+#k .rn-raid-hold .rn-raid-odds { font-style: normal; font-weight: 700; font-size: 1.05em; }
+#k .rn-raid-hold.is-on { outline: 2.5px solid var(--u-risk-mark); outline-offset: 1px; background: var(--u-you); }
+#k .rn-raid-hold[disabled] { opacity: 1; cursor: default; }
+#k .rn-raid-print .rn-hp-list li b { display: inline-block; min-width: calc(44 * var(--k-px)); }
+#k .rn-raid-lose li, #k .rn-raid-where li[data-where="out"] { color: var(--u-ink); }
+#k .rn-raid-go { margin-top: 6px !important; font-weight: 700; }
+#k .rn-raid-hire { margin-top: 4px; }
+#k .rn-raid-chip { background: var(--u-risk); color: var(--u-ink); }
+#k .rn-raid-chip.is-now { background: var(--u-loss-plate); color: var(--u-loss-on); }
+#k .rn-notice.is-raid { box-shadow: var(--rn-sh), inset 4px 0 0 var(--u-risk-mark); }
+#k[data-skin] .hk .k-btn.rn-notice-go { flex: none; min-height: calc(20 * var(--k-px)); padding: 0 8px; font-weight: 700; }
+#k .rn-raid-lines { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 3px; }
+#k .rn-raid-lines li { margin: 0; }
+#k .u-pill.rn-cut { background: var(--u-risk); color: var(--u-risk-on); }
+#k .u-pill.rn-cut.is-up { background: var(--u-loss-plate); color: var(--u-loss-on); }
+/* (seven numbers with WORTH: each a little tighter again, the captions smaller, so none is cut at 1440) */
+#k .u-stats:has(.u-stat.is-worth) .u-stat { padding-left: calc(3 * var(--k-px)); padding-right: calc(3 * var(--k-px)); }
+#k .u-stats:has(.u-stat.is-worth) .u-stat .u-cap { font-size: 0.8em; letter-spacing: 0; }
+#k .rn-raid-win { margin: 0; }
+/* (raidfight-5: the card titles first: who, in your hands, home or out, who stands with you; the rest folded under a
+   short title that a press opens: what you lose, what you win, what would help) */
+#k .rn-raid-who span { display: block; color: var(--u-ink-2); font-size: var(--u-fs-s, 0.85em); }
+#k .rn-raid-alone { margin: 2px 0 0; }
+#k .rn-raid-fold { margin-top: 6px; border-top: 1px dashed var(--u-line); padding-top: 2px; }
+#k .rn-raid-fold + .rn-raid-fold { margin-top: 2px; }
+#k .rn-fold-t { appearance: none; background: none; border: 0; padding: 3px 0; color: var(--u-ink); font: inherit; font-weight: 700; text-transform: uppercase; text-align: left; cursor: pointer; width: 100%; display: flex; gap: 6px; align-items: baseline; }
+#k .rn-fold-t:hover, #k .rn-fold-t:focus-visible { text-decoration: underline; }
+#k .rn-fold-t i { font-style: normal; width: 1em; flex: none; }
+#k .rn-fold-body { padding: 0 0 2px calc(14 * var(--k-px)); }
+#k .rn-fold-body[hidden] { display: none; }
+#k .rn-fold-h { margin: 2px 0 0; font-weight: 700; color: var(--u-ink-2); }
+#k .rn-raid-out { margin: 0; }
+/* (the raid's word: the head and its buttons on the first line, the words under them, the whole width) */
+#k .rn .rn-notice.is-raid { flex-wrap: wrap; max-width: calc(460 * var(--k-px)); row-gap: 2px; padding-bottom: 5px; }
+#k .rn-notice.is-raid .rn-notice-h { flex: 1 1 auto; }
+#k .rn-notice.is-raid .rn-notice-text { order: 5; flex: 1 1 100%; }

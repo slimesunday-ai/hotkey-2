@@ -1,13 +1,16 @@
 // CHARACTER AUDIT · a headless Chrome over CDP (the pattern of studio/sweep.mjs). open(url) → { ev(expr, awaitPromise), close() }.
 import { spawn } from 'node:child_process'; import fs from 'node:fs/promises'; import os from 'node:os'; import path from 'node:path';
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', sleep = ms => new Promise(r => setTimeout(r, ms));
-export async function open(url, { title, timeout = 60000 } = {}) {
+// debugPort: the browser's debug port (0, the default: any free one) · pidFile: write the browser's process id there (to stop only it)
+export async function open(url, { title, timeout = 60000, debugPort = 0, pidFile = null } = {}) {
   const prof = await fs.mkdtemp(path.join(os.tmpdir(), 'audit-chrome-'));
-  const ch = spawn(CHROME, ['--headless=new', `--user-data-dir=${prof}`, '--no-first-run', '--no-default-browser-check', '--use-angle=metal', '--ignore-gpu-blocklist', '--remote-debugging-port=0', '--window-size=800,600', 'about:blank'], { stdio: 'ignore' });
+  const ch = spawn(CHROME, ['--headless=new', `--user-data-dir=${prof}`, '--no-first-run', '--no-default-browser-check', '--use-angle=metal', '--ignore-gpu-blocklist', `--remote-debugging-port=${debugPort | 0}`, '--window-size=800,600', 'about:blank'], { stdio: 'ignore' });
+  if (pidFile) await fs.writeFile(pidFile, String(ch.pid));
   const kill = () => { try { ch.kill('SIGKILL'); } catch {} }; for (const sig of ['SIGALRM', 'SIGTERM', 'SIGINT']) process.once(sig, () => { kill(); process.exit(1); }); process.once('exit', kill);
   const close = async () => { try { ch.kill('SIGKILL'); } catch {} await sleep(300); await fs.rm(prof, { recursive: true, force: true }).catch(() => {}); };
   try {
-    let port = null; for (let t = 0; t < 150 && !port; t++) { await sleep(100); try { port = (await fs.readFile(path.join(prof, 'DevToolsActivePort'), 'utf8')).split('\n')[0]; } catch {} }
+    // (a fixed debug port: ask the port itself, the profile's port file can be late)
+    let port = null; for (let t = 0; t < 150 && !port; t++) { await sleep(100); try { port = debugPort ? ((await fetch(`http://127.0.0.1:${debugPort}/json/version`)).ok ? String(debugPort) : null) : (await fs.readFile(path.join(prof, 'DevToolsActivePort'), 'utf8')).split('\n')[0]; } catch {} }
     if (!port) throw new Error('chrome did not start');
     const page = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find(t => t.type === 'page'), ws = new WebSocket(page.webSocketDebuggerUrl);
     await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; }); let id = 0; const wait = new Map(), errs = [];

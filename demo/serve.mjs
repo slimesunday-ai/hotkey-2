@@ -8,10 +8,17 @@
 //   node demo/serve.mjs --overlay       last night's narrowed streets (city/overlay/) in front of the pinned city.
 //                                       OFF by default since the big-city branch: the game plays on the city as pinned
 //
-// It listens on this machine only (127.0.0.1), reads files and nothing else, and never caches: an edit shows on the
-// next reload. Files whose name starts with a dot, and anything outside the repo, are never served.
+// It listens on this machine only (127.0.0.1) and reads files and nothing else. Files whose name starts with a dot, and
+// anything outside the repo, are never served.
+// THE BROWSER KEEPS ITS COPY, AND ASKS EVERY TIME (smooth-1, docs/perf/2026-11-18-audit.md fix 9): every file goes out
+// with `Cache-Control: no-cache` and a validator, so the browser keeps the file and the code it compiled from it, and
+// asks again on every load: an unchanged file is a 304 with no body, a changed one is sent whole. The ETag is the
+// file's size, its modification time and its change time (to the nanosecond) and its inode: any write to the file
+// changes the change time, which nothing can set back, so an edit, or a `git checkout` of another version in place
+// while this server runs, is never answered from the old copy, even one of the same size in the same second.
+// If-None-Match is the answer when it is sent; If-Modified-Since alone only when the file is a whole second older.
 import http from 'node:http';
-import { createReadStream } from 'node:fs';
+import { createReadStream, realpathSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -67,6 +74,20 @@ function resolve(urlPath) {
   return file;
 }
 
+/** The validator of a file as it is now (stat with bigint: nanoseconds). Any write to it changes it. */
+export const etagOf = info => `"${info.size.toString(36)}-${info.mtimeNs.toString(36)}-${info.ctimeNs.toString(36)}-${info.ino.toString(36)}"`;
+
+/**
+ * Whether the browser's copy is the file as it is now: If-None-Match names this ETag (it wins when sent); else
+ * If-Modified-Since is a whole second after the file was last written (an edit in the same second is never missed).
+ */
+export function fresh(req, etag, mtimeMs) {
+  const inm = req.headers['if-none-match'];
+  if (inm) return inm.split(',').map(t => t.trim().replace(/^W\//, '')).some(t => t === etag || t === '*');
+  const ims = Date.parse(req.headers['if-modified-since'] ?? '');
+  return Number.isFinite(ims) && Math.floor(mtimeMs / 1000) * 1000 < ims;
+}
+
 function send(res, status, body, headers = {}) {
   res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', ...headers });
   res.end(body);
@@ -85,15 +106,22 @@ const server = http.createServer(async (req, res) => {
     if (over && await stat(over).then(i => i.isFile(), () => false)) file = over;
   }
   try {
-    let info = await stat(file);
+    let info = await stat(file, { bigint: true });
     if (info.isDirectory()) {
       // a folder without its closing slash would resolve the page's relative imports one level too high
       if (!url.pathname.endsWith('/')) return send(res, 302, '', { Location: url.pathname + '/' + url.search });
       file = path.join(file, 'index.html');
-      info = await stat(file);
+      info = await stat(file, { bigint: true });
     }
     const type = TYPES[path.extname(file).toLowerCase()] ?? 'application/octet-stream';
-    res.writeHead(200, { 'Content-Type': type, 'Content-Length': info.size, 'Cache-Control': 'no-store' });
+    const etag = etagOf(info);
+    const mtimeMs = Number(info.mtimeNs / 1000000n);
+    const kept = { 'Cache-Control': 'no-cache', ETag: etag, 'Last-Modified': new Date(mtimeMs).toUTCString() };
+    if (fresh(req, etag, mtimeMs)) {
+      res.writeHead(304, kept);
+      return res.end();
+    }
+    res.writeHead(200, { 'Content-Type': type, 'Content-Length': String(info.size), ...kept });
     if (req.method === 'HEAD') return res.end();
     createReadStream(file).on('error', () => res.destroy()).pipe(res);
   } catch {
@@ -102,11 +130,22 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.on('error', err => {
-  console.error(err.code === 'EADDRINUSE' ? `serve: port ${port} is taken. Try --port 5471.` : `serve: ${err.message}`);
-  process.exit(1);
-});
+export { server };
 
-server.listen(port, '127.0.0.1', () => {
-  console.log(`serve: http://127.0.0.1:${port}/demo/   (the city alone: /city/from-trunk/style/city/?nobake=1)`);
-});
+// (run as a script it listens; imported, by a test, it is the server not yet listening)
+const main = (() => {
+  try {
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+})();
+if (main) {
+  server.on('error', err => {
+    console.error(err.code === 'EADDRINUSE' ? `serve: port ${port} is taken. Try --port 5471.` : `serve: ${err.message}`);
+    process.exit(1);
+  });
+  server.listen(port, '127.0.0.1', () => {
+    console.log(`serve: http://127.0.0.1:${port}/demo/   (the city alone: /city/from-trunk/style/city/?nobake=1)`);
+  });
+}

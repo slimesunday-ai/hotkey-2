@@ -6,9 +6,15 @@
 // open is put back as it was, the pads' cutaway's or none).
 //
 // Its door, outside, is the trailer's real door: the lot's anchor gives the stoop (0.55 m in front of the wall,
-// plan.js) and the way it faces, and our leaf hangs in the wall there and swings out. Its door inside is a doorway in
-// a low front wall of ours (the room is seen walls-down from its open front, as the city's own cutaway shows it), with
-// a leaf that swings in while somebody comes or goes and is not there otherwise.
+// plan.js) and the way it faces, and our leaf hangs in the wall there. Its door inside is a doorway in a low front
+// wall of ours (the room is seen walls-down from its open front, as the city's own cutaway shows it), with a leaf that
+// is there while somebody comes or goes and not otherwise. THE TWO LEAVES SWING THE WAY THE WALKER GOES (notes-1, the
+// owner 2026-11-19: "the door should swing out from the direction you are walking so it doesnt pass through your
+// body"): leaving, out, ahead of him, in the room's view and then outside; coming in, in, outside and then in the
+// room's view (place.leaf's `way`, doorway.js says which). Both are hinged on the left as the door is seen from in
+// front of it. The trailer's leaf swung in is seen in its dark doorway, and only there (it is drawn just after the
+// doorway's dark, where the dark is nearer than it: the trailer's wall, in front of it everywhere else, hides the
+// rest); what is mounted on its room side is behind it then, against the wall, and is not drawn.
 //
 // THE RUN'S OWN PAD is built from the starter pack instead (set/starter.js: a layout of ours in the city's format,
 // 7 m by 3.5 m), once the run says which pad is the player's: its doorway in the middle of the room's long front,
@@ -30,9 +36,18 @@ const STUB = { h: 0.42, t: 0.12, gap: 1.12 };
 /** The stoop is this far in front of the wall (plan.js), and the step this far in front of the stoop (pads.js). */
 const STOOP = 0.55;
 const STEP = 1.15;
-/** How far the leaf outside swings open (radians, outward: a trailer's door opens out) and the one inside (in). */
+/**
+ * How far a leaf swings open (radians): the trailer's out over its stoop, and in; the room's in, and out over the
+ * ground in front of its low wall (no further than square to it: past that its hinge edge went into the wall's end).
+ */
 const SWING_OPEN = 1.75;
+const SWING_OPEN_IN = 1.65;
 const SWING_IN = 1.65;
+const SWING_IN_OUT = Math.PI / 2;
+/** The trailer's leaf swinging in hangs this far into the wall (m, off the doorway's dark): behind the dark from the first. */
+const HANG_IN = -0.04;
+/** A leaf (m): its width, height, thickness. */
+const LEAF = { w: 1.06, h: 2.2, t: 0.06 };
 /** A room cell (m), the city's. */
 const C4 = 0.25;
 
@@ -48,10 +63,16 @@ export function createCribs({ city, HOMES, PLAN, GPU, roomOf, entry, lotOf, keys
   const cutNow = () => (CUT ? CUT.value.slice() : null);
   const putCut = was => was && CUT.value.set(was);
 
-  const leafG = new T.BoxGeometry(1.06, 2.2, 0.06);
+  const leafG = new T.BoxGeometry(LEAF.w, LEAF.h, LEAF.t);
   const leafM = new T.MeshStandardMaterial({ color: 0x6b4428, roughness: 0.7 });
   const paneG = new T.BoxGeometry(0.38, 0.38, 0.075);
   const paneM = new T.MeshStandardMaterial({ color: 0x9fd6ee, roughness: 0.25 });
+  // (the trailer's leaf swung in, inside its wall: drawn only where the doorway's dark, drawn just before it, is nearer
+  // than it, and over that dark; it leaves the dark's depth as it was, so the wall and the trailer's own door, drawn
+  // after, stay behind the dark and whoever stands in front of the doorway is drawn over the lot)
+  const behind = m => Object.assign(m.clone(), { depthFunc: T.GreaterEqualDepth, depthWrite: false });
+  const leafInM = behind(leafM);
+  const paneInM = behind(paneM);
   const holeG = new T.PlaneGeometry(1.12, 2.26);
   const holeM = new T.MeshBasicMaterial({ color: 0x120e0b });
   const innerM = new T.MeshStandardMaterial({ color: 0x7a4c2c, roughness: 0.7, transparent: true });
@@ -61,6 +82,8 @@ export function createCribs({ city, HOMES, PLAN, GPU, roomOf, entry, lotOf, keys
   // 'door-locks', variant 0 "chain + deadbolt") on the room side of both leaves, by the latch edge, at its own mount
   // height. The rules are not touched: what the deadbolt does is config's (`things.deadbolt.defends`).
   let lockGeo = null;
+  // (sixes-1: THE DOOR BAR, the kit's own 'door-bar', across the room's side of the door leaves, owned: as the locks)
+  let barGeo = null;
   const lockMats = [0.78, 0.22, 0.3].map((r, i) => new T.MeshStandardMaterial({ vertexColors: true, roughness: r, metalness: [0, 0.1, 0.85][i] }));
   const CITY = new URL('../../../city/from-trunk/style/city/', import.meta.url).href;
   Promise.all([import(`${CITY}interiors/home/index.js`), import(`${CITY}vox.js`), import(`${CITY}glue.js`)]).then(([HO, V, G]) => {
@@ -68,7 +91,30 @@ export function createCribs({ city, HOMES, PLAN, GPU, roomOf, entry, lotOf, keys
     const b = new V.Bank(true);
     V.meshVol(HO.buildObject(o, { variant: 0 }), b);
     lockGeo = { mount: o.mount, layers: b.L.map((O, li) => (O.v ? { g: G.geoOf(O), li } : null)).filter(Boolean) };
+    const ob = HO.byId.get('door-bar');
+    if (ob) {
+      const bb = new V.Bank(true);
+      V.meshVol(HO.buildObject(ob, { variant: 0 }), bb);
+      const box = new T.Box3();
+      const layers = bb.L.map((O, li) => (O.v ? { g: G.geoOf(O), li } : null)).filter(Boolean);
+      for (const { g } of layers) { g.computeBoundingBox(); box.union(g.boundingBox); }
+      barGeo = { mount: ob.mount ?? 1.1, layers, box };
+    }
   }).catch(err => console.warn('[crib] the door locks did not load:', err));
+  // THE GUARD DOG (assets-1): the older game's chain dog (props/dog.js) stood by his bed wherever the room has one (the kit's
+  // 'dog-bed', owned and put down), or out in the yard by the stoop when a tool asks (place.dog(mode, { yard: true })). A pose to
+  // show, no rule: sit by default; place.dog('lie' | 'sleep' | 'bark' | …) changes it, place.dog(null) sends him off.
+  const dogKit = Promise.all([import(`${CITY}vox.js`), import(`${CITY}glue.js`), import('../props/dog.js'), import(`${CITY}interiors/home/index.js`)])
+    .catch(err => (console.warn('[crib] the dog did not load:', err), null));
+  const dogs = new Set();
+  let dogLoop = false;
+  function tickDogs() {
+    if (!dogs.size) { dogLoop = false; return; }
+    dogLoop = true;
+    const now = performance.now();
+    for (const d of dogs) { const dt = Math.min(0.1, (now - (d.last ?? now)) / 1000); d.last = now; if (d.dog.root.parent && d.dog.root.visible) d.dog.tick(dt); }
+    requestAnimationFrame(tickDogs);
+  }
   /** The locks for a leaf (its centre at the leaf's middle): on its -z face (the room's side), by the latch edge. */
   function locksOn(leaf, side = -1) {
     if (!lockGeo) return null;
@@ -77,6 +123,20 @@ export function createCribs({ city, HOMES, PLAN, GPU, roomOf, entry, lotOf, keys
     // (the piece's face is +z out of its wall: turned half round to face -z, its 0.25 m width ending 0.06 m from the edge)
     g.rotation.y = side < 0 ? Math.PI : 0;
     g.position.set(side < 0 ? 0.47 : 0.22, lockGeo.mount - 1.1, side * 0.031);
+    leaf.add(g);
+    return g;
+  }
+
+  /** (sixes-1) The door bar for a leaf: across its room side at the height of the kit's mount, centred on the leaf. */
+  function barOn(leaf, side = -1) {
+    if (!barGeo) return null;
+    const g = new T.Group();
+    for (const { g: geo, li } of barGeo.layers) g.add(Object.assign(new T.Mesh(geo, lockMats[li] ?? lockMats[0]), { userData: { shared: true } }));
+    const b = barGeo.box;
+    // (the piece's own middle on the leaf's middle, turned to face the room; at the kit's mount height off the floor)
+    g.rotation.y = side < 0 ? Math.PI : 0;
+    const cx = (b.min.x + b.max.x) / 2;
+    g.position.set(side < 0 ? cx : -cx, barGeo.mount - 1.1 - (b.min.y + b.max.y) / 2 + (b.max.y - b.min.y) / 2, side * 0.04);
     leaf.add(g);
     return g;
   }
@@ -183,11 +243,40 @@ export function createCribs({ city, HOMES, PLAN, GPU, roomOf, entry, lotOf, keys
       const leaf = new T.Mesh(leafG, innerM);
       leaf.position.set(0.53, 1.1, 0);
       leaf.visible = false;
-      if (S0 && starter.shows().door) locksOn(leaf, -1);
+      const mounts = [S0 && starter.shows().door ? locksOn(leaf, -1) : null].filter(Boolean);
+      // (notes-1: THE DOOR BAR IS LIFTED OFF TO OPEN THE DOOR. The kit's bar is 1.25 m across, wider than the leaf, and
+      // braced 0.3 m out to a plate on the floor: on a leaf swung open it went into the doorway's end or across the
+      // way through, whichever way the leaf swung. While the door stands open it stands as the kit builds it, its back
+      // to the low wall's inside face beside the doorway, on the latch side where the floor is clear (else the hinge
+      // side; else it is put away and not seen). Outside it is inside the trailer, off the door, and not drawn.)
+      let bar = null;
+      if (S0 && starter.shows().bar && barGeo) {
+        const w = barGeo.box.max.x - barGeo.box.min.x;
+        const deep = barGeo.box.max.z - barGeo.box.min.z;
+        const freeAt = x0 => {
+          if (x0 < 0.12 || x0 + w > F.W - 0.12) return false;
+          for (let x = x0; x <= x0 + w + 1e-6; x += C4 / 2) {
+            for (const z of [F.D - STUB.t - 0.02, F.D - STUB.t - deep]) {
+              const gx = Math.floor((Math.min(x, x0 + w) - P.x0) / C4);
+              const gz = Math.floor(z / C4);
+              if (gx < 0 || gz < 0 || gx >= G.RW || gz >= G.RD || G.blocked[gx + gz * G.RW]) return false;
+            }
+          }
+          return true;
+        };
+        const x0 = [dx + half + 0.06, dx - half - 0.06 - w].find(freeAt);
+        if (x0 !== undefined) {
+          // (on a stand where a leaf's middle would be, so barOn sets it at the kit's own height and 0.01 m off the wall)
+          const stand = new T.Group();
+          stand.position.set(x0 + w / 2, 1.1, -STUB.t + 0.03);
+          stand.visible = false;
+          if (barOn(stand, -1)) g.add((bar = stand));
+        }
+      }
       hinge.add(leaf);
       g.add(hinge);
       extra.add(g);
-      extra.userData.inner = { hinge, leaf };
+      extra.userData.inner = { hinge, leaf, mounts, bar };
     }
     extra.traverse(o => o.layers.set(LAYER));
     extra.visible = false;
@@ -204,20 +293,90 @@ export function createCribs({ city, HOMES, PLAN, GPU, roomOf, entry, lotOf, keys
       const pane = new T.Mesh(paneG, paneM);
       pane.position.set(0, 0.45, 0);
       leaf.add(pane);
-      // (the room's side of the trailer's own door: seen from the street while it stands open)
-      if (S0 && starter.shows().door) locksOn(leaf, -1);
+      // (the room's side of the trailer's own door: seen from the street while it stands open out)
+      // (the door bar is not on it: lifted off to open the door, it stands inside, set above)
+      const mounts = [S0 && starter.shows().door ? locksOn(leaf, -1) : null].filter(Boolean);
       hinge.add(leaf);
       const hole = new T.Mesh(holeG, holeM);
       hole.position.set(0, 1.13, 0.02);
+      // (the dark first of all, then the leaf swung in: see `behind`)
+      hole.renderOrder = -2;
       g.add(hinge, hole);
       g.visible = false;
       city.scene.add(g);
-      return { g, hinge };
+      return { g, hinge, leaf, pane, mounts };
     })();
+
+    // the dog's bed in this room (an item of its layout), as room metres → the world, facing the room's open front
+    const bedItem = (r.A?.items ?? []).find(it => it.id === 'dog-bed');
+    // (in the bed's ring: 0.375 m in from its back-left corner, the bowls to its right, as the kit draws it; turned with the bed)
+    const dogSpot = bedItem ? (() => { const rot = ((bedItem.rot ?? 0) / 90) & 3, w = rot & 1 ? 3 : 4, d = rot & 1 ? 4 : 3;
+      const ring = [[.375, .375], [.375, .625], [.625, .375], [.625, .375]][rot];
+      const at = P.w3(bedItem.x * C4 + Math.min(ring[0], w * C4), bedItem.z * C4 + Math.min(ring[1], d * C4), yF); return { at, ry: Math.atan2(F.za[0], F.za[1]) }; })() : null;
+    const yardSpot = { at: [outside.step[0] + face[1] * 1.1, 0, outside.step[1] - face[0] * 1.1], ry: Math.atan2(face[0], face[1]) };
+    let dogNow = null;
+    async function setDog(mode, o = {}) {
+      if (!mode) { if (dogNow) { dogs.delete(dogNow); dogNow.dog.dispose(); dogNow.bed?.removeFromParent(); dogNow = null; } return null; }
+      const yard = !!o.yard, spot = yard ? yardSpot : dogSpot;
+      if (!spot) return null;
+      // (the yard's ground as it is drawn there: the first of the city's surfaces straight down, once)
+      if (yard && !yardSpot.grounded) { yardSpot.grounded = true; try { const rc = new T.Raycaster(new T.Vector3(yardSpot.at[0], yardSpot.at[1] + 4, yardSpot.at[2]), new T.Vector3(0, -1, 0), 0, 8); rc.layers.set(0); rc.camera = city.camera;
+        const hit = rc.intersectObjects(city.scene.children, true).find(q => q.object.isMesh && q.object.visible && q.point.y < yardSpot.at[1] + 1.2); if (hit) yardSpot.at[1] = hit.point.y; } catch { /* (the plan's ground, 0) */ } }
+      const kit = await dogKit;
+      if (!kit || gone) return null;
+      const [VOX, GLUE, D, HO] = kit;
+      if (dogNow && dogNow.yard !== yard) await setDog(null);
+      if (!dogNow) {
+        const dog = D.createDog(T, VOX, GLUE, { coat: o.coat ?? 'fawn', mode });
+        let bed = null;
+        if (yard) {
+          // (out in the yard he brings his own bed: the kit's, at the stoop's side)
+          const b = new VOX.Bank(true); VOX.meshVol(HO.buildObject('dog-bed', { variant: 0 }), b);
+          bed = new T.Group(); b.L.forEach((O, li) => { if (O.v) bed.add(new T.Mesh(GLUE.geoOf(O), lockMats[Math.min(2, li)])); });
+          // (its ring under him: the bed's back-left corner 0.375 m back and left of him, turned with him)
+          const c = Math.cos(spot.ry), sn = Math.sin(spot.ry);
+          bed.position.set(spot.at[0] - (0.375 * c + 0.375 * sn), spot.at[1], spot.at[2] - (-0.375 * sn + 0.375 * c));
+          bed.rotation.y = spot.ry; city.scene.add(bed);
+        }
+        // (set back a little from the ring's centre: his head is forward of his middle, so he lies inside the ring, not over its front)
+        const back = 0.08;
+        dog.root.position.set(spot.at[0] - Math.sin(spot.ry) * back, spot.at[1] + (yard ? 0 : 0.05), spot.at[2] - Math.cos(spot.ry) * back);
+        dog.root.rotation.y = spot.ry;
+        if (yard) city.scene.add(dog.root); else { dog.root.traverse(n => n.layers.set(LAYER)); extra.add(dog.root); }
+        dogNow = { dog, bed, yard };
+        dogs.add(dogNow);
+        if (!dogLoop) requestAnimationFrame(tickDogs);
+      }
+      dogNow.dog.setMode(mode);
+      if (o.settle) dogNow.dog.settle();
+      return dogNow.dog.mode;
+    }
+    // (a room with a dog bed shows its dog, sitting by it)
+    if (dogSpot) setDog('sit');
 
     let shown = false;
     let gone = false;
-    const leaves = { in: 0, out: 0 };
+    // each leaf: how far open (k), which way it swings (into the building, or out of it), how much of it is seen
+    const leaves = { in: { k: 0, way: 'in', alpha: 1 }, out: { k: 0, way: 'out', alpha: 1 } };
+    const leafMesh = side => (side === 'out' ? outer.leaf : extra.userData.inner.leaf);
+    const hingeOf = side => (side === 'out' ? outer.hinge : extra.userData.inner.hinge);
+    // (the leaf, and each thing mounted on it, as a box in the leaf's own frame: what the doorway measures bodies against)
+    const boxesOf = mesh => {
+      const out = [new T.Box3(new T.Vector3(-LEAF.w / 2, -LEAF.h / 2, -LEAF.t / 2), new T.Vector3(LEAF.w / 2, LEAF.h / 2, LEAF.t / 2))];
+      for (const c of mesh.children) {
+        if (!c.visible) continue;
+        const b = new T.Box3();
+        c.traverse(o => {
+          if (!o.geometry) return;
+          o.geometry.boundingBox ?? o.geometry.computeBoundingBox();
+          const M = new T.Matrix4();
+          for (let p = o; p && p !== mesh; p = p.parent) M.premultiply((p.updateMatrix(), p.matrix));
+          b.union(o.geometry.boundingBox.clone().applyMatrix4(M));
+        });
+        if (!b.isEmpty()) out.push(b);
+      }
+      return out;
+    };
     const place = {
       key,
       lift: LIFT,
@@ -266,21 +425,60 @@ export function createCribs({ city, HOMES, PLAN, GPU, roomOf, entry, lotOf, keys
         if (gx >= 0 && gz >= 0 && gx < G.RW && gz < G.RD && G.blocked[gx + gz * G.RW]) return 'a piece of furniture';
         return null;
       },
-      leaf(side, k) {
-        leaves[side] = k;
+      /**
+       * A leaf open by k (0 shut … 1 open), swinging `way` ('in': into the building or room, 'out': out of it; unsaid,
+       * as it always did: the trailer's out, the room's in), the room's one seen by `alpha` (it goes from where it
+       * stands when it cannot swing shut).
+       */
+      leaf(side, k, { way = side === 'out' ? 'out' : 'in', alpha = 1 } = {}) {
+        leaves[side] = { k, way, alpha };
         if (side === 'out') {
-          outer.g.visible = k > 0.001;
-          // (out, into the porch: a trailer's door opens outward)
-          outer.hinge.rotation.y = -k * SWING_OPEN;
+          const O = outer;
+          O.g.visible = k > 0.001;
+          // (out, over the stoop; in, inside the wall, hung behind the doorway's dark)
+          const inward = way === 'in';
+          O.hinge.position.z = inward ? HANG_IN : 0.05;
+          O.hinge.rotation.y = inward ? k * SWING_OPEN_IN : -k * SWING_OPEN;
+          O.leaf.material = inward ? leafInM : leafM;
+          O.pane.material = inward ? paneInM : paneM;
+          O.leaf.renderOrder = inward ? -1 : 0;
+          O.pane.renderOrder = inward ? -0.5 : 0;
+          for (const m of O.mounts) m.visible = !inward;
           return;
         }
         const I = extra.userData.inner;
-        I.hinge.rotation.y = k * SWING_IN;
-        I.leaf.visible = k > 0.001;
-        innerM.opacity = Math.min(1, k / 0.35);
+        I.hinge.rotation.y = way === 'out' ? -k * SWING_IN_OUT : k * SWING_IN;
+        I.leaf.visible = k > 0.001 && alpha > 0.001;
+        innerM.opacity = Math.min(1, k / 0.35) * alpha;
+        // (what is mounted on it goes with it as it goes: it cannot be seen through, so at half)
+        for (const m of I.mounts) m.visible = innerM.opacity > 0.5;
+        // (the door bar stands by the doorway while the door is open)
+        if (I.bar) I.bar.visible = k > 0.001;
+      },
+      /**
+       * For doorway.js: a leaf's hinge in the world ([x, z], and the floor's y) and its reach from it (m); and, while it
+       * is shown, its box and the box of each thing mounted on it, each as its four corners on the ground ([x, z] × 4).
+       */
+      leafAt(side) {
+        const mesh = leafMesh(side);
+        const H = hingeOf(side);
+        H.updateWorldMatrix(true, true);
+        const h = new T.Vector3().setFromMatrixPosition(H.matrixWorld);
+        const shownNow = side === 'out' ? outer.g.visible : extra.visible && mesh.visible;
+        const boxes = shownNow
+          ? boxesOf(mesh).map(b => [[b.min.x, b.min.z], [b.max.x, b.min.z], [b.max.x, b.max.z], [b.min.x, b.max.z]].map(([x, z]) => {
+            const v = new T.Vector3(x, b.min.y, z).applyMatrix4(mesh.matrixWorld);
+            return [v.x, v.z];
+          }))
+          : null;
+        return { hinge: [h.x, h.z], y: h.y, reach: Math.hypot(LEAF.w, LEAF.t / 2), boxes, ...leaves[side] };
       },
       // (by night: over the front half of the room, so whoever faces the camera has the light on their face)
       lamp: () => P.w3(F.W / 2, F.D * 0.82, yF + 2.4),
+      /** The guard dog (assets-1): his pose by his bed (or { yard: true }: out by the stoop); null sends him off. → the mode shown */
+      dog: (mode, o) => setDog(mode, o),
+      /** Where he stands, if anywhere: { mode, yard, at: [x, y, z] } or null. */
+      dogNow: () => (dogNow ? { mode: dogNow.dog.mode, yard: dogNow.yard, at: dogNow.dog.root.getWorldPosition(new T.Vector3()).toArray(), ry: dogNow.dog.root.rotation.y } : null),
       // (what it stands on in the inside view: a trailer's lot is grass, a walk-up's block is concrete)
       ground: () => (h.tier === 'trailer' ? 'grass' : 'concrete'),
       /**
@@ -292,13 +490,14 @@ export function createCribs({ city, HOMES, PLAN, GPU, roomOf, entry, lotOf, keys
         shown = false;
         gone = true;
         const done = () => {
+          if (dogNow) setDog(null);
           extra.removeFromParent();
           outer.g.removeFromParent();
           extra.traverse(o => o.geometry && o.geometry !== leafG && !o.userData.shared && o.geometry.dispose());
         };
         if (!up) return done();
-        next.leaf('in', leaves.in);
-        next.leaf('out', leaves.out);
+        next.leaf('in', leaves.in.k, leaves.in);
+        next.leaf('out', leaves.out.k, leaves.out);
         const ok = await next.open().catch(() => false);
         done();
         return ok;
@@ -348,8 +547,11 @@ export function createCribs({ city, HOMES, PLAN, GPU, roomOf, entry, lotOf, keys
       way: call('way', null),
       solidAt: call('solidAt', null),
       leaf: call('leaf', undefined),
+      leafAt: call('leafAt', null),
       lamp: call('lamp', null),
       ground: call('ground', undefined),
+      dog: call('dog', null),
+      dogNow: call('dogNow', null),
       // (how far over its lot the inside is built: a picture of the city from that much lower has the building where the room is)
       lift: LIFT,
       get plan() {

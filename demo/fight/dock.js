@@ -3,17 +3,22 @@
 // words and numbers out, no DOM, so it is tested in node (test/fight-dock.test.mjs). The page draws it in the run's
 // own parts (demo/fight/index.js; demo/run/ui.css and skin.css).
 //
-//   dockOf({ pick, results, site })   → { cards: five loadouts (keys 1 to 5), levels: the three, go, label, custom }
+//   dockOf({ pick, results, site })   → { cards: five loadouts (keys 1 to 5), levels: the four, go, label, custom }
+//   weaponWords(id)                   a weapon in the build list: its job in a few words, and its numbers (fight-3)
+//   earlRows(pick)                    Earl's three ways, when he is brought (fight-3)
 //   metersOf(F)                       → { health, vest, ammo, left, time, ally }: every running risk, a meter
 //   cardOf(R, F, site, { tryout })    → the result card: { tone, kicker, head, body, chips, advice, meta }
 //   siteWords(site, text)             the rules' words said for a site (its level names, and no stairs where it has none)
-import { PRESETS, WEAPONS, GEAR, ALLY, LEVELS, CAP, buildName, presetOf } from '../../src/fight/data.mjs';
+import { PRESETS, WEAPONS, GEAR, ALLY, CAP, EARL_WAYS, WAYS_OFFERED, buildName, presetOf, levelOf } from '../../src/fight/data.mjs';
 
 /** The five loadouts, in the order of their keys (1 to 5). */
 export const PRESET_KEYS = Object.keys(PRESETS);
-/** The three levels of the stop, in the order the dock shows them (↑ ↓ step through them). */
-export const LEVEL_KEYS = Object.keys(LEVELS);
-export const LEVEL_WORD = Object.freeze({ easy: 'Easy', real: 'Real', hard: 'Hard' });
+/**
+ * The levels, in the order the dock shows them (↑ ↓ step through them): getting jumped, two at once (fight-3: a small
+ * one, the Doorman's kind of fight; data.mjs STREET), then the stop's three.
+ */
+export const LEVEL_KEYS = ['jumped', 'easy', 'real', 'hard'];
+export const LEVEL_WORD = Object.freeze({ jumped: 'Jumped', easy: 'Easy', real: 'Real', hard: 'Hard', corner: 'Corner', raid: 'Raid' });
 
 const cap = s => (s ? s[0].toUpperCase() + s.slice(1) : s);
 /** Seconds as the page says them: "38 s", "1:12". */
@@ -22,7 +27,7 @@ export const secs = s => (s >= 60 ? `${Math.floor(s / 60)}:${String(Math.floor(s
 export const clock = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
 /** A level's name AT A SITE: its own (sites.js `levels`), else the rules'. */
-export const levelName = (site, id) => site?.levels?.[id] ?? LEVELS[id]?.name ?? id;
+export const levelName = (site, id) => site?.levels?.[id] ?? levelOf(id)?.name ?? id;
 
 /**
  * THE RULES' WORDS SAID FOR A SITE: a level's name as the site has it ("Elm St after dark" is the ELM ST stop's), and
@@ -30,15 +35,39 @@ export const levelName = (site, id) => site?.levels?.[id] ?? LEVELS[id]?.name ??
  */
 export function siteWords(site, text) {
   let t = String(text ?? '');
-  for (const id of LEVEL_KEYS) if (LEVELS[id].name !== levelName(site, id)) t = t.split(LEVELS[id].name).join(levelName(site, id));
+  for (const id of LEVEL_KEYS) if (levelOf(id).name !== levelName(site, id)) t = t.split(levelOf(id).name).join(levelName(site, id));
   if (site?.stairs) return t;
   return t.replace(/went back down the stairs/g, 'backed off across the lot').replace(/walk back down the stairs/g, 'back off across the lot').replace(/come up the stairs/g, 'come in');
 }
 
-/** What a build carries, in a few words: "six-shot · stab vest · Cousin Earl". */
+/** What a build carries, in a few words: "six-shot · stab vest · Cousin Earl" ("Earl, out in front" when told). */
 export function contentsOf(b) {
   // (Cousin Earl is Earl here, as over his head: the card has the room of about thirty letters at 1280)
-  return [WEAPONS[b.weapon]?.name ?? b.weapon, ...(b.gear ?? []).map(g => GEAR[g]?.name ?? g), b.ally ? ALLY.name.replace(/^Cousin /, '') : null].filter(Boolean).join(' · ');
+  const earl = b.ally ? `${ALLY.name.replace(/^Cousin /, '')}${b.earl && b.earl !== 'side' && EARL_WAYS[b.earl] ? `, ${EARL_WAYS[b.earl].name}` : ''}` : null;
+  return [WEAPONS[b.weapon]?.name ?? b.weapon, ...(b.gear ?? []).map(g => GEAR[g]?.name ?? g), earl].filter(Boolean).join(' · ');
+}
+
+/** Each weapon's job, in the build list's words (fight-3: every weapon has its own, no damage tiers). */
+export const JOBS = Object.freeze({
+  hands: 'what you were born with',
+  blade: 'quick and close',
+  pistol: 'for anything',
+  chopper: 'strong, and hungry for rounds',
+  doorman: 'several at once, up close',
+  longeye: 'one hard shot, from far off',
+});
+/** A weapon in the build list: { job, stats } ("several at once, up close", "24–32 a shell · 2 in it · reload 1.8 s · 20 shells"). */
+export function weaponWords(id) {
+  const X = WEAPONS[id];
+  const job = JOBS[id] ?? null;
+  if (X.kind !== 'gun') return { job, stats: `${X.dmg[0]}–${X.dmg[1]} a blow · ${X.rate} a second` };
+  const unit = id === 'doorman' ? ['a shell', 'shells'] : ['a shot', 'rounds'];
+  return { job, stats: `${X.dmg[0]}–${X.dmg[1]} ${unit[0]} · ${X.mag} in it · reload ${X.reload} s · ${X.rounds} ${unit[1]}` };
+}
+/** EARL'S THREE WAYS, when he is brought: [{ id, word, says, on }] (none on: his old way, at your side). */
+export function earlRows(pick) {
+  if (!pick.ally) return [];
+  return WAYS_OFFERED.map(id => ({ id, word: EARL_WAYS[id].word, says: EARL_WAYS[id].says, on: pick.earl === id }));
 }
 /** A build's name: a loadout's own ("Handgun + vest"), else what it carries. */
 export const buildLabel = b => (presetOf(b) ? PRESETS[presetOf(b)].name : cap(buildName(b)));
@@ -55,21 +84,21 @@ export function lastWords(R, level = null) {
 /** What Enter does while you choose: "Fight · Handgun + vest · Real". */
 export const goWords = (pick, again = false) => `${again ? 'Again' : 'Fight'} · ${buildLabel(pick)} · ${LEVEL_WORD[pick.level] ?? pick.level}`;
 
-/** THE DOCK WHILE YOU CHOOSE: the five loadouts on 1 to 5, the three levels, what Enter will do. */
+/** THE DOCK WHILE YOU CHOOSE: the five loadouts on 1 to 5, the four levels, what Enter will do. */
 export function dockOf({ pick, results = {}, site = null, again = false }) {
   const cur = presetOf(pick);
   const cards = PRESET_KEYS.map((id, k) => ({
     n: k + 1, id, name: PRESETS[id].name, contents: contentsOf(PRESETS[id]),
     last: lastWords(results[id]?.[pick.level], pick.level), on: cur === id,
   }));
-  const levels = LEVEL_KEYS.map(id => ({ id, word: LEVEL_WORD[id], name: levelName(site, id), says: LEVELS[id].says, on: pick.level === id }));
+  const levels = LEVEL_KEYS.map(id => ({ id, word: LEVEL_WORD[id], name: levelName(site, id), says: levelOf(id).says, on: pick.level === id }));
   return { cards, levels, custom: !cur, label: buildLabel(pick), contents: contentsOf(pick), go: goWords(pick, again), last: lastWords((results[cur ?? 'custom'] ?? {})[pick.level], pick.level) };
 }
 
-/** The next level up or down the three (↑ ↓), kept at the ends. */
+/** The next level up or down (↑ ↓), kept at the ends. */
 export function stepLevel(level, dir) {
   const i = LEVEL_KEYS.indexOf(level);
-  return LEVEL_KEYS[Math.max(0, Math.min(LEVEL_KEYS.length - 1, (i < 0 ? 1 : i) + dir))];
+  return LEVEL_KEYS[Math.max(0, Math.min(LEVEL_KEYS.length - 1, (i < 0 ? LEVEL_KEYS.indexOf('real') : i) + dir))];
 }
 /** The next loadout along the five (← →), round the ends; from a build of your own, the first or the last. */
 export function stepPreset(pick, dir) {
@@ -93,7 +122,7 @@ export function vestTook(F) {
 export function metersOf(F) {
   const me = F.people[0];
   const frac = me.max ? Math.max(0, me.hp) / me.max : 0;
-  const left = F.people.filter(p => p.side === 'foe' && !p.down).length + (LEVELS[F.level].waves.length - F.wave);
+  const left = F.people.filter(p => p.side === 'foe' && !p.down).length + (F.waves.length - F.wave);
   const G = me.gun ? WEAPONS[me.gun] : null;
   const ally = F.people.find(p => p.side === 'ally') ?? null;
   const t = Math.max(0, F.t);

@@ -92,11 +92,13 @@ await session(1600, 1000, async page => {
   if (want('door')) {
     await both('1-inside');
     await choose(4);
-    // at the door, inside, it open
-    await until(`(d => d && d.k > 0.6 && d.side < -0.15)(window.__demo.stage.doorway.info(${JSON.stringify(KEY)}, 'a1'))`);
+    // at the door, inside, it open: the room's own leaf (kIn), swung out ahead of him (notes-1), a step short of it and
+    // before the picture goes dark at 0.5 m (the door outside, k, is shut all the while he is in the room, and `side` is
+    // measured from it, so it says nothing in the room: the wait on those was never met, before notes-1 either)
+    await until(`(d => d && d.inside && d.kIn > 0.6 && d.wayIn === 'out' && d.dIn < 1.15 && d.dIn > 0.55)(window.__demo.stage.doorway.info(${JSON.stringify(KEY)}, 'a1'))`);
     await both('2-door-inside-open');
     // on the step, it open
-    await until(`(d => d && d.side > 0.6 && d.k > 0.25)(window.__demo.stage.doorway.info(${JSON.stringify(KEY)}, 'a1'))`, 20000).catch(() => console.log('  (the step with the door open was missed)'));
+    await until(`(d => d && d.side > 0.6 && d.k > 0.25 && d.way === 'out')(window.__demo.stage.doorway.info(${JSON.stringify(KEY)}, 'a1'))`, 20000).catch(() => console.log('  (the step with the door open was missed)'));
     await both('3-step-door-open');
     // walking off, the room shut: the trailer whole
     await until(`!window.__demo.stage.debug().inside.length && window.__demo.stage.actors.get('a1').moving > 0.3`, 20000).catch(() => console.log('  (walking off was missed)'));
@@ -119,7 +121,7 @@ await session(1600, 1000, async page => {
     await until(`!window.__demo.stage.travelling && !window.__demo.stage.debug().dark && (d => d && d.step > 8)(window.__demo.stage.doorway.info(${JSON.stringify(KEY)}, 'a1'))`, 60000);
     await page.sleep(500);
     await both('6-put-down-outside');
-    await until(`(d => d && d.k > 0.5 && d.side < 0.5 && d.side > -0.5)(window.__demo.stage.doorway.info(${JSON.stringify(KEY)}, 'a1'))`, 40000).catch(() => console.log('  (walking in was missed)'));
+    await until(`(d => d && d.k > 0.5 && d.way === 'in' && d.side < 0.5 && d.side > -0.5)(window.__demo.stage.doorway.info(${JSON.stringify(KEY)}, 'a1'))`, 40000).catch(() => console.log('  (walking in was missed)'));
     await both('7-walking-in');
     await phase('choose');
     await page.sleep(1200);

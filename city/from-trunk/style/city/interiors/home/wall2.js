@@ -1,7 +1,7 @@
 // Home objects · catalogue v2 · wall and floor: gilded frames with invented paintings, stencil art, a pop triptych, a fashion-editorial
 // print, shaped neons, sick rugs (tiger, checker, zebra, banknote, black-and-gold persian), a gold chandelier and a disco ball.
 // Every image is invented (a Dazed / street-art energy, never a copy of a real work, magazine or brand).
-import { def, K, pick, cyl, line, glow, LIT, shade, mix, hash, rng, txt, txtTop, M3, M5, face } from './lib.js';
+import { def, K, pick, cyl, line, glow, LIT, shade, mix, hash, rng, txt, txtTop, M3, M5, face, ball, frect, fline, fdisc } from './lib.js';
 import { flex, gilded } from './bits.js';
 
 const inC = (i, j, cx, cy, r) => Math.hypot(i + .5 - cx, j + .5 - cy) <= r, inR = (i, j, a, b, c, d) => i >= a && i < c && j >= b && j < d;
@@ -48,12 +48,37 @@ const PAINT = {
 export const frameGilded = def({ id: 'frame-gilded', name: 'Gilded frame', cat: 'wall', place: 'wall', foot: [7, 9], h: 0.2, mount: 0.6,
   tiers: ['house', 'penthouse'], tags: ['art', 'gilded', 'statement'], variants: 3, vnames: ['saint on the phone', 'still life with stacks', 'poodle in a chain'], far: true,
   game: flex('grail', 40, 'drop'),
-  build(V, { variant = 0 } = {}) { gilded(V, 35, 45, PAINT[pick(['saint', 'still', 'poodle'], variant)]); } });
+  build(V, { variant = 0 } = {}) { gilded(V, 35, 45, PAINT[pick(['saint', 'still', 'poodle'], variant)]); },
+  // third pass: the painting finer than its blocks (fine): the saint's eyes, brows, nose and lips and the phone's lit screen; the still
+  // life's shine on each fruit and the chain's links; the poodle's glare on the shades and its nose
+  fine(P, { variant = 0 } = {}) {
+    const f = '+z';
+    if (variant === 0) {
+      for (const x of [13, 21]) { frect(P, f, x, 28, x + 2, 29, K.white); frect(P, f, x + 1, 28, x + 1.75, 28.75, K.ink); frect(P, f, x - .25, 29, x + 2.25, 29.25, shade(K.skin[2], .6)); frect(P, f, x, 29.5, x + 2, 29.75, K.ink); }   // eyes, lids, brows
+      fline(P, f, 18.25, 27.75, 18.5, 25.75, shade(K.skin[2], .72)); frect(P, f, 17.75, 25.5, 19.25, 25.75, shade(K.skin[2], .6));   // the nose
+      frect(P, f, 16, 24, 20, 24.5, 0xc0303a); frect(P, f, 16.25, 24.5, 19.75, 24.75, 0xe05a64);                         // the lips
+      frect(P, f, 21.25, 14.5, 23.75, 17.75, 0x7ff0f2); for (const y of [15, 16, 17]) frect(P, f, 21.5, y, 23.25, y + .25, K.white);   // the phone's screen, its lines
+    } else if (variant === 1) {
+      for (const [x, y] of [[10, 20], [14, 21], [12, 24], [8, 24]]) { frect(P, f, x - 1, y + .5, x - .25, y + 1.25, K.white); }   // a shine on each fruit
+      for (let x = 18; x < 31; x++) frect(P, f, x, Math.round(13 + Math.abs(x - 3 - 21) * .4) + .25, x + .5, Math.round(13 + Math.abs(x - 3 - 21) * .4) + .75, shade(K.gold, .7));   // the chain's links
+    } else {
+      fline(P, f, 14, 29.5, 16.5, 27.25, K.white); fline(P, f, 19, 29.5, 21.5, 27.25, K.white);                            // glare on the shades
+      frect(P, f, 16.75, 25, 18.25, 26, K.ink);                                                                             // the nose
+    }
+  } });
 
 export const frameGildedSmall = def({ id: 'frame-gilded-small', name: 'Small gilded frame', cat: 'wall', place: 'wall', foot: [3, 4], h: 0.2, mount: 1.2,
   tiers: ['apartment', 'house', 'penthouse'], tags: ['art', 'gilded', 'small'], variants: 3, vnames: ['burning bill', 'melting cone', 'pearls'],
   game: flex('rare', 12),
-  build(V, { variant = 0 } = {}) { gilded(V, 15, 20, PAINT[pick(['dollar', 'cone', 'pearls'], variant)]); } });
+  build(V, { variant = 0 } = {}) { gilded(V, 15, 20, PAINT[pick(['dollar', 'cone', 'pearls'], variant)]); },
+  // third pass: the picture finer than its blocks (fine): the burning bill's border and portrait, the cone's sprinkles, the pearls' shine
+  fine(P, { variant = 0 } = {}) {
+    const f = '+z';
+    if (variant === 0) { frect(P, f, 4.25, 4.25, 11.75, 4.5, K.cashD); frect(P, f, 4.25, 9.5, 11.75, 9.75, K.cashD); fdisc(P, f, 8, 7, 1.1, d => (d > .9 ? K.cashD : d < .45 ? 0x8a6a40 : 0xe8dcc0));   // the bill's border, its portrait
+      for (const x of [5, 8, 11]) frect(P, f, x, 10.75, x + .5, 11.75, K.yellow); }                                          // flame tips
+    else if (variant === 1) { for (const [x, y, c] of [[6.5, 12.5, K.red], [8, 13.25, K.cyan], [9.25, 12.25, K.yellow], [7.25, 11.5, K.lime], [9, 11, K.red]]) frect(P, f, x, y, x + .5, y + .25, c); }   // sprinkles
+    else { for (let x = 5; x < 11; x++) frect(P, f, x + .25, 7.5, x + .5, 7.75, K.white); }                                 // the pearls' shine
+  } });
 
 export const artStencil = def({ id: 'art-stencil', name: 'Stencil canvas', cat: 'wall', place: 'wall', foot: [6, 4], h: 0.1, mount: 1.1,
   tiers: ['apartment', 'house', 'penthouse'], tags: ['art', 'stencil', 'street'], variants: 3, vnames: ['clown-nose cop', 'pigeon with the bag', 'crying diamond'], far: true,
@@ -194,10 +219,16 @@ export const chandelier = def({ id: 'chandelier-gold', name: 'Gold chandelier', 
 export const discoBall = def({ id: 'disco-ball', name: 'Disco ball', cat: 'lights', place: 'ceiling', foot: [2, 2], h: 0.6,
   tiers: ['apartment', 'house', 'penthouse'], tags: ['disco', 'party', 'mirror'], variants: 2, vnames: ['mirror', 'gold mirror'],
   game: flex('common', 5),
+  grain: 0.025, shaped: 'a disco ball: a round ball of little mirror tiles on a rod',
   build(V, { variant = 0 } = {}) {
-    for (let y = 8; y < 12; y++) V.set(5, y, 5, K.steelD, 2);
-    for (let x = 0; x < 10; x++) for (let y = 0; y < 9; y++) for (let z = 0; z < 10; z++) if (Math.hypot(x + .5 - 5, y + .5 - 4.5, z + .5 - 5) <= 4.4)
-      V.set(x, y, z, hash(x, y * 7 + z, 9) > .8 ? K.white : ((x + y + z) & 1) ? (variant ? K.gold : K.chrome) : (variant ? shade(K.gold, .8) : K.steelL), hash(x, y * 7 + z, 9) > .8 ? LIT : 2);
+    // THIRD PASS · a round ball (0.4 m) on a rod from a ceiling cap: the ball covered in a grid of little mirror tiles, rows of light
+    // and shade round it, a few lit glints
+    const g = variant === 1, A = g ? K.gold : K.chrome, B = g ? shade(K.gold, .8) : K.steelL, D = g ? shade(K.gold, .62) : 0x7d8796;
+    cyl(V, 10, 10, 2.4, 22, 24, K.steelD, 2); cyl(V, 10, 10, .8, 16, 22, K.steelD, 2);                                  // the cap, the rod
+    ball(V, 10, 9.5, 10, 8, 8, 8, (x, y, z, u, v, w) => {
+      const lat = Math.round(Math.asin(Math.max(-1, Math.min(1, v))) / .2), lon = Math.round((Math.atan2(w, u) + Math.PI) * Math.cos(Math.asin(Math.max(-1, Math.min(1, v)))) / .2);
+      const h = hash(lat, lon, 3); return h > .93 ? K.white : (lat + lon) & 1 ? A : h < .25 ? D : B; }, 2);
+    ball(V, 10, 9.5, 10, 8, 8, 8, (x, y, z, u, v, w) => (hash(x, y * 7 + z, 9) > .965 && u * .48 + v * .5 + w * .72 > .55 ? K.white : null), LIT);   // the glints, on the side that faces you
   } });
 
 export const WALL2 = [frameGilded, frameGildedSmall, artStencil, artTriptych, artEditorial, neonShapes, rugTiger, rugChecker, rugZebra, rugBanknote, rugPersianGold, chandelier, discoBall];

@@ -1,11 +1,14 @@
 #!/usr/bin/env node
-// Measures RUN.md's marks (seven of the first test, five of rules-2, two of trust, two of goods, R1 to R4 of routes, H1 to H8 of home pressure) on the real engine (src/run/) with simple scripted policies, free.
+// Measures RUN.md's marks (seven of the first test, five of rules-2, two of trust, two of goods, R1 to R4 of routes, H1 to H8 of home pressure, P1 to P5 of the new places, S1 to S4 of the first slice) on the real engine (src/run/) with simple scripted policies, free.
 //   node scripts/run-marks.mjs                 3,000 seeded six-day seasons per cell (ten-day for the home marks)
 //   node scripts/run-marks.mjs --seeds 500     quicker, noisier
 //   node scripts/run-marks.mjs --home          only the home marks, H1 to H8
+//   node scripts/run-marks.mjs --places        only the new places' marks, P1 to P5 (batch-1; P5 bigman-1)
+//   node scripts/run-marks.mjs --sixes         only the first slice's marks, S1 to S4 (sixes-1)
+//   node scripts/run-marks.mjs --raid          only the raid's marks, D1 to D6 (raid-1)
 //   node scripts/run-marks.mjs --json          the numbers as JSON
 import { RUN_CONFIG } from '../src/run/config.mjs';
-import { measure, judge, tableText, measureWorld, judgeWorld, worldText, measureTrust, judgeTrust, trustText, measureGoods, judgeGoods, goodsText, measureRoutes, judgeRoutes, routesText, measureHome, judgeHome, homeText } from '../src/run/marks.mjs';
+import { measure, judge, tableText, measureWorld, judgeWorld, worldText, measureTrust, judgeTrust, trustText, measureGoods, judgeGoods, goodsText, measureRoutes, judgeRoutes, routesText, measureHome, judgeHome, homeText, measurePlaces, judgePlaces, placesText, measureSixes, judgeSixes, sixesText, atRest, measureRaid, judgeRaid, raidText } from '../src/run/marks.mjs';
 
 const argv = process.argv.slice(2);
 const opt = name => {
@@ -23,6 +26,29 @@ if (argv.includes('--home')) {
   else console.log(`${homeText(homeMarks)}\n\n${homeMarks.filter(m => m.pass).length} of ${homeMarks.length} marks pass (${((Date.now() - started) / 1000).toFixed(0)} s)`);
   process.exit(0);
 }
+if (argv.includes('--sixes')) {
+  const sx = measureSixes(RUN_CONFIG, { seeds });
+  const sxMarks = judgeSixes(sx);
+  if (argv.includes('--json')) console.log(JSON.stringify({ sixes: sx, marks: sxMarks }, null, 1));
+  else console.log(`${sixesText(sxMarks)}\n\n${sxMarks.filter(m => m.pass).length} of ${sxMarks.length} marks pass (${((Date.now() - started) / 1000).toFixed(0)} s)`);
+  process.exit(0);
+}
+if (argv.includes('--raid')) {
+  const rd = measureRaid(RUN_CONFIG, { seeds });
+  const rdMarks = judgeRaid(rd);
+  if (argv.includes('--json')) console.log(JSON.stringify({ raid: rd, marks: rdMarks }, null, 1));
+  else console.log(`${raidText(rdMarks)}
+
+${rdMarks.filter(m => m.pass).length} of ${rdMarks.length} marks pass (${((Date.now() - started) / 1000).toFixed(0)} s)`);
+  process.exit(0);
+}
+if (argv.includes('--places')) {
+  // (second pass: P1 to P5 compare a place with a place: the Sixes, who tax only the market, at rest)
+  const places = measurePlaces(atRest(RUN_CONFIG), { seeds });
+  const placeMarks = judgePlaces(places);
+  console.log(`${placesText(placeMarks)}\n\n${placeMarks.filter(m => m.pass).length} of ${placeMarks.length} marks pass (${((Date.now() - started) / 1000).toFixed(0)} s)`);
+  process.exit(0);
+}
 const result = measure(RUN_CONFIG, { seeds });
 const marks = judge(result);
 const world = measureWorld(RUN_CONFIG, { seeds, rows: result.rows });
@@ -35,7 +61,14 @@ const routes = measureRoutes(RUN_CONFIG, { seeds, rows: result.rows });
 const routeMarks = judgeRoutes(routes);
 const home = measureHome(RUN_CONFIG, { seeds });
 const homeMarks = judgeHome(home);
-if (argv.includes('--json')) console.log(JSON.stringify({ ...result, world, trust, goods, routes, home, marks: [...marks, ...routeMarks, ...homeMarks] }, null, 1));
+// (second pass: with the Sixes at rest, so the market's own rows, measured with them on, are not handed over)
+const places = measurePlaces(atRest(RUN_CONFIG), { seeds });
+const placeMarks = judgePlaces(places);
+const sixes = measureSixes(RUN_CONFIG, { seeds });
+const sixesMarks = judgeSixes(sixes);
+const raid = measureRaid(RUN_CONFIG, { seeds });
+const raidMarks = judgeRaid(raid);
+if (argv.includes('--json')) console.log(JSON.stringify({ ...result, world, trust, goods, routes, home, places, sixes, raid, marks: [...marks, ...routeMarks, ...homeMarks, ...placeMarks, ...sixesMarks, ...raidMarks] }, null, 1));
 else {
   console.log(tableText(result, marks.filter(m => m.n <= 7)));
   console.log('');
@@ -48,6 +81,12 @@ else {
   console.log(routesText(routeMarks));
   console.log('');
   console.log(homeText(homeMarks));
-  const all = [...marks, ...routeMarks, ...homeMarks];
+  console.log('');
+  console.log(placesText(placeMarks));
+  console.log('');
+  console.log(sixesText(sixesMarks));
+  console.log('');
+  console.log(raidText(raidMarks));
+  const all = [...marks, ...routeMarks, ...homeMarks, ...placeMarks, ...sixesMarks, ...raidMarks];
   console.log(`\n${all.filter(m => m.pass).length} of ${all.length} marks pass (${((Date.now() - started) / 1000).toFixed(0)} s)`);
 }

@@ -1,7 +1,7 @@
 {
  "source": "trunk",
- "commit": "8b0b8dfd2e6fa56916cb4dcf566635869233ef93",
- "committed": "2026-11-06T20:28:45-05:00",
+ "commit": "d5a6e641f95df0c1312d3e18a6f54d031ebb4911",
+ "committed": "2026-11-19T15:10:38-05:00",
  "include": [
   "style/city",
   "world",
@@ -13,6 +13,6 @@
   "style/city/board-*.jpg",
   "style/city/render-presets-sheet.jpg"
  ],
- "files": 1007,
- "bytes": 19630595
+ "files": 1061,
+ "bytes": 20551086
 }

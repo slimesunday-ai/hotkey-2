@@ -27,6 +27,8 @@
 //   runtest=guard      the same, hiring Cousin Earl for three days, $75 up front, the morning an attempt is due unless
 //                      he is on through it (home-1, mark H3; save-1, mark H8)
 //   runtest=racer      the same, heading home on a notice by the quickest way in time when it pays (home-1, mark H7)
+//   runtest=shark      the shark that leans on its own street and uses fear: a debt from whoever gives way first, no
+//                      fight while anybody there fears it, those come due paid off or fought (memory-1)
 // &kit=pocket,cutter,bed,board starts the run owning those (for the street's robbing early on; the board as a thing).
 //
 // When it is over the title is `run-ok` or `run-fail: <why>`, and window.__runtest holds the numbers, with `moves`:
@@ -57,6 +59,19 @@ const POLICY = {
   homefirst: { ...POLICIES.homeFirst(120), buy: true },
   guard: { ...POLICIES.homeFirst(120), defend: 'guard', buy: true },
   racer: { ...POLICIES.homeFirst(120), race: true, buy: true },
+  // memory-1 (RUN.md "People remember"): the shark on its own street, using fear
+  shark: { ...POLICIES.shark(120), buy: true },
+  // batch-1 (RUN.md "Low Tide Docks", "Glasswall Plaza"): the market's player at each new place, one ride from home;
+  // the plaza's also heat-blind
+  docks: { ...POLICIES.docks(120), buy: true },
+  plaza: { ...POLICIES.plaza(120), buy: true },
+  plazablind: { ...POLICIES.plazaBlind(120), buy: true },
+  // sixes-1 (RUN.md "The first slice"): the pressured player who lays low when warned and tells Earl the way the door
+  // card says wins most (give it the pieces with &kit=deadbolt,floorsafe,doorbar,dog,camera,dogsign); the market's
+  // crime player paying Dutch the tax, and refusing it
+  slice: { ...POLICIES.layLow(120), buy: true },
+  taxpay: { ...POLICIES.taxPayer(120), buy: true },
+  taxrefuse: { ...POLICIES.taxRefuser(120), buy: true },
 };
 
 export function runRunTest({ demo, mountRun, host, opts }) {
@@ -103,7 +118,8 @@ export function runRunTest({ demo, mountRun, host, opts }) {
     // (home-1: warnings (seen casing your crib), notices (somebody at your door), attempts met at the door (home in time,
     // or in the night) and settled while you were out, how each went, Cousin Earl's stretches (save-1: each hire paid up
     // front, `hires`; of them kept on from his last day, `kept`; his last-day notices and his going), ones called off)
-    home: { warnings: 0, notices: 0, met: 0, settled: 0, taken: 0, held: 0, hires: 0, kept: 0, lastDays: 0, gone: 0, calledOff: 0, raced: 0, outcomes: [] } };
+    home: { warnings: 0, notices: 0, met: 0, settled: 0, taken: 0, held: 0, hires: 0, kept: 0, lastDays: 0, gone: 0, calledOff: 0, raced: 0, outcomes: [] },
+    sixes: { crewWarnings: 0, crews: 0, doorFights: 0, byTheSteps: 0 } };
   let dayAt = started;
   let stepAt = started;
   let lastStep = null;
@@ -128,7 +144,8 @@ export function runRunTest({ demo, mountRun, host, opts }) {
     if (!finished && performance.now() - stepAt > 120000) finish(`stuck after ${seen.steps} steps at ${hud?.state.place}, ${hud?.phase}`);
   }, 5000);
 
-  const kit = Object.fromEntries((Q.get('kit') ?? '').split(',').filter(k => ['pocket', 'cutter', 'bed', 'board'].includes(k)).map(k => [k, true]));
+  // (sixes-1: and the slice's pieces, things for the trailer as the board is)
+  const kit = Object.fromEntries((Q.get('kit') ?? '').split(',').filter(k => ['pocket', 'cutter', 'bed', 'board', 'deadbolt', 'floorsafe', 'doorbar', 'dog', 'camera', 'dogsign'].includes(k)).map(k => [k, true]));
   const hud = mountRun(host, {
     ...opts,
     kit,
@@ -153,6 +170,11 @@ export function runRunTest({ demo, mountRun, host, opts }) {
       if (before.home?.raid?.started && (choice.do === 'subway' || choice.do === 'walk' || choice.do === 'skate' || choice.do === 'onward') && (choice.to === 'park' || before.route?.to === 'park')) Hm.raced += 1;
       for (const e of events) {
         if (e.type === 'casing') Hm.warnings += 1;
+        // (sixes-1: crews, their door fights, the Sixes' word, tax and the two by the steps)
+        if (e.type === 'casing' && e.kind === 'crew') seen.sixes.crewWarnings += 1;
+        if (e.type === 'raid' && e.kind === 'crew') { seen.sixes.crews += 1; if (e.duel) seen.sixes.doorFights += 1; }
+        if (e.type === 'sixes') seen.sixes[e.what] = (seen.sixes[e.what] ?? 0) + 1;
+        if (e.type === 'jumped' && e.sixes) seen.sixes.byTheSteps += 1;
         if (e.type === 'alarm') Hm.notices += 1;
         if (e.type === 'calledOff') Hm.calledOff += 1;
         if (e.type === 'guard' && e.paid) Hm.hires += 1;

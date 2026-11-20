@@ -31,7 +31,7 @@ export const RANK = { common: 0, event: 1, rare: 1, epic: 2, grail: 3, legendary
 const RCOL = { common: '#c9c9d1', rare: '#4f9dff', event: '#ff8a1a', epic: '#b24bff', grail: '#ffc21a', legendary: '#ff4fa3', '1of1': '#6cff4a' };
 const FIXED = new Set(['door-front', 'window', 'ac-window', 'radiator', 'wall-panelling']);   // the building's own: the street sees the same unit
 const NOT_OWNED = new Set(['sign-rent', 'door-front', 'window', 'ac-window', 'radiator', 'wall-panelling']);   // never in an owner's tray
-const WARDROBE = new Set(['streetwear-rack', 'sneaker-wall', 'sneaker-rack', 'sneaker-boxes', 'cap-wall', 'chain-bust', 'watch-box', 'jersey-frame', 'mirror-lean']);
+const WARDROBE = new Set(['streetwear-rack', 'sneaker-wall', 'sneaker-rack', 'sneaker-boxes', 'cap-wall', 'watch-box', 'jersey-frame', 'mirror-lean']);
 export const isLocked = o => !!o && (o.sim === 'safe' || o.sim === 'stash' || o.cat === 'stash');
 export const isShowcase = o => !!o && (o.game?.kind === 'trophy' || WARDROBE.has(o.id));
 const stakes = o => !!o?.game && o.game.kind !== 'base';

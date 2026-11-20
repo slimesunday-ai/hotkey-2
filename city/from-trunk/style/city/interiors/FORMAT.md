@@ -54,6 +54,55 @@ Each set also has its own preview page, `interiors/<set>/preview.html`. Neither 
 - **`far`** is the object downsampled to 0.1 m. Small surface pieces may skip it.
 - **Building from a set.** `buildObject(o | id, { variant, seed, state, far })` returns a Vol. Seeds vary the clutter, garments and stock.
 
+## Fine detail (2026-11-17)
+
+A piece may carry a `fine(P, opt)` function beside `build`: detail finer than a 0.05 m voxel, the traits' own tools (`world/fresh/README.md` "Fine detail: below the voxel", `world/cast/fit/fine.js`), run on the piece's finished Vol by `interiors/fine.js`.
+
+```js
+  fine(P, { variant, seed, state, V }) {
+    P.rect('+z', 36, 16, 80, 44, (qa, qb) => colour);   // paint: 4 × 4 texels a voxel face, at quarter-voxel coordinates
+    P.halfBox(2, 1, 20, 4, 3, 21, K.chrome, 2);       // fine voxels: half-size cubes at 2 × voxel coordinates
+  },
+```
+
+- **Paint** lands on the outermost voxel along the face's normal: `'+z'` the front (x, y), `'+y'` the top (x, z), `'+x'` the right side (z, y). It takes the voxel's material: paint on a lit voxel glows. `P.at` (or `home/lib.js` `fsurf`, with `opt.V`) paints a chosen voxel's face. `home/lib.js` has helpers in voxel units: `frect`, `fdisc`, `fline`, `ftxt`, `hbox`.
+- **Fine voxels** must touch a voxel (or a fine voxel that does) and stay inside the piece's own box: a fine pass never grows its footprint or height.
+- **Budget**, per variant and state: 192 painted faces and 64 fine voxels (`FINE` in `interiors/fine.js`). `node style/city/interiors/home/fine-check.mjs [--cost]` gates on it, and on misses, buried or floating fine voxels and the far tier.
+- **Where it shows.** `vox.js` `meshVol` draws it in the near mesh wherever a piece is meshed: the previews, the city's rooms, the home builder, the game's inside view and tiles. The far tier folds each painted voxel into its faces' average and drops the fine voxels. `FINE.on = false` builds without it.
+- **Opt-in.** A piece without `fine` is built exactly as before.
+
+## Small things: the fine grain (second art pass, 2026-11-17)
+
+Paint cannot give a small thing its shape. A revolver about 20 cm long is four 5 cm blocks: no cylinder, no trigger guard, no grip curve. A small piece may therefore be **built at a finer grain**, its whole volume, not a few details:
+
+```js
+  grain: 0.025,     // half the block (the grain of the city's held gun and tools); or 0.0125, a quarter (a fine-paint texel)
+  view: 'top',      // optional: it lies flat, so its picture (the game's tiles) is taken from high up, not from 30°
+```
+
+- **The same footprint and height** in cells and metres; `volFor` makes the Vol at the piece's grain (10 or 20 cubes a 0.25 m cell). `build` draws in those finer cubes. Its `fine` pass then paints the finer voxels (texels a quarter of its own grain).
+- **Only for small things** (lib.js `SMALL`): at most 4 cells of footprint and 0.4 m tall, and at most 3,000 triangles in its near mesh, fine pass and all, in every variant and state. `home/fine-check.mjs` gates on all of it, and on `view` being `'top'` on a surface piece.
+- **The far tier** stays 0.1 m: `farOf` downsamples by 4 or 8. Nothing else changes: every place that draws a piece meshes its Vol at the Vol's own size.
+- **Which grain:** half for most things (a gun, a camera, a fogger); a quarter only where a round silhouette must read close up (a can).
+
+## Shaped things: the half grain past SMALL (third art pass, 2026-11-18)
+
+Some pieces are past SMALL (bigger than 4 cells or taller than 0.4 m) and still have a shape the 5 cm block cannot draw: a vase's neck and the flowers in it, a monstera's split leaves, a lamp's drum shade, a stool's thin pole and foot ring, a beanbag's slump, a tiger's head on a rug, a jaw of gold teeth. Such a piece may be built at **half the block**, its whole volume, if it says why:
+
+```js
+  grain: 0.025,
+  shaped: 'a vase of flowers: the round body, the slim neck, the stems, leaves and blooms',
+```
+
+- **The limits** (lib.js `SHAPED`): the half grain only (the quarter stays for SMALL things); the box it fills at most **24 cell-metres** (footprint cells × height in m; a wall piece: its cells on the wall × how far it stands off it), so at most 96,000 half-grain cubes; at most 2.0 m tall; at most **6,000 triangles** in its near mesh, fine pass and all, in every variant and state. A piece small enough for SMALL may not say `shaped`. `home/fine-check.mjs` gates on all of it.
+- **What it costs**: see PASS.md "Third pass" (per piece and per preset room).
+- **Everything else is as for SMALL**: the same footprint and height, `volFor` builds the Vol at the grain, the far tier is 0.1 (`farOf` downsamples by 4), the fine pass paints the finer faces.
+- **Helpers** (lib.js): `lathe` (a solid of revolution, optionally hollow: a vase, a shade, a pot), `prof` (its radius through points), `ball` (an ellipsoid), `plate` (a flat thing one voxel thick, sampled so a tilted leaf is one closed sheet).
+
+## Gold (third art pass, 2026-11-18)
+
+The metal layer (2) mirrors the sky (the city's day dome, the tiles' blue gradient), and a metal tints its reflection with its own colour: gold came out olive green. `interiors/fine.js` `gild` runs last in both kits' `buildObject`: a warm, saturated colour on the metal layer (hue 30° to 60°, saturation at least 0.4: gold, brass, gilt) is drawn with the gloss shading (layer 1) instead. Grey metals, every other colour and every piece without gilt build exactly as before. Draw gold as before (`K.gold, 2`); `gild` does the rest.
+
 ## The game block (catalogue v2, 2026-09-28)
 
 What an item means in the game. slime's rules:

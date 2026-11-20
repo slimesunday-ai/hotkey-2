@@ -15,7 +15,16 @@
 //
 //   const gore = await createGore({ city, CITY, actors });
 //   gore.hit(victimId, shooterId)     the shot went home
+//   gore.hit(victimId, shooterId, { mark: false })   (raidfight-1) on a body posed by hand: the spray and its splats on
+//                                     the ground, and nothing that rides the body
 //   gore.blow(victimId, hitterId, clip)  a fist landed (punch, haymaker, scuffle_pair: BLOWS), see below
+//   gore.blow(victimId, hitterId, clip, { at, mark: false })   (anim-1) a blow on a body the page poses by hand (a
+//                                     staged fight, demo/fight/puppet/): the drops off the very place it landed (`at`,
+//                                     a world point) and their splats on the ground, and NOTHING that rides the body:
+//                                     see "A BODY POSED BY HAND" below
+//   gore.cheek(id)                    the mark on the cheek of somebody standing (a fight over, they are on their feet)
+//   gore.pool(x, y, z) → { dry() }    a small pool on the ground (under the head of one who stays down)
+//   gore.riding()                     every splat riding a body now, where it is in the world (for the tools)
 //   gore.stats()                      what is on stage now (for the tools)
 //
 // A FIST THAT LANDS (the owner, 2026-11-16: "a little blood splatter when a punch lands"): the same blood, smaller,
@@ -30,6 +39,13 @@
 //                    up or gone. Down for a moment and up again is no pool. While they lie the cheek mark is off
 //                    the face (a lying head is not where a standing one was) and is back on it when they are up
 
+// A BODY POSED BY HAND (anim-1, the owner 2026-11-18: "a piece of blood splatter stays in the air and glitches in
+// front of you"). The cheek mark and the wound RIDE a place and a heading: the walker's own, where a head and a chest
+// are while it stands in one of the city's clips. A body in a staged fight is not there: its head is wherever the blow
+// sent it (leaning in, knocked back, on the ground), and its walker's heading is its LEGS', which pivot with every
+// step. So a mark laid on it hung in the air where a standing face would have been, a metre over a body on the ground,
+// and swung with the feet. Nothing rides a hand-posed body: its blows shed their drops from where they landed, and
+// the mark is put on the cheek when the fight is over and they stand (demo/run/duel.js).
 /** The clips of a body going down or lying (the city's falls: anim/cast/clips/falls.js). */
 const DOWN = new Set(['fall_back', 'shove_fall', 'lie_hurt', 'lie_still', 'death_collapse']);
 /** Where the chest is over the feet of a standing body, and how far in front of the body's middle its surface is (m). */
@@ -38,11 +54,13 @@ const FRONT = 0.27;
 /** A body on its back (fall_back's end, lie_hurt): its chest is this far behind where the feet were, and this high. */
 const LAID = { back: 0.5, top: 0.62 };
 /**
- * WHERE THE FACE IS: the front of a head as it is drawn is this many times headOf's half depth ahead of the body's
- * middle (headOf's box is the bake's; measured on Mrs. Alvarez at the trailer park, 2026-11-16: a mark laid at her
- * half depth was inside her head, at twice it on her cheek), and the cheek a quarter of the way up the head.
+ * WHERE THE FACE IS (anim-1, 2026-11-18): a head's front is its own half depth ahead of the body's middle (headOf's
+ * box, metres: 0.45 on a bare head, more under a brim), and the cheek a quarter of the way up the head. The mark was
+ * laid at TWICE that (measured from the game's own high camera, where a mark half a metre in front of a face sits over
+ * the cheek in the picture): from any view the player turns the camera to, it hung in the air in front of the face,
+ * for the minute it is kept. It is laid on the face: the head's front, never further out than a bare head's and a brim.
  */
-const FACE = 2;
+const faceAt = H => Math.min(H.hd, 0.5) + 0.03;
 /** The clip clock (s) at which each blow lands: the clips' own notes (anim/cast/clips/game-port.js, arrest.js). */
 export const BLOWS = Object.freeze({ punch: 0.22, haymaker: 0.08, scuffle_pair: 0.25 });
 /**
@@ -84,7 +102,7 @@ export async function createGore({ city, CITY, actors }) {
   };
   const rnd = (a, b) => a + Math.random() * (b - a);
 
-  function hit(victimId, shooterId) {
+  function hit(victimId, shooterId, o = {}) {
     const A = actors.all().find(a => a.id === victimId);
     const B = actors.all().find(a => a.id === shooterId);
     if (!A || A.w.hide) return false;
@@ -99,6 +117,12 @@ export async function createGore({ city, CITY, actors }) {
       const [along, side] = [rnd(0.5, 2.6), rnd(-0.55, 0.55)];
       const [x, z] = [A.x + dx * along - dz * side, A.z + dz * along + dx * side];
       fx.splat(x, floor(x, z, A.y), z, 0, 1, 0, rnd(0.18, 0.42), { delay: 0.25 + along * 0.14, grow: 0.15 });
+    }
+    // (raidfight-1: `mark: false`, a body posed by hand: nothing rides it (see A BODY POSED BY HAND); the page lays
+    // its pool where it lies)
+    if (o.mark === false) {
+      live = BLOOD.poolLife + 30;
+      return true;
     }
     // the wound: on the chest, on the side the shot came from, and where it came out. It rides the body (`rider`,
     // what the city's car splat rides: a place and a heading)
@@ -115,10 +139,28 @@ export async function createGore({ city, CITY, actors }) {
    * A FIST LANDED on `victimId` from `hitterId` (clip: which blow, for its side: the city's punch and haymaker are
    * thrown with the −x fist, across the body to +x).
    */
-  function blow(victimId, hitterId, clip = 'punch') {
+  function blow(victimId, hitterId, clip = 'punch', o = {}) {
     const A = actors.all().find(a => a.id === victimId);
     const B = actors.all().find(a => a.id === hitterId);
     if (!A || A.w.hide) return false;
+    if (o.at) {
+      // (anim-1) a body posed by hand: the drops off the place it landed, thrown the way the blow went and a little
+      // across; their splats on the ground as it is drawn there; nothing on the body
+      let [dx, dz] = B ? [A.x - B.x, A.z - B.z] : [-Math.sin(A.ry), -Math.cos(A.ry)];
+      const d = Math.hypot(dx, dz) || 1;
+      const sd = Math.random() < 0.5 ? 1 : -1;
+      [dx, dz] = [dx / d - (dz / d) * 0.5 * sd, dz / d + (dx / d) * 0.5 * sd];
+      const [x0, y0, z0] = o.at;
+      fx.shed(x0, y0, z0, dx * 3.0, 1.1, dz * 3.0, BLOW.drops);
+      const n = BLOW.splats[0] + Math.floor(Math.random() * (BLOW.splats[1] - BLOW.splats[0] + 1));
+      for (let k = 0; k < n; k++) {
+        const [along, side] = [rnd(BLOW.reach[0], BLOW.reach[1]), rnd(-0.3, 0.3)];
+        const [x, z] = [x0 + dx * along - dz * side, z0 + dz * along + dx * side];
+        fx.splat(x, floor(x, z, A.y), z, 0, 1, 0, rnd(BLOW.size[0], BLOW.size[1]), { delay: 0.2 + along * 0.18, grow: 0.1, life: BLOW.life });
+      }
+      live = Math.max(live, BLOW.life + 10);
+      if (o.mark === false) return true;
+    }
     // the way the blow went: from the hitter to them, and across, the way the fist travelled (the hitter's +x)
     let [fx0, fz0] = B ? [A.x - B.x, A.z - B.z] : [-Math.sin(A.ry), -Math.cos(A.ry)];
     const d = Math.hypot(fx0, fz0) || 1;
@@ -131,7 +173,7 @@ export async function createGore({ city, CITY, actors }) {
     // off the side of the face the fist hit: the cheek on the hitter's −x side (the head is the figures' big one)
     const H = actors.headOf(victimId);
     const fy = A.y + H.y0 + (H.y1 - H.y0) * 0.25;
-    const [ox, oz] = [A.x - cx * H.hw * 0.7 - fx0 * H.hd * FACE * 0.8, A.z - cz * H.hw * 0.7 - fz0 * H.hd * FACE * 0.8];
+    const [ox, oz] = [A.x - cx * H.hw * 0.7 - fx0 * faceAt(H) * 0.8, A.z - cz * H.hw * 0.7 - fz0 * faceAt(H) * 0.8];
     fx.shed(ox, fy, oz, dx * 3.2, 1.1, dz * 3.2, BLOW.drops);
     // (where they come down, on the ground as it is drawn there: small splats, a beat after, that dry away)
     const n = BLOW.splats[0] + Math.floor(Math.random() * (BLOW.splats[1] - BLOW.splats[0] + 1));
@@ -155,7 +197,39 @@ export async function createGore({ city, CITY, actors }) {
     const H = actors.headOf(A.id);
     if (!F.rider || F.rider.gone) F.rider = { x: A.x, z: A.z, h: A.w.yawS ?? A.ry, yawOff: 0, gone: false };
     const k = F.marks.length;
-    F.marks.push(note(fx.carSplat(F.rider, H.hw * (F.side * 0.25 - k * 0.15), A.y + F.fy + k * 0.06, H.hd * FACE + 0.01, 0, 0, 1, BLOW.mark * (1 - k * 0.15)), F.rider));
+    F.marks.push(note(fx.carSplat(F.rider, H.hw * (F.side * 0.25 - k * 0.15), A.y + F.fy + k * 0.06, faceAt(H), 0, 0, 1, BLOW.mark * (1 - k * 0.15)), F.rider));
+  }
+  /** (anim-1) The mark on the cheek of somebody standing who took it in a fight that is over: no drops, the mark only. */
+  function cheek(id) {
+    const A = actors.all().find(a => a.id === id);
+    if (!A || A.w.hide) return false;
+    const H = actors.headOf(id);
+    const F = fists.get(id) ?? { rider: null, marks: [], pool: [], down: false, lie: 0, up: 0, t: 0, side: 1, fy: H.y0 + (H.y1 - H.y0) * 0.25 };
+    F.t = 0;
+    if (!F.down) mark(F, A);
+    fists.set(id, F);
+    live = Math.max(live, BLOW.life + 10);
+    return true;
+  }
+  /** (anim-1) A small pool on the ground at a place (under the head of one who stays down); → { dry() }. */
+  function pool(x, y, z) {
+    const r = note(fx.splat(x, floor(x, z, y), z, 0, 1, 0, BLOW.pool, { life: BLOOD.poolLife, grow: 1.6, color: BLOOD.pool }));
+    live = Math.max(live, BLOOD.poolLife + 10);
+    return { dry: () => dry(r) };
+  }
+  /** (anim-1) Every splat riding a body now: whose, what, and where it is in the world. */
+  function riding() {
+    const out = [];
+    const at = (id, kind, r) => {
+      if (!ours(r) || r.rider.gone) return;
+      const a = -(r.rider.h + (r.rider.yawOff || 0));
+      const [c, sn] = [Math.cos(a), Math.sin(a)];
+      // (the city's own placing of a splat on what it rides: its place, turned by its heading; gorefx.js place)
+      out.push({ id, kind, x: +(r.rider.x + r.s.lx * c - r.s.lz * sn).toFixed(3), y: +r.s.ly.toFixed(3), z: +(r.rider.z + r.s.lx * sn + r.s.lz * c).toFixed(3) });
+    };
+    for (const [id, F] of fists) for (const r of F.marks) at(id, 'cheek', r);
+    for (const [id, W] of wounds) for (const r of W.body) at(id, 'wound', r);
+    return out;
   }
   /** Their fist's blood goes with them: the mark off the face, the pool dried. */
   function endFist(id) {
@@ -260,6 +334,9 @@ export async function createGore({ city, CITY, actors }) {
   return {
     hit,
     blow,
+    cheek,
+    pool,
+    riding,
     end,
     clear() {
       for (const id of [...wounds.keys()]) end(id);
