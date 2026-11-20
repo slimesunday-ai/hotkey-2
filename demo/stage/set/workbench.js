@@ -23,9 +23,28 @@
  * south (measured 2026-11-19: solid within 0.25 m of it there), and open ground to the east, toward the game's camera
  * over the park and clear of the way up to his step (1.8 m east): he faces east, the bench in front of him.
  */
-export const WORK = [{ spot: 'home:a3:yard', who: 'npc:neighbour:2', clip: 'bench_hammer', at: [-242.7, -49.1, Math.PI / 2] }];
+export const WORK = [{ spot: 'home:a3:yard', who: 'npc:neighbour:2', clip: 'bench_hammer', at: [-242.7, -49.1, Math.PI / 2], asides: [[1.75, -0.15], [1.25, 1.35], [1.8, 0.7], [-1.05, 1.45], [0, 1.7]] }].map(w => ({ ...w, asides: w.asides.map(q => asideOf(w, q)) }));
 
 export const workAt = (spot, clip) => WORK.find(w => w.spot === spot && w.clip === clip)?.at ?? null;
+
+/**
+ * (notes-2) WHOEVER ELSE WORKS AT A BENCH (the player's odd job for Mr. Pruitt: the same hammer) works at its point, the
+ * anvil in front of him, and its keeper stands aside while he does. `asides`: where he may stand, in the bench's body
+ * frame ([x across, z ahead] at the standard size: past its +x end on the open ground north of Mr. Pruitt's yard point,
+ * at its +x and -x corners ahead, across it), each a heads' gap (actors.headGap: 1.58 m for the two of them) and more
+ * from the bench's point; as [x, z, ry] in the world, facing the anvil. Which one is the director's (the one off the
+ * way the worker comes to the bench). → the bench where `clip` is played within `near` m of (x, z), or null.
+ */
+export const benchNear = (clip, x, z, near = 8) => WORK.find(w => w.clip === clip && Math.hypot(x - w.at[0], z - w.at[1]) < near) ?? null;
+
+function asideOf(w, [bx, bz]) {
+  const [x, z, ry] = w.at;
+  const [c, s] = [Math.cos(ry), Math.sin(ry)];
+  const [ax, az] = [x + bx * c + bz * s, z - bx * s + bz * c];
+  // (facing the anvil, BENCH.anvil at x 0.2, z 0.67 of the frame: where the work is)
+  const [nx, nz] = [x + 0.2 * c + 0.67 * s, z - 0.2 * s + 0.67 * c];
+  return [ax, az, Math.atan2(nx - ax, nz - az)];
+}
 
 export async function createWorkbenches({ city, CITY, actors }) {
   const THREE = city.THREE;

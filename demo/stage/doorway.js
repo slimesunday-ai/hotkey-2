@@ -109,7 +109,13 @@ export function createDoorway({ actors, inside, fade, rest = () => {} }) {
     const off = Math.hypot(f - Math.max(-BODY, Math.min(BODY, f)), l - Math.max(-BODY, Math.min(BODY, l)));
     return off > L.reach + CLEAR;
   };
+  // whoever stands in a doorway waiting for the black: where and how they stood ([x, z, ry, y]), kept (walkToBlack)
+  const holds = new Map();
   actors.onFrame(dt => {
+    for (const [id, [x, z, ry, y]] of holds) {
+      const A = actors.has(id) ? actors.get(id) : null;
+      if (A && (Math.abs(A.ry - ry) > 1e-3 || Math.hypot(A.x - x, A.z - z) > 1e-3)) actors.place(id, x, z, ry, y);
+    }
     for (const [name, d] of swinging) {
       // (their walk through it over: shut once its sweep is clear of them; the room's, if they stopped in its sweep,
       // goes from where it stands)
@@ -140,7 +146,7 @@ export function createDoorway({ actors, inside, fade, rest = () => {} }) {
       if (gap <= 0 && !measure.met.has(tag)) {
         measure.met.add(tag);
         measure.through++;
-        if (measure.examples.length < 8) measure.examples.push(`${A.id} met ${d.key}'s ${d.side === 'out' ? 'door' : 'room door'} swinging ${d.way}, open ${d.k.toFixed(2)}`);
+        if (measure.examples.length < 8) measure.examples.push(`${A.id} met ${d.key}'s ${d.side === 'out' ? 'door' : 'room door'} swinging ${d.way}, open ${d.k.toFixed(2)}, at (${A.x.toFixed(2)}, ${A.z.toFixed(2)}) facing ${A.ry.toFixed(2)}, ${Math.hypot(A.x - L.hinge[0], A.z - L.hinge[1]).toFixed(2)} m from its hinge; its walk ${d.walk ?? '-'} for ${d.who ?? 'nobody'}${d.done ? ', over' : ''}; ${A.route ? 'walking' : 'standing'}, clip ${A.clipName ?? '-'}, clock ${actors.clock?.toFixed?.(1) ?? '-'}${(h => (h ? `, day ${h.day} ${h.hour}:00 at ${h.place}` : ''))(globalThis.__demo?.hud?.state)}`);
       }
     }
   }
@@ -185,15 +191,33 @@ export function createDoorway({ actors, inside, fade, rest = () => {} }) {
   async function walkToBlack(id, points, key, side, sill) {
     const hold = { fading: null };
     const swing = follow(key, side, sill);
+    // (square to the doorway as they reach it: the way of the last step, onto the sill)
+    const [p0, p1] = points.slice(-2);
+    const yaw = p0 && p1 ? Math.atan2(p1[0] - p0[0], p1[2] - p0[2]) : null;
     const ok = await actors.walkPath(id, points, {
-      v: WALK, room: true,
+      v: WALK, room: true, yaw,
       onStep: (x, z) => {
         swing(x, z);
         if (!hold.fading && dist(x, z, sill) < BLACK_AT) hold.fading = fade.out();
       },
     });
     hold.fading ??= ok ? fade.out() : null;
-    if (hold.fading) await hold.fading;
+    // (HELD IN THE DOORWAY, SQUARE TO IT, UNTIL THE PICTURE IS BLACK. The dealer's third day, notes-1: home at 15:00,
+    // he stood on the sill waiting for the black while the run's next step had already begun (the page read day 4,
+    // 12:00), and he was turned to 0.37 rad there, standing, no clip: his body's corner was in the trailer's leaf,
+    // open in beside him, 0.56 m from its hinge. Arriving square alone did not stop it; his own routine stopped and
+    // his pose kept by the frame loop below, before the leaves are measured, did)
+    const A = ok && actors.has(id) ? actors.get(id) : null;
+    if (A) {
+      // (their own routine stopped, and the pose kept by the frame loop, before the leaves are measured)
+      rest(id);
+      holds.set(id, [A.x, A.z, yaw ?? A.ry, A.y]);
+    }
+    try {
+      if (hold.fading) await hold.fading;
+    } finally {
+      holds.delete(id);
+    }
     return { ok, held: !!hold.fading };
   }
 
@@ -255,10 +279,13 @@ export function createDoorway({ actors, inside, fade, rest = () => {} }) {
         inside.door(id, key, 'out', { walking: true });
         await inside.ready();
         if (!live()) return false;
-        // the picture back: out onto the stoop and the step, the door shutting behind them once it can
+        // the picture back: out onto the stoop and the step, the door shutting behind them once it can. (notes-2, THE
+        // STEPS: the stoop and the step are given no height, so the feet go down the boards as they are drawn. The
+        // stoop's height was the lot anchor's, the sidewalk's 0.2 m, under the porch's 0.5 m boards, and the walk ran
+        // on a line from the sill's 0.8 m down to it: through the boards and the step, both ways, from the first day)
         held = false;
         fade.in();
-        const ok = await actors.walkPath(id, [[O.stoop[0], O.stoop[1], O.stoop[2]], [O.step[0], null, O.step[1]]], { v: WALK, room: false, onStep: follow(key, 'out', O.sill) });
+        const ok = await actors.walkPath(id, [[O.stoop[0], null, O.stoop[2]], [O.step[0], null, O.step[1]]], { v: WALK, room: false, onStep: follow(key, 'out', O.sill) });
         inside.door(id, key, 'out', { walking: false });
         done(key, 'out');
         return ok && live();
@@ -286,7 +313,7 @@ export function createDoorway({ actors, inside, fade, rest = () => {} }) {
       try {
         // from the step: up onto the stoop, the door opening in as they come, into the doorway; black as they reach it
         through(key, 'out', 'in', id);
-        const r = await walkToBlack(id, [[O.stoop[0], O.stoop[1], O.stoop[2]], [O.sill[0], O.sill[1], O.sill[2]]], key, 'out', O.sill);
+        const r = await walkToBlack(id, [[O.stoop[0], null, O.stoop[2]], [O.sill[0], O.sill[1], O.sill[2]]], key, 'out', O.sill);
         held = r.held;
         if (!r.ok || !live()) return false;
         // UNDER THE BLACK: in the doorway of the inside view, its leaf open in, as the trailer's was; the door outside

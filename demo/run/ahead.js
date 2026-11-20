@@ -29,8 +29,94 @@ import { aheadOf, aheadCells, aheadCell } from '../../src/run/ahead.mjs';
 const money = n => `$${n}`;
 const cap = s => (s ? s[0].toUpperCase() + s.slice(1) : s);
 const in10 = p => (p === null || p === undefined ? '…' : String(Math.round(p / 10)));
-const BRANCH_ICON = { fight: 'fight', gear: 'goods', home: 'home', places: 'map' };
-const KIND_ICON = { arm: 'fight', style: 'fight', shop: 'star', good: 'goods', guard: 'person', place: 'map', route: 'walk', thing: 'home' };
+const BRANCH_ICON = { fight: 'fight', gear: 'goods', home: 'home', places: 'map', make: 'pot' };
+const KIND_ICON = { arm: 'fight', style: 'fight', shop: 'star', good: 'goods', guard: 'person', place: 'map', route: 'walk', thing: 'home', making: 'goods', bag: 'bag', product: 'pot' };
+
+// ── MAKE (pot-2): the fifth tree, the crafting plan's (B10, "In what's ahead: a fifth tree, Make. Names only"), from the
+// rules' view of the pot (view.make, view.pot) and its moves: the kitchen and its tools (the hot plate, taken off Gear,
+// and the box fan), what goes in (who sells it, where), what it goes into (bags), and what you have found (each thing a
+// set of makings makes, by its name: the player's own when he named it). The same three states as every node. Nothing
+// worked out here but which state: every word and number is the rules'.
+const STATE_OF = ({ owned = false, price = 0, have = 0, why = null, here = false }) => (owned ? { state: 'owned', here: false, toGo: 0, why: null }
+  : why ? { state: 'later', here: false, toGo: 0, why } : Math.max(0, (price ?? 0) - have) ? { state: 'later', here: false, toGo: Math.max(0, price - have), why: null } : { state: 'now', here: !!here, toGo: 0, why: null });
+const choiceFor = (v, test) => {
+  const c = (v.choices ?? []).find(x => test(x.choice ?? {}));
+  return c ? { key: c.key, available: !!c.available, why: c.why ?? null, label: c.label, choice: { ...c.choice } } : null;
+};
+const nameOf = s => cap(String(s ?? '').replace(/^(a pair of|an?|the) /i, ''));
+/** Where a thing of the pot is had: { place, placeLabel, who, at, pays, text, payText } (as the rules' Ahead says it). */
+function madeWhere(cfg, place, keeper, verb = 'sells it') {
+  const P = cfg.places[place] ?? {};
+  const p = (P.people ?? []).find(x => x.id === (keeper?.id ?? keeper)) ?? null;
+  return { place, placeLabel: P.label ?? place, who: p ? { id: p.id, name: p.name } : null, at: null, pays: 'carried',
+    text: `${p ? `${cap(p.name)} ${verb}` : cap(verb)}, ${P.where ?? `at ${P.label ?? place}`}.`, payText: 'from what you carry, no hour' };
+}
+export function makeBranch(cfg, v, D, have) {
+  const M = v?.make;
+  const P = v?.pot;
+  if (!M || !P) return null;
+  const X = cfg.make;
+  const add = n => {
+    Object.assign(n, STATE_OF({ owned: n.owned, price: n.price, have, why: n.why, here: !!n.choice?.available }));
+    n.stateText = n.state === 'owned' ? n.ownedText ?? 'yours' : n.why ?? (n.toGo ? `$${n.toGo} to go` : n.here ? 'here, now' : n.where ? n.where.text.replace(/\.$/, '') : 'within reach');
+    D.nodes[n.id] = n;
+    return n.id;
+  };
+  const kitchen = M.makers.find(m => m.id === P.maker) ?? M.makers[0];
+  const shelf = kitchen.shelf;
+  // THE KITCHEN: its station (the rules' own node of it, moved here from Gear) and the box fan (the smell one lower)
+  const tools = [];
+  const st = kitchen.station;
+  const plate = D.nodes[`thing:${st?.item}`];
+  if (plate) {
+    for (const b of D.branches) for (const g of b.groups) g.nodes = g.nodes.filter(id => id !== plate.id);
+    plate.branch = 'make';
+    if (plate.state === 'owned' && st.out) plate.ownedText = `yours · smashed until day ${st.out + 1}`;
+    tools.push(plate.id);
+  }
+  const fanItem = Object.keys(cfg.things ?? {}).find(k => cfg.things[k].smellOff);
+  if (fanItem) {
+    const t = cfg.things[fanItem];
+    const smell = M.smell;
+    tools.push(add({ id: `thing:${fanItem}`, branch: 'make', kind: 'thing', key: fanItem, name: nameOf(t.label), price: t.price, priceText: `$${t.price}`, parent: null, owned: !!v.things?.owned?.some?.(o => o.item === fanItem) || !!D.owns?.[fanItem],
+      short: 'the smell of your cooking one lower', does: `${t.job}.`, facts: [smell?.text ? `${smell.text}.` : 'Nothing cooked lately: no smell on HOME.', 'Stands in the trailer\'s window. Kept for the run.'], opens: [],
+      where: madeWhere(cfg, t.at, t.keeper), needs: [], choice: choiceFor(v, c => c.do === 'get' && c.item === fanItem), piece: t.piece ?? null, library: t.piece ? fanItem : null }));
+  }
+  // WHAT GOES IN: each making, who sells it and where; yours while you have some (on you or at home)
+  const ins = shelf.makings.map(m => {
+    const E = X.effects[m.effect];
+    const n = m.on + m.home;
+    return add({ id: `making:${m.item}`, branch: 'make', kind: 'making', key: m.item, name: cap(m.label), price: m.price, priceText: `$${m.price} a ${m.unit}`, parent: null, owned: n > 0, ownedText: `${m.on} on you · ${m.home} at home`,
+      short: `${cap(E.words)}, ${E.hours} hours`, does: `${cap(m.pack)}: one goes in the pot. Whoever takes what it makes: ${E.words}, ${E.hours} hours.`, facts: [`${cap(m.label)} on its own makes ${P.options.find(o => o.with.length === 1 && o.with[0] === m.item)?.name ?? Object.values(X.products).find(p => p.from.length === 1 && p.from[0] === m.item)?.name ?? 'something'}.`, 'Bought onto you; it goes home when you go in. On you it is at risk like any goods.'],
+      opens: [], where: madeWhere(cfg, m.at, m.keeper), needs: [], colour: m.colour, piece: m.piece ?? null, choice: choiceFor(v, c => c.do === 'making' && c.item === m.item) });
+  });
+  // WHAT IT GOES INTO: the pot gives bags (each sold as a good, one on your belt)
+  const C = P.carrier;
+  const bags = shelf.made.reduce((a, r) => a + r.on + r.home, 0);
+  const into = C ? [add({ id: `bag:${C.gives}`, branch: 'make', kind: 'bag', key: C.gives, name: cap(`${X.kinds?.[C.gives]?.unit ?? C.gives}s`), price: null, priceText: '', parent: null, owned: bags > 0, ownedText: `${bags} now`,
+    why: bags ? null : st?.owned ? 'cook first' : 'a hot plate first',
+    short: `${C.n} come out of a cook, ${C.hours === 1 ? 'an hour' : `${C.hours} hours`}`, does: `${C.n} bags come out of the pot every cook, at home. Each sells as goods do: Shaky Dee at the bus stop, the crowd at the market. One can ride on your belt, never sold.`,
+    facts: [`What is at home counts in what your home is worth.`], opens: [], where: null, needs: [] })] : [];
+  // FOUND: what each set makes, by the name it goes by (yours, once named); not found yet, how to find it
+  const book = kitchen.book;
+  const found = Object.entries(X.products).map(([id, p]) => {
+    const f = book.found.find(x => x.product === id);
+    const withWords = p.from.map(k => X.makings[k].label).join(' and ');
+    const opt = P.options.find(o => o.product === id);
+    return add({ id: `product:${id}`, branch: 'make', kind: 'product', key: id, name: f?.name ?? p.name, price: null, priceText: '', parent: null, owned: !!f, ownedText: f ? `found day ${f.day}` : 'yours',
+      why: f ? null : `not cooked yet: ${withWords}`,
+      short: (f?.lines ?? opt?.lines ?? []).join(', ').toLowerCase() || withWords, does: `${withWords.replace(/^./, c => c.toUpperCase())} in the pot.${f?.canName ? ' Yours to name.' : ''}`, facts: (f?.lines ?? opt?.lines ?? []).map((l, i) => `${i + 1}. ${l}`), opens: [], where: null, needs: [] });
+  });
+  const groups = [
+    { id: 'kitchen', label: 'The kitchen', note: 'Where you cook, and what keeps the smell down.', nodes: tools },
+    { id: 'in', label: 'What goes in', note: 'Sold on your own street, from what you carry.', nodes: ins },
+    { id: 'into', label: 'What comes out', note: 'Six bags a cook.', nodes: into },
+    { id: 'found', label: 'Found', note: `${book.found.length} of ${Object.keys(X.products).length} found. ${book.text}.`, nodes: found },
+  ].filter(g => g.nodes.length);
+  const all = groups.flatMap(g => g.nodes).map(id => D.nodes[id]);
+  const counted = all.filter(n => n.kind === 'thing' || n.kind === 'product');
+  return { id: 'make', label: 'Make', icon: 'pot', note: 'Cook it, sell it, watch what it does (P: the pot).', groups, count: { owned: counted.filter(n => n.state === 'owned').length, of: counted.length, word: 'yours' } };
+}
 
 export function createAhead({ cfg, tiles, now, act, root, kept = null, bg = null }) {
   const odds = {};
@@ -294,6 +380,17 @@ export function createAhead({ cfg, tiles, now, act, root, kept = null, bg = null
     const v = n0.v;
     if (!v) return;
     data = aheadOf(cfg, n0.state, v.choices, odds);
+    // (pot-2: the fifth tree, Make, from the rules' view of the pot; the hot plate moves to it from Gear)
+    const make = makeBranch(cfg, v, { ...data, owns: n0.state?.things }, data.have);
+    if (make) {
+      data.branches.push(make);
+      const gear = data.branches.find(b => b.id === 'gear');
+      if (gear) {
+        const counted = gear.groups.flatMap(g => g.nodes).map(id => data.nodes[id]).filter(n => n.kind !== 'good');
+        gear.count = { ...gear.count, owned: counted.filter(n => n.state === 'owned').length, of: counted.length };
+      }
+      data.order = data.branches.flatMap(b => b.groups.flatMap(g => g.nodes));
+    }
     if (picked && !data.nodes[picked] && !groupOf(picked)) picked = null;
     const keys = (v.choices ?? []).map(c => `${c.key}:${n0.keyFor?.(c.key) ?? ''}`).join();
     const s = JSON.stringify([data.branches, data.order.map(id => data.nodes[id]), picked, keys]);

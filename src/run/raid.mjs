@@ -21,7 +21,8 @@ import { rng } from '../rng.mjs';
 import { runRaid } from '../fight/raid.mjs';
 import { tallied } from './odds.mjs';
 import { EARL_WAYS, WEAPONS } from '../fight/data.mjs';
-import { armOf, armLabel, armsOf, morningEnergy, duelHealth, guardOf, earlWayOf, earlWayWords, defVal, dogOf, goodsWorth, clamp } from './rules.mjs';
+import { armOf, armLabel, armsOf, morningEnergy, duelHealth, guardOf, earlWayOf, earlWayWords, defVal, dogOf, goodsWorth, clamp, isBought, isMade, isMaking } from './rules.mjs';
+import { sellsFor } from './make.mjs';
 
 /** The order a gun is held in when nothing is chosen (the cheapest first). */
 export const GUN_ORDER = Object.freeze(['sixshot', 'doorman', 'chopper', 'longeye']);
@@ -77,10 +78,17 @@ export const findable = (cfg, state, banked = state.banked) => Math.max(0, banke
 export const shareTaken = (cfg, state, pct, banked = state.banked) => Math.floor((findable(cfg, state, banked) * pct) / 100);
 
 /** Where the rules find each kind of holding at the crib (config worth.entries `of`): a later kind is one more row here. */
+const only = (cfg, goods, test) => Object.fromEntries(Object.entries(goods ?? {}).filter(([g]) => test(cfg, g)));
 const HOLDINGS = {
   banked: (cfg, state) => state.banked,
-  stash: (cfg, state) => goodsWorth(cfg, state.stash ?? {}),
+  // (pot-1: the goods bought from a connect, at cost; what you made and what you make it with are rows of their own)
+  stash: (cfg, state) => goodsWorth(cfg, only(cfg, state.stash, isBought)),
   things: (cfg, state) => thingsAtRisk(cfg, state).reduce((a, x) => a + x.worth, 0),
+  // (pot-1) what you made, kept at the crib, at what it sells for (make.mjs sellsFor: the best selling job's middle)
+  // (bench-1: a bottle, which no selling job takes, at what it cost)
+  made: (cfg, state) => Object.entries(state.stash ?? {}).filter(([g]) => isMade(cfg, g)).reduce((a, [g, n]) => a + n * (sellsFor(cfg, g)?.mid ?? (cfg.goods[g].price / cfg.goods[g].sales)), 0),
+  // (pot-1) what you make it with, kept at the crib, at cost
+  makings: (cfg, state) => goodsWorth(cfg, only(cfg, state.stash, isMaking)),
 };
 /**
  * WHAT YOUR HOME IS WORTH (the WORTH meter): one sum over config worth.entries, everything kept at the crib, each row's

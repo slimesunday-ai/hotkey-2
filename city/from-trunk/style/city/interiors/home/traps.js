@@ -72,8 +72,9 @@ export const pepperFogger = def({ id: 'pepper-fogger', name: 'Pepper fogger', ca
   tiers: ['apartment', 'house', 'penthouse'], tags: ['alarm', 'fogger', 'door'], variants: 1, vnames: ['orange canister'],
   does: 'Trips when the door opens: a cloud of pepper fills the doorway and whoever came in backs out coughing.',
   game: sec({ secure: 'alarm', burgleOdds: -15 }, 'rare'),
-  build(V) {
-    const can = 0xf2621f, cx = 9, cz = 5;
+  // (`can`: the can's colour; the fogger as bought is orange. craft.js door-can is the same fogger loaded, its can in the load's colour)
+  build(V, { can = 0xf2621f } = {}) {
+    const cx = 9, cz = 5;
     V.box(4, 6, 0, 15, 19, 1, K.steelD, 1);                                                                       // the wall plate
     for (let y = 5; y < 18; y++) for (let z = 1; z < 10; z++) for (let x = 5; x < 14; x++) { const r = Math.hypot(x + .5 - cx, z + .5 - cz);
       const R = y >= 17 ? 3.2 : y === 5 ? 3.1 : 3.8; if (r > R) continue;

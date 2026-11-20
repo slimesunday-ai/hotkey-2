@@ -10,7 +10,7 @@ The city's own characters, bake and walker material; not in the city yet. Board:
 - **corners:** a loop round a square.
 - **stop-start:** a kerb queue crosses on the signal, idles, turns round, comes back.
 - **crowd:** 20, 200 or 2,000 walkers wandering and idling.
-- **idle line-up:** all nine idles, labelled.
+- **idle line-up:** nine idles at a time, labelled (`&from=9`: the next nine; `&vary=<n>`: each with its own tempo, size and side). Seventeen since K3-idles (idle.js).
 
 **Walk:** old, v1, v2, old | v1, or v1 | v2 (the default: both side by side).
 
@@ -87,6 +87,7 @@ The city's own characters, bake and walker material; not in the city yet. Board:
 ## URL parameters (for shots)
 - `scene`, `ab` (`old`, `new` = v1, `v2`, `ab`, `v12`), `cam`, `n`, `v`, `t` (deterministic time)
 - `look=<i>`: the treadmill's character
+- `from=<i>`, `vary=<n>`: the idle line-up's first idle, and per-person variation on it
 - `shot=1` hides the UI
 - `strip=8&sdt=…&cols=4` renders a contact sheet
 - `cx=`/`zoom=` frame close-ups

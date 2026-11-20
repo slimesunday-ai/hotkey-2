@@ -12,9 +12,41 @@
 //   corners     a corner node is held by the stream of walkers that reached it first; walkers from another edge wait a beat outside
 //               it, and a stream that has waited PED.fair s gets its turn. Agents: generic walkers never take a corner an agent is
 //               coming to, and one walking ahead of an agent keeps the agent's pace.
-//   passing     none: on a 2 m sidewalk there is no room for two walkers abreast, so a faster walker follows (speeds vary little)
+//   passing     on a 2 m sidewalk none: there is no room for two walkers abreast, so a faster walker follows (speeds vary little). On the
+//               wider grid's 3 and 4 m walks: two files, and a faster walker passes a slower one beside it (K2-WALK below)
 //   density     walkers per 100 m of sidewalk = PED.base + PED.perDemand × the district's street demand (the sim's DEMAND [day, night];
 //               CROWD for districts the sim has no street market in) × the kit's peds.density, ×2 in a Director rush
+// K2-WALK (2026-11-19) · THE WALK'S OWN WIDTH, AND FEWER WALKERS NEAR THE PLAYER (slime 11-19: "Let's use width I already have together
+// with 1 and see if that helps walkers"; 1 = fewer walkers near the player). Measured by tools/walkprobe.mjs (seeds 404–406, 120 s, a
+// mover walking against the flow down a downtown side street and an avenue, published as THE RUN publishes its player).
+//   the rings   stay one-way: walkers never meet each other head-on on a sidewalk (measured: none to fix there); what they met was a mover
+//               coming the other way on their own lane — the game's player — and on 3 / 4 m walks they kept to one line 1.8 / 2.4 m out
+//   two files   on a 3 or 4 m walk each walker keeps to its own file, ±0.55 m (+0.1 per metre over 3) from the lane, inside the side's
+//               clear strip (the room table): two walk abreast, a faster one changes file behind a slower one and passes it a body's width
+//               clear; the files close onto the lane 5 m before a corner (open 2.5 m after one), so the corners, kerbs and queues are single
+//               file as before. A dog walker keeps to the lane. PED.file; fileTarget, besideOK; step's following
+//   making way  for a mover on a 3 or 4 m walk (threatWide): seen 2.6 s ahead (the published 1.6 s, then straight on), the step aside that
+//               puts the walker's centre PED.clear (1.1) off the mover's line where they meet — the head is 1.0 m wide, so heads pass
+//               clear — on the side with the room for it over the stretch it walks till then, the side kept once taken; no room on the way
+//               but room where it stands: it steps aside there and waits; no room at all: as far as it can, and (if that is worth it) it
+//               stands. 2 m walks and crossings: as before (threatOf)
+//   thin        thin(x, z, r, f): fewer walkers near a point — within r m the crowd is kept at f of its number, back to all of it over the
+//               next 0.6 r (≥ 12 m); only through the numbers the crowd already keeps (each edge's target, the choice at a corner), so
+//               nobody leaves or arrives in view and the count is never raised elsewhere. thin(null) ends it. See THIN.
+// FOR THE RUN (hotkey-2 demo/stage/actors.js), what the game does:
+//   · call peds.sim.thin(player.x, player.z, 30, .4) every frame its player is on the street (cheap: nothing is redone until it has moved
+//     2 m), and peds.sim.thin(null) when it leaves the street. It takes hold as the walkers in view walk out of it (nobody is taken out in
+//     view): measured, the probe (120 s) walkers within 20 m of the mover 16.3 → 10.5 (side street), 15.6 → 9.6 (avenue), 40–80 m out
+//     182 → 172, 177 → 169, none arriving or leaving in its view; the live page moved by real drags and wheel turns (tools/walkinput.mjs)
+//     16.7 → 11.6 within 20 m over 60 s (only 15.5 → 12.7 over the first 24 s), 192 → 189 at 40–80 m, on-screen spawns and removals 0
+//   · the walkers' update costs more: the probe's step 0.34 → 0.50 ms (630 walkers, all near), the live page's peds update 1.57 → 2.04 ms
+//   · keep publishing its player as now (sim.movers: x, z, hx, hz, v, n, ft 0.2 … 1.6, fx; and its body on the map). Nothing new is needed
+//     for the crowd to make way by a body's width
+//   · on a 3 m walk the crowd alone can't always clear a player walking down the middle of the lane against the flow: the lane rests 1.8 m
+//     out, the facade side's clear strip ends ~2.4–2.7 m out and the kerb strip has lamps, trees and bins, so a walker's centre can't
+//     always get 1.1 m off it. A player that walks against the ring on the kerb side (the riders' line, movement.js MOVE.band: 0.3 × the
+//     walk's width from the curb, clear of the kerb things — the probe's --line kerb) leaves the walkers the facade half. That is the
+//     game's half (its walker brakes and steps round too; the probe's mover does neither, so what it counts is the crowd's half alone)
 // ANIMATION MERGE (2026-09-29) · the anim lab's walk (anim/: gait2.js, turn.js, idle.js; peds.js draws it with walk2.js)
 //   corner arcs  within ARC.r·tan(φ/2) of a corner node (≤ ARC.max) a walker leaves the lane's polyline for a quadratic Bézier through
 //                the node (turn.js cornerPoint's curve, laid on the lanes themselves: the arc's ends are lane points, so a lane that bends
@@ -60,6 +92,14 @@ export const PED = {
   // its way, stops short until it has passed — then steps back onto its lane. Never in a corner square (dodge falls to 0 within
   // dodgeNode m of a corner node), never on a kerb or a detour ramp. A walker without room data that side stays on its lane.
   yieldR: 1.05, yieldT: 1.6, dodge: .42, dodgeV: .9, dodgeBack: .45, dodgeA: 3, dodgeNode: 1.3, yieldOn: true,
+  // K2-WALK (2026-11-19) · on a 3 or 4 m walk a walker makes way for a mover by a body's width: centres `clear` m apart where they meet (the
+  // head is 1.0 m wide), seen up to yieldT2 s ahead (the published 1.6 s, then straight on) — see threatWide
+  clear: 1.1, yieldT2: 2.6, k2: true,   // (k2 false — with file.on false — is the crowd as it was before K2-walk: ?k2walk=0, the before/after clips)
+  // K2-WALK · TWO FILES on a 3 or 4 m walk: each walker keeps to its own file, half m (+ 0.1 per metre of walk over 3) either side of the
+  // lane (by id; a dog walker keeps to the lane), so two walk abreast and a faster one passes a slower one beside it; within merge m of the
+  // corner ahead (and fade m after the one behind) the files close back onto the lane — the corners, the kerbs and the queues are single
+  // file as before. fileV: m/s sideways settling into a file. See fileTarget.
+  file: { half: .55, merge: 5, fade: 2.5, fileV: .5, on: true },
   cornerT: 1.2, cornerR: 1.6,      // crowd hold: on a wider walk a corner a mover passes within cornerR m of in the next cornerT s is held for it (walkers along a side wait outside)
   roadWait: Infinity,              // transit sync: s a walker may stand in the road on a crossing, waiting for the corner, before it takes it — OFF in the page (no walker
                                    // stands there 10 s: measured); the node measuring tools (tools/transit-measure.mjs) set 2.5: with no block lanes (no kerb rows) their walkers jam at corners
@@ -83,6 +123,12 @@ export const CORNER = { kerb: .9, clear: .75, hurry: 1.45, brake: 2, beat: .45 }
 // (+ 0.6 s at its pace); stuck: s behind the same body before it squeezes by on the bare radii; reach: m it may step aside round someone
 // standing (inside the side's clear strip: a rider's step is PED.dodge); on: false — no map, as before
 export const GRID = { cell: 2, pad: .06, room: .3, look: 1.2, stuck: 6, reach: 1.2, on: true };
+// K3-IDLES (the elbow round) · TURNING TO TALK (talkCheck): one stop in `share`, once it has stood `still` s, looks for someone standing
+// r[0]–r[1] m away who has stood as long; both turn to face at `turn` rad/s (calm: the path's turn is ARC.turnRate) and talk (anim/idle.js 18), handing over every
+// swap[0]–swap[1] s, the hand-over eased over `ease` s; one let go turns back as calmly for `calm` s. r[0]: two heads (1.0 × 0.85 m)
+// turning to face 1.05 m apart (the kerb's files) meet; 1.25 m clears them
+export const TALK = { share: 3, r: [1.25, 1.8], still: 1, turn: 1.4, swap: [3.5, 7], ease: .6, calm: 2 };
+const POOL_NIGHT = [...IDLE_POOL, IDLE.cold, IDLE.cold];   // (K3-IDLES: what a walker picks from by night: the cold twice more)
 export const STEP = 1.0, FILES = [0, 1.05];   // (crowd pass: the kerb spot 0.2 m from the curb, 1.0 from the corner node — a walker passing the node clears a waiter's head by its own half-width + the waiter's half-depth; the second file a head's width + 5 cm beside the first)
    // at a detour corner (a dealing crew holds the corner square: engine.js detourCornersOf) walkers go round it this far out in the road
 // WALKERS-FIX ROUND (2026-09-28) · THE KERB-WAIT CLUMP. On DON'T WALK a corner fills up: file 0 at the kerb on the corner's line, then the
@@ -145,6 +191,16 @@ export function createPedSim({ night = false, seed = 0x9ed5, densityOf = () => 1
   let crowd = null, rush = null;
   const demandOf = d => (crowd && crowd[d] !== undefined ? crowd[d] : (CROWD[d] || [1, 1])[night ? 1 : 0]) * (rush?.dist === d ? rush.mult : 1);
   const per100 = E => E.off ? 0 : pedsPer100(demandOf(E.dist)) * densityOf(E.dist);
+  // K2-WALK (2026-11-19) · FEWER WALKERS NEAR ONE POINT (thin(x, z, r, f): THE RUN's player). Within r m of the point the crowd is kept at f
+  // of its usual number, easing back to all of it over the next THIN.ramp × r m (at least THIN.min m); an edge's share is the mean over five
+  // points along it. It reaches the crowd only through the numbers it already keeps: each edge's target (populate: the unseen walkers on an
+  // edge over its target leave, arrivals go only to edges short of theirs, out of view) and the walkers' choice at a corner (pickNext: a way
+  // on into the thin ring is chosen that much less). Nobody leaves or arrives in view (populateSeen's rules, unchanged); the crowd further
+  // off is as it was; the count is never raised anywhere to make up for it. thin(null) ends it.
+  let TH = null; const THIN = { ramp: .6, min: 12 };
+  const thinAt = (x, z) => { if (!TH) return 1; const d = Math.hypot(x - TH.x, z - TH.z), R = Math.max(THIN.min, TH.r * THIN.ramp); if (d <= TH.r) return TH.f; if (d >= TH.r + R) return 1; const q = (d - TH.r) / R; return TH.f + (1 - TH.f) * q * q * (3 - 2 * q); };
+  const thinOf = E => { if (!TH) return 1; if (E._thV === TH.v) return E._th; let a = 0; for (let k = 0; k < 5; k++) { const f = (k + .5) / 5; a += thinAt(E.a.x + (E.b.x - E.a.x) * f, E.a.z + (E.b.z - E.a.z) * f); } E._thV = TH.v; return E._th = a / 5; };
+  const per100t = E => per100(E) * thinOf(E);
 
   // ── where a walker is: along a side it follows the block's lane (c = metres from the curb), across a crossing a straight line
   // (fidelity pass: an edge keeps its slab and its lane side, re-read when a block's lanes arrive — where() runs for every walker every frame)
@@ -224,7 +280,7 @@ export function createPedSim({ night = false, seed = 0x9ed5, densityOf = () => 1
   // ── walkers
   const walkers = [], agents = []; let looks = 1, nextId = 1;
   // (walkers-fix: at a corner a crossing draws KERB.pull × the street demand more of the walkers: a busy district's walkers cross more)
-  const wOut = o => (per100(o) + .5) * (o.cross ? 1 + KERB.pull[o.busy ? 0 : 1] * demandOf(o.dist) : 1);
+  const wOut = o => (per100(o) + .5) * (o.cross ? 1 + KERB.pull[o.busy ? 0 : 1] * demandOf(o.dist) : 1) * (TH ? thinOf(o) : 1);   // (K2-walk: a way on into the thin ring less)
   const pickNext = E => { const outs = E.to.out.filter(o => !o.off); if (outs.length < 2) return outs[0] || null; let sum = 0; for (const o of outs) sum += wOut(o); let x = rnd() * sum; for (const o of outs) { x -= wOut(o); if (x <= 0) return o; } return outs[outs.length - 1]; };
   const dogOf = id => { const h = Math.imul(id ^ 0x5bd1e995, 0x27d4eb2d) >>> 0; return (h % 1000) / 1000 < PED.dogs ? (h >>> 10) % 20 : -1; };   // (by id: no draw from the rng, so the crowd itself doesn't change)
   // the edge lists' one invariant: w.k IS the walker's index in w.E.list, at every moment of a step (step() takes the walker ahead as
@@ -234,7 +290,7 @@ export function createPedSim({ night = false, seed = 0x9ed5, densityOf = () => 1
   // list's end, "reading 's'" at the lead lookup, and the throw stopped the frame loop. One leaving made the walker behind lead itself.)
   const enlist = (E, w) => { w.k = E.list.push(w) - 1; busy.add(E); };
   const unlist = w => { const L = w.E?.list, q = L ? L.indexOf(w) : -1; if (q < 0) return; L.splice(q, 1); for (let i = q; i < L.length; i++) L[i].k = i; };
-  function spawn(E, s, o = {}) { const [v0, v1] = PED.speed, id = nextId++, w = { id, born: t, E, s, v: o.v ?? (v0 + rnd() * (v1 - v0)), vc: 0, look: o.look ?? ((rnd() * looks) | 0), ph: rnd() * 6.28, next: null, k: 0, agent: !!o.agent, route: o.route || null, held: 0, p: [0, 0, 0, 0], dog: o.agent ? -1 : dogOf(id), off: false, halt: false, goal: null, fix: null, arrived: false, lat: 0, kx: 0, kt: 0, kv: 0, pE: null, blk: null, sdT: -1e9, sdW: 0, sdX: 0, sdZ: 0, sdR: 0, bsO: -1, bsT: -1e9, bsS: 0, _bsE: null, _bsF: -1, _bsS0: 0, _bsV: 1e9, _bsH: 1e9, dg: 0, dgv: 0, dgT: -1e9, dgW: 0, gone: false, aid: undefined, mv: null, tq: null, lift: 0, stagePose: null, npc: undefined, tier: undefined, dn: 0, seenT: undefined, outF: undefined, onF: undefined, drawnF: undefined, aF: undefined, g: undefined, gx: 0, gz: 0, fT: undefined, yawS: undefined, omega: 0, dyaw: 0, nIdle: 0, jt: undefined, jx: 0, jz: 0, ko: undefined, _arc: undefined, propKind: undefined, propF: undefined, propSlot: undefined, propSlots: undefined, bpDone: undefined, gore: undefined, lieQ: undefined, cleaner: undefined, hide: undefined };   // (crowd grid: every field a walker will ever carry — the grid's, the drawing's (peds.js), the agents' and the stage's — from birth, so its shape never changes: fields added mid-life made the step's reads of every walker megamorphic, and the crowd's frame cost nearly doubled)
+  function spawn(E, s, o = {}) { const [v0, v1] = PED.speed, id = nextId++, w = { id, born: t, E, s, v: o.v ?? (v0 + rnd() * (v1 - v0)), vc: 0, look: o.look ?? ((rnd() * looks) | 0), ph: rnd() * 6.28, next: null, k: 0, agent: !!o.agent, route: o.route || null, held: 0, p: [0, 0, 0, 0], dog: o.agent ? -1 : dogOf(id), off: false, halt: false, goal: null, fix: null, arrived: false, lat: 0, kx: 0, kt: 0, kv: 0, pE: null, blk: null, sdT: -1e9, sdW: 0, sdX: 0, sdZ: 0, sdR: 0, bsO: -1, bsT: -1e9, bsS: 0, _bsE: null, _bsF: -1, _bsS0: 0, _bsV: 1e9, _bsH: 1e9, dg: 0, dgv: 0, dgT: -1e9, dgW: 0, fo: 0, fr0: 0, fr1: 0, frF: -1, gone: false, aid: undefined, mv: null, tq: null, lift: 0, stagePose: null, npc: undefined, tier: undefined, dn: 0, seenT: undefined, outF: undefined, onF: undefined, drawnF: undefined, aF: undefined, g: undefined, gx: 0, gz: 0, fT: undefined, yawS: undefined, omega: 0, dyaw: 0, nIdle: 0, jt: undefined, jx: 0, jz: 0, ko: undefined, _arc: undefined, propKind: undefined, propF: undefined, propSlot: undefined, propSlots: undefined, bpDone: undefined, gore: undefined, lieQ: undefined, cleaner: undefined, hide: undefined };   // (crowd grid: every field a walker will ever carry — the grid's, the drawing's (peds.js), the agents' and the stage's — from birth, so its shape never changes: fields added mid-life made the step's reads of every walker megamorphic, and the crowd's frame cost nearly doubled)
     w.vc = w.v; w.next = w.route ? w.route.shift() || null : pickNext(E); walkers.push(w); enlist(E, w); where(w); return w; }
   const clearAt = (E, s) => !E.cross && s > PED.node + .4 && s < E.len - PED.node - .4 && !E.list.some(o => Math.abs(o.s - s) < PED.gap + .6);   // spawn with a gap, never in a corner (traffic pass: nor out in the road)
   const generic = () => walkers.length - agents.length;
@@ -247,12 +303,12 @@ export function createPedSim({ night = false, seed = 0x9ed5, densityOf = () => 1
   function populate(focus, first, o = {}) {
     if (o.seen) return populateSeen(focus, first, o);
     const near = [], R2 = PED.radius * PED.radius; let target = 0;
-    for (const E of edges) { const mx = (E.a.x + E.b.x) / 2 - focus.x, mz = (E.a.z + E.b.z) / 2 - focus.z; if (mx * mx + mz * mz < R2) { near.push(E); target += per100(E) * len0(E) / 100; } }   // (crowd hold: today's length)
+    for (const E of edges) { const mx = (E.a.x + E.b.x) / 2 - focus.x, mz = (E.a.z + E.b.z) / 2 - focus.z; if (mx * mx + mz * mz < R2) { near.push(E); target += per100t(E) * len0(E) / 100; } }   // (crowd hold: today's length; K2-walk: thinned near the thin point)
     const want = Math.round(target);
     for (let k = walkers.length - 1; k >= 0; k--) { const w = walkers[k]; if (w.agent) continue; where(w); if (Math.hypot(w.p[0] - focus.x, w.p[2] - focus.z) > PED.radius * 1.12) drop(w); }
     const outer = near.filter(E => Math.hypot((E.a.x + E.b.x) / 2 - focus.x, (E.a.z + E.b.z) / 2 - focus.z) > PED.radius * .78), pool = first || !outer.length ? near : outer;
-    const wsum = pool.reduce((s, E) => s + per100(E) * len0(E), 0); let guard = 0;
-    while (wsum > 0 && generic() < want && guard++ < 6000) { let x = rnd() * wsum, E = pool[0]; for (const e of pool) { x -= per100(e) * len0(e); if (x <= 0) { E = e; break; } }
+    const wsum = pool.reduce((s, E) => s + per100t(E) * len0(E), 0); let guard = 0;
+    while (wsum > 0 && generic() < want && guard++ < 6000) { let x = rnd() * wsum, E = pool[0]; for (const e of pool) { x -= per100t(e) * len0(e); if (x <= 0) { E = e; break; } }
       const s = rnd() * E.len; if (clearAt(E, s)) spawn(E, s); }
     if (generic() > want * 1.25) for (let k = walkers.length - 1; k >= 0 && generic() > want * 1.1; k--) if (!walkers[k].agent) drop(walkers[k]);
     return want;
@@ -261,7 +317,7 @@ export function createPedSim({ night = false, seed = 0x9ed5, densityOf = () => 1
     const r0 = PED.radius, cam = o.cam, seen = o.seen, fx = focus.x, fz = focus.z;
     const inR = (x, z, pad) => { const dx = x - fx, dz = z - fz; if (dx * dx + dz * dz < (r0 + pad) ** 2) return true; if (!cam || cam[2] <= 0) return false; const ex = x - cam[0], ez = z - cam[1]; return ex * ex + ez * ez < (cam[2] + pad) ** 2; };
     const near = [], tgt = []; let target = 0;
-    for (const E of edges) { if (!inR((E.a.x + E.b.x) / 2, (E.a.z + E.b.z) / 2, 0)) continue; const n = per100(E) * len0(E) / 100; if (n <= 0) continue; near.push(E); tgt.push(n); target += n; }
+    for (const E of edges) { if (!inR((E.a.x + E.b.x) / 2, (E.a.z + E.b.z) / 2, 0)) continue; const n = per100(E) * len0(E) / 100; if (n <= 0) continue; near.push(E); const nt = n * thinOf(E); tgt.push(nt); target += nt; }   // (K2-walk: thinned near the thin point)
     const want = Math.round(target), unseen = w => first || (t - (w.seenT ?? -1e9) >= PED.grace && !seen(w.p, false)), mine = E => { let n = 0; for (const w of E.list) if (!w.agent) n++; return n; };
     for (let k = walkers.length - 1; k >= 0; k--) { const w = walkers[k]; if (w.agent) continue; where(w); if (!inR(w.p[0], w.p[2], 14) && unseen(w)) drop(w); }   // out of both discs, and unseen for a while
     // fidelity pass (zoom round) · every edge is kept at ITS OWN density: arrivals go to the edges short of theirs (out of view), and when
@@ -333,7 +389,7 @@ export function createPedSim({ night = false, seed = 0x9ed5, densityOf = () => 1
   function goAgent(w, way, goal) { w.next = way[0] || null; w.route = way.slice(1); w.goal = goal ? { E: goal.E, s: goal.s, armed: w.E === goal.E && w.s <= goal.s + 1e-6 } : null; w.halt = false; w.fix = null; w.arrived = false; }
   function putAgent({ id, look = 0, E = null, s = 0, way = [], goal = null, v = 1.25, fix = null, check = true }) {
     if (!E && !fix) return null; if (E && check && !laneClear(E, s)) return null;
-    const w = { id: nextId++, E, s, v, vc: 0, look, ph: 0, next: null, k: 0, agent: true, route: [], held: 0, p: [0, 0, 0, 0], dog: -1, aid: id, off: !E, halt: false, goal: null, fix: fix ? fix.slice() : null, arrived: false, lat: 0, kx: 0, kt: 0, kv: 0, pE: null, blk: null, sdT: -1e9, sdW: 0, sdX: 0, sdZ: 0, sdR: 0, bsO: -1, bsT: -1e9, bsS: 0, _bsE: null, _bsF: -1, _bsS0: 0, _bsV: 1e9, _bsH: 1e9, dg: 0, dgv: 0, dgT: -1e9, dgW: 0, gone: false, mv: null, tq: null, lift: 0, stagePose: null, npc: undefined, tier: undefined, dn: 0, seenT: undefined, outF: undefined, onF: undefined, drawnF: undefined, aF: undefined, g: undefined, gx: 0, gz: 0, fT: undefined, yawS: undefined, omega: 0, dyaw: 0, nIdle: 0, jt: undefined, jx: 0, jz: 0, ko: undefined, _arc: undefined, propKind: undefined, propF: undefined, propSlot: undefined, propSlots: undefined, bpDone: undefined, gore: undefined, lieQ: undefined, cleaner: undefined, hide: undefined };
+    const w = { id: nextId++, E, s, v, vc: 0, look, ph: 0, next: null, k: 0, agent: true, route: [], held: 0, p: [0, 0, 0, 0], dog: -1, aid: id, off: !E, halt: false, goal: null, fix: fix ? fix.slice() : null, arrived: false, lat: 0, kx: 0, kt: 0, kv: 0, pE: null, blk: null, sdT: -1e9, sdW: 0, sdX: 0, sdZ: 0, sdR: 0, bsO: -1, bsT: -1e9, bsS: 0, _bsE: null, _bsF: -1, _bsS0: 0, _bsV: 1e9, _bsH: 1e9, dg: 0, dgv: 0, dgT: -1e9, dgW: 0, fo: 0, fr0: 0, fr1: 0, frF: -1, gone: false, mv: null, tq: null, lift: 0, stagePose: null, npc: undefined, tier: undefined, dn: 0, seenT: undefined, outF: undefined, onF: undefined, drawnF: undefined, aF: undefined, g: undefined, gx: 0, gz: 0, fT: undefined, yawS: undefined, omega: 0, dyaw: 0, nIdle: 0, jt: undefined, jx: 0, jz: 0, ko: undefined, _arc: undefined, propKind: undefined, propF: undefined, propSlot: undefined, propSlots: undefined, bpDone: undefined, gore: undefined, lieQ: undefined, cleaner: undefined, hide: undefined };
     walkers.push(w); agents.push(w); if (E) { enlist(E, w); goAgent(w, way, goal); w.fix = fix ? fix.slice() : null; } where(w); return w; }
   function offAgent(w, fix) { unlist(w); w.E = null; w.pE = null; w.off = true; w.halt = false; w.goal = null; w.next = null; w.route = []; w.fix = fix.slice(); w.vc = 0; }
   function onAgent(w, E, s) { w.E = E; w.s = s; w.pE = null; enlist(E, w); w.off = false; w.halt = true; w.goal = null; }
@@ -430,13 +486,20 @@ export function createPedSim({ night = false, seed = 0x9ed5, densityOf = () => 1
     const R2 = PED.cornerR * PED.cornerR;
     for (const M of movers) for (let k = -1; k < M.n; k++) { if (k >= 0 && M.ft[k] > PED.cornerT) break; const x = k < 0 ? M.x : M.fx[2 * k], z = k < 0 ? M.z : M.fx[2 * k + 1], cx = Math.floor(x / 2), cz = Math.floor(z / 2);
       for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const n of NG.get((cx + a + 8192) * 16384 + (cz + b + 8192)) || []) if ((n.x - x) ** 2 + (n.z - z) ** 2 < R2) { n.mvUntil = t + .25; n.mvM = M; } } }
-  function moverGrid() { MG.clear(); for (const M of movers) for (let k = -1; k < M.n; k++) { const x = k < 0 ? M.x : M.fx[2 * k], z = k < 0 ? M.z : M.fx[2 * k + 1], cx = Math.floor(x / 2), cz = Math.floor(z / 2);
+  // K2-WALK · a mover's place at its q-th sample: −1 now, 0 … n − 1 its published path (M.ft), then on past its end in a straight line at
+  // the pace of its last piece, every 0.2 s up to PED.yieldT2 → MP [x, z, t]
+  const MP = [0, 0, 0];
+  function mvAt(M, q) { if (q < 0) { MP[0] = M.x; MP[1] = M.z; MP[2] = 0; return MP; } if (q < M.n) { MP[0] = M.fx[2 * q]; MP[1] = M.fx[2 * q + 1]; MP[2] = M.ft[q]; return MP; }
+    const n = M.n, ax = n > 1 ? M.fx[2 * n - 4] : M.x, az = n > 1 ? M.fx[2 * n - 3] : M.z, at = n > 1 ? M.ft[n - 2] : 0, bx = M.fx[2 * n - 2], bz = M.fx[2 * n - 1], bt = M.ft[n - 1], e = (q - n + 1) * .2 / Math.max(.05, bt - at);
+    MP[0] = bx + (bx - ax) * e; MP[1] = bz + (bz - az) * e; MP[2] = bt + (q - n + 1) * .2; return MP; }
+  const mvN = M => M.n > 0 ? M.n + Math.max(0, Math.floor((PED.yieldT2 - M.ft[M.n - 1]) / .2 + 1e-6)) : 0;
+  function moverGrid() { MG.clear(); for (const M of movers) for (let k = -1, kn = mvN(M); k < kn; k++) { mvAt(M, k); const x = MP[0], z = MP[1], cx = Math.floor(x / 2), cz = Math.floor(z / 2);
       for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const key = (cx + a + 8192) * 16384 + (cz + b + 8192); let L = MG.get(key); if (!L) MG.set(key, L = []); if (L[L.length - 1] !== M) L.push(M); } } }
   // how far a walker may step aside here, along its axis: out [min, max] ([0, 0]: not here). Never in a corner square (the posts, the
   // turning lines), on a detour ramp, at the kerb, in the kerb-wait row or with a dog; on a sidewalk only inside the side's clear strip
   // (the room table, looked at from 0.3 m behind to 1.2 m ahead); on a zebra, out in the road, half a metre either way
   // (reach: crowd grid — a step round someone standing may go wider than a rider's, up to it m)
-  function dodgeRoom(w, E, out, reach = 0) { out[0] = out[1] = 0;
+  function dodgeRoom(w, E, out, reach = 0, ahead = 1.2) { out[0] = out[1] = 0;
     // (crowd hold: on a wider walk a side by a dealing crew's corner makes way too, clear of its ramp into the road — r1 + 1.4 m from the corner)
     const det = E.from.detour || E.to.detour; if (det && (E.cross || !(E.wk > 1))) return out;
     const dNode = Math.min(w.s - (E.from.detour ? E.from.detour.r1 + 1.4 : 0), E.len - w.s - (E.to.detour ? E.to.detour.r1 + 1.4 : 0)) - PED.dodgeNode; if (dNode <= 0) return out;
@@ -444,7 +507,8 @@ export function createPedSim({ night = false, seed = 0x9ed5, densityOf = () => 1
     const u = sideU(E, w.s), du = sideDir(E), m = Math.min(Math.max(PED.dodge * (E.wk || 1), reach), dNode);
     if (E.wk > 1) {   // (crowd hold, a wider walk: sample by sample, round the lane's own place THERE — it bends round things, and a step aside held from
       // where it was carried a walker into a shopfront's stand)
-      let lo = -9, hi = 9; for (let q = 0; q <= 8; q++) { const u2 = u + du * (-.3 + q * 1.5 / 8), r2 = roomSpan(E, u2, u2, RS); if (!r2) return out; const c2 = laneC(E, u2);
+      // (K2-walk: over `ahead` m — a walker making way for a mover, as far as where it meets it and a metre past)
+      const nq = Math.max(8, Math.ceil((ahead + .3) / .2)); let lo = -9, hi = 9; for (let q = 0; q <= nq; q++) { const u2 = u + du * Math.min(E.len - w.s, -.3 + q * (ahead + .3) / nq), r2 = roomSpan(E, u2, u2, RS); if (!r2) return out; const c2 = laneC(E, u2);
         if (r2[0] + .02 - c2 > lo) lo = r2[0] + .02 - c2; if (r2[1] - .02 - c2 < hi) hi = r2[1] - .02 - c2; }
       out[0] = Math.min(0, Math.max(-m, lo)); out[1] = Math.max(0, Math.min(m, hi)); return out; }
     const r = roomSpan(E, u - du * .3, u + du * 1.2, RS); if (!r) return out; const c = laneC(E, u);
@@ -452,7 +516,8 @@ export function createPedSim({ night = false, seed = 0x9ed5, densityOf = () => 1
   // the mover nearest to running into a walker (its lane point: the dodge taken off) in the next PED.yieldT s → the walker's response:
   // along its lane (overtaken or met head-on) it steps aside, away from the mover's line; across it, it stops short until the mover is by
   const YT = { want: 0, stop: false };   // (crowd grid: a rider held up and standing — M.v < 0.3 — is not one coming: it is a body on the map, bodyStep's to step round; yielding to it as to one coming held each in the other's way)
-  function threatOf(w, E) { YT.want = 0; YT.stop = false; const L = MG.get(mcell(w.p[0], w.p[2])); if (!L) return false; axisOf(E, AX);
+  function threatOf(w, E) { YT.want = 0; YT.stop = false; YT.wide = false; const L = MG.get(mcell(w.p[0], w.p[2])); if (!L) return false; axisOf(E, AX);
+    if (PED.k2 && E.wk > 1 && !E.cross && !E.joint) return threatWide(w, E, L);   // (K2-walk: on a 3 or 4 m walk, a body's width clear)
     const bx = w.p[0] - AX[0] * (w.dg || 0), bz = w.p[2] - AX[1] * (w.dg || 0), hx = Math.sin(w.p[3]) * w.vc, hz = Math.cos(w.p[3]) * w.vc; let bM = null, bd = PED.yieldR * PED.yieldR, bk = -1;
     for (const M of L) { if (M.w === w || (GRID.on && (M.v || 0) < .3)) continue; for (let k = -1; k < M.n; k++) { const t = k < 0 ? 0 : M.ft[k]; if (t > PED.yieldT) break; const dx = bx + hx * t - (k < 0 ? M.x : M.fx[2 * k]), dz = bz + hz * t - (k < 0 ? M.z : M.fx[2 * k + 1]), d = dx * dx + dz * dz; if (d < bd) { bd = d; bM = M; bk = k; } } }
     if (!bM) return false; const M = bM, t = bk < 0 ? 0 : M.ft[bk], px = bk < 0 ? M.x : M.fx[2 * bk], pz = bk < 0 ? M.z : M.fx[2 * bk + 1];
@@ -460,16 +525,60 @@ export function createPedSim({ night = false, seed = 0x9ed5, densityOf = () => 1
     const lat = (bx + hx * t - px) * -mz + (bz + hz * t - pz) * mx, pa = -mz * AX[0] + mx * AX[1];   // (lat: the walker off the mover's line, + on its left; pa: one metre along the walker's axis moves it pa across that line)
     if (Math.abs(pa) < .4) { const ahead = (px - bx) * Math.sin(w.p[3]) + (pz - bz) * Math.cos(w.p[3]); if (ahead > -.2 && t > .05) YT.stop = true; return true; }
     const sg = Math.abs(lat) > .04 ? Math.sign(lat) * Math.sign(pa) : 0; YT.want = sg * PED.dodge * (E.wk || 1); YT.side0 = sg === 0; return true; }
+  // K2-WALK (2026-11-19) · A BODY'S WIDTH CLEAR, on a 3 or 4 m walk (E.wk > 1). The mover nearest to running into the walker within
+  // PED.yieldT2 s (its published path, then straight on at its last piece's pace) closer than PED.clear + 0.15: the walker takes the step
+  // aside that puts its lane point PED.clear off the mover's line where they meet (the head is 1.0 m wide: centres 1.1 apart pass clear),
+  // on the side that needs the smaller step and has the room — the room over the stretch it walks until they have met and a metre past
+  // (dodgeRoom ahead), anywhere across the walk's clear strip. Once a side is taken it keeps it while the meeting lasts (the old step
+  // chose afresh each frame and, half-way out, crossed back over the mover's line). Where neither side has a body's width it stands aside
+  // as far as it can and stops (a body standing: the game's mover steps round it, as it does round anyone standing — YT.short). A step
+  // it can't make before they meet slows it down (YT.tm: s to the meeting).
+  const RH = [0, 0];
+  function threatWide(w, E, L) { YT.here = false;
+    const bx = w.p[0] - AX[0] * (w.dg || 0), bz = w.p[2] - AX[1] * (w.dg || 0), hx = Math.sin(w.p[3]) * w.vc, hz = Math.cos(w.p[3]) * w.vc, r = PED.clear + .15; let bM = null, bd = r * r, bk = -1;
+    for (const M of L) { if (M.w === w || (GRID.on && (M.v || 0) < .3)) continue; for (let k = -1, kn = mvN(M); k < kn; k++) { mvAt(M, k); const t = MP[2]; if (t > PED.yieldT2) break; const dx = bx + hx * t - MP[0], dz = bz + hz * t - MP[1], d = dx * dx + dz * dz; if (d < bd) { bd = d; bM = M; bk = k; } } }
+    if (!bM) return false; const M = bM; mvAt(M, bk); const t = MP[2], px = MP[0], pz = MP[1];
+    let mx = M.hx, mz = M.hz; mvAt(M, bk + 1); { const ex = MP[0] - px, ez = MP[1] - pz, l = Math.hypot(ex, ez); if (l > .05) { mx = ex / l; mz = ez / l; } }
+    const lat = (bx + hx * t - px) * -mz + (bz + hz * t - pz) * mx, pa = -mz * AX[0] + mx * AX[1];
+    if (Math.abs(pa) < .4) { const ahead = (px - bx) * Math.sin(w.p[3]) + (pz - bz) * Math.cos(w.p[3]); if (ahead > -.2 && t > .05) YT.stop = true; return true; }
+    // the two steps that clear it (+: to the mover's left, −: its right), in metres along the walker's axis, and the room for them
+    const R = dodgeRoom(w, E, RR, E.sw, w.vc * t + 1), a = (PED.clear - lat) / pa, b = (-PED.clear - lat) / pa, okA = a >= R[0] - 1e-3 && a <= R[1] + 1e-3, okB = b >= R[0] - 1e-3 && b <= R[1] + 1e-3;
+    const keep = t - (w.dgT ?? -1e9) < .5 && w.dgW ? Math.sign(w.dgW) : 0;   // (the side it took: kept)
+    let tg; if (okA && okB) tg = keep ? (Math.sign(a) === keep || !a ? a : Math.sign(b) === keep ? b : Math.abs(a) <= Math.abs(b) ? a : b) : Math.abs(a) <= Math.abs(b) ? a : b; else if (okA) tg = a; else if (okB) tg = b;
+    else if (dodgeRoom(w, E, RH, E.sw, .6) && ((a >= RH[0] - 1e-3 && a <= RH[1] + 1e-3) || (b >= RH[0] - 1e-3 && b <= RH[1] + 1e-3))) {   // (no room on its way to where they'd meet, but room here: it steps aside here and waits there)
+      const oa = a >= RH[0] - 1e-3 && a <= RH[1] + 1e-3, ob = b >= RH[0] - 1e-3 && b <= RH[1] + 1e-3; tg = oa && ob ? (keep ? (Math.sign(a) === keep ? a : b) : Math.abs(a) <= Math.abs(b) ? a : b) : oa ? a : b; YT.short = true; YT.here = true; }
+    else { const ca = Math.max(R[0], Math.min(R[1], a)), cb = Math.max(R[0], Math.min(R[1], b)), ga = Math.abs(lat + pa * ca), gb = Math.abs(lat + pa * cb);   // (no room to clear: as far out as it can, and it stands)
+      tg = keep && (keep === Math.sign(ca) ? ga >= gb - .1 : !(keep === Math.sign(cb) && gb >= ga - .1)) ? (keep === Math.sign(ca) ? ca : cb) : ga >= gb ? ca : cb; YT.short = Math.max(ga, gb) - Math.abs(lat) > .3; }   // (… unless that is next to nothing: standing on its lane would only hold it in the mover's way longer)
+    YT.wide = true; YT.want = tg; YT.tm = t; YT.side0 = false; return true; }
+  // K2-WALK · TWO FILES (PED.file). The file a walker keeps to on a wider walk, as a step aside it rests in (w.dg, m along its axis from the
+  // lane: the dodge's own machinery carries it, inside the side's clear strip — dodgeRoom, looked at every third frame, w.fr0 / fr1): w.fo
+  // its file (±1, by id; flipped to pass, see step), 0 off a wide side, near a corner, for an agent or a dog walker. Closing onto the lane
+  // it never moves in on a walker beside it (within PED.gap along, closer than PED.clear across): it holds its line until that one is by.
+  function fileTarget(w, E, frame) { const F = PED.file; if (!F.on || !(E.wk > 1) || E.cross || E.joint || w.agent || w.dog >= 0 || w.kx || w.halt) return 0;
+    if (!w.fo) w.fo = (Math.imul(w.id, 0x9e3779b1) >>> 16) & 1 ? 1 : -1;
+    const dA = w.s - F.fade, dB = E.len - w.s - F.merge, e = Math.min(dA, dB); if (e <= -F.fade) return 0; const f = e >= 0 ? 1 : (q => q * q * (3 - 2 * q))(1 + e / F.fade);
+    if (frame || w.frF < 0) { dodgeRoom(w, E, RF, E.sw, 1.2); w.fr0 = RF[0]; w.fr1 = RF[1]; w.frF = sf; }
+    let tg = Math.max(w.fr0, Math.min(w.fr1, w.fo * (F.half + .1 * Math.max(0, E.sw - 3)) * f)); const dg = w.dg || 0;
+    if (Math.abs(tg) < Math.abs(dg) - 1e-3 || Math.sign(tg) !== Math.sign(dg)) for (let q = Math.max(0, w.k - 3); q < Math.min(E.list.length, w.k + 4); q++) { const o = E.list[q];   // (closing in: not on someone beside it)
+      if (o !== w && Math.abs(o.s - w.s) < PED.gap && Math.abs((o.dg || 0) - dg) >= .3 && Math.abs((o.dg || 0) - tg) < PED.clear) { tg = dg; break; } }
+    return tg; }
+  const RF = [0, 0];
+  // may w walk on beside o (both on wide side E, o ahead of it)? Both well clear of the corner ahead, o walking (one standing is a queue: w
+  // waits behind it), and a body's width apart across the walk — PED.clear less 5 cm
+  const besideOK = (w, o, E) => PED.file.on && E.wk > 1 && !E.cross && !E.joint && E.len - w.s > PED.file.merge && (o.vc || 0) > .3 && !o.halt && Math.abs((w.dg || 0) - (o.dg || 0)) >= PED.clear - .05;
   // one step of a walker's dodge (w.dg, m along its axis) → the speed it may walk at this step
-  function yieldStep(w, E, dt, v) { let tg = 0, side0 = false;
+  function yieldStep(w, E, dt, v) { let tg = 0, side0 = false; YT.short = false;
     const th = movers.length > 0 && threatOf(w, E), hold = !th && w.dgT !== undefined && t - w.dgT < .35;   // (it holds its step a moment after the mover is by)
     const sd = !th && t - w.sdT < .3;   // (crowd grid: stepping round someone standing in its way — bodyStep)
-    if (!th && !hold && !sd && !w.dg && !w.dgv) return v;   // (nobody coming and on its lane: nothing to do — the common case, kept cheap)
-    const R = dodgeRoom(w, E, RR, sd ? GRID.reach : 0);
-    if (th) { w.dgT = t; if (YT.stop && !(E.cross && w.s > STEP + .01 && w.s < E.len - 1)) v = 0;   // (crowd grid: out in the road it walks on — the rider waits for it)
-      side0 = YT.side0; tg = side0 ? (R[1] >= -R[0] ? R[1] : R[0]) : YT.want; w.dgW = tg; } else if (sd) tg = w.sdW; else if (hold) tg = w.dgW || 0;
+    const ft = !th && !hold && !sd ? fileTarget(w, E, (w.id + sf) % 3 === 0) : 0;   // (K2-walk: its file on a wider walk)
+    if (!th && !hold && !sd && !ft && !w.dg && !w.dgv) return v;   // (nobody coming and on its lane: nothing to do — the common case, kept cheap)
+    const wide = PED.k2 && E.wk > 1 && !E.cross && !E.joint, R = wide && !th && !hold && !sd && w.frF >= 0 && sf - w.frF < 4 ? (RR[0] = w.fr0, RR[1] = w.fr1, RR) : dodgeRoom(w, E, RR, sd ? GRID.reach : wide ? E.sw : 0);   // (K2-walk: on a wider walk its step aside may go as far as the clear strip lets it; in its file, the room fileTarget looked at)
+    if (th && YT.wide) { w.dgT = t; tg = YT.want; w.dgW = tg; const gap = Math.abs(tg - (w.dg || 0)), need = gap / PED.dodgeV + .2;   // (K2-walk: a body's width clear)
+      if (YT.short && (YT.here || YT.tm < 1.6)) v = 0; else if (gap > .05 && need > YT.tm) v = Math.min(v, Math.max(.25, v * YT.tm / need)); }
+    else if (th) { w.dgT = t; if (YT.stop && !(E.cross && w.s > STEP + .01 && w.s < E.len - 1)) v = 0;   // (crowd grid: out in the road it walks on — the rider waits for it)
+      side0 = YT.side0; tg = side0 ? (R[1] >= -R[0] ? R[1] : R[0]) : YT.want; w.dgW = tg; } else if (sd) tg = w.sdW; else if (hold) tg = w.dgW || 0; else tg = ft;
     tg = Math.max(R[0], Math.min(R[1], tg)); const dg = w.dg || 0; if (!dg && !tg && !w.dgv) return v;
-    const out = dg < R[0] - 1e-3 || dg > R[1] + 1e-3, vm = out ? 1.5 : tg ? PED.dodgeV : PED.dodgeBack, vd = Math.max(-vm, Math.min(vm, (tg - dg) * 5)), a = (out ? 6 : PED.dodgeA) * dt;
+    const out = dg < R[0] - 1e-3 || dg > R[1] + 1e-3, vm = out ? 1.5 : ft && tg ? PED.file.fileV : tg ? PED.dodgeV : PED.dodgeBack, vd = Math.max(-vm, Math.min(vm, (tg - dg) * 5)), a = (out ? 6 : PED.dodgeA) * dt;
     if (dg) v = Math.min(v, Math.max(.15, (E.len - w.s) / (Math.abs(dg) / 1.5 + .1)));   // (crowd grid: back on its lane by the corner — the step aside is dropped there, and one still out walked into the corner with a jump)
     w.dgv = (w.dgv || 0) + Math.max(-a, Math.min(a, vd - (w.dgv || 0))); let n = dg + w.dgv * dt;
     if ((tg - dg) * (tg - n) < 0) { n = tg; w.dgv = 0; } if (Math.abs(n) < 1e-3 && !tg) { n = 0; w.dgv = 0; } w.dg = n; return v; }
@@ -559,7 +668,15 @@ export function createPedSim({ night = false, seed = 0x9ed5, densityOf = () => 1
       else if (E.cross && w.s > STEP + .01 && !walkOK(E)) v = Math.max(v, CORNER.hurry);   // (crowd grid: out in the road on the flashing hand, it hurries off)   // (a dog owner stops a little short: its dog at the kerb, itself clear of the corner — walkers-fix: and nobody slows to a crawl in the corner's first 0.65 m, where the next sidewalk's walkers pass once its lock has run out)
       if (act) {
         if (E.cross) { const la = w.lat || 0, lk = w.kx || 0; for (let q = w.k - 1; q >= 0; q--) { const o = E.list[q]; if (((o.lat || 0) === la && Math.abs((o.kx || 0) - lk) < KERB.line) || o.s > E.len - KERB.merge || w.s > E.len - KERB.merge) { lead = o; gap = o.s - w.s; break; } } }   // (the files merge into one before the far kerb)   // (on a crossing: the walker ahead in its own file — walkers-fix: by file, not by where the ramp has it: the second file stepping out past the first's kerb spot stalled at the corner node behind it)
-        else if (w.k > 0) { lead = E.list[w.k - 1]; gap = lead.s - w.s; }
+        else if (w.k > 0) { lead = E.list[w.k - 1];
+          // (K2-walk · two files: someone ahead in the other file is beside, not in its way — the first one ahead that is, it follows; and
+          // behind a slower one in its own file, with the other file clear round it, it changes file to pass)
+          if (E.wk > 1 && PED.file.on && !w.agent) { lead = null; for (let q = w.k - 1; q >= 0; q--) { const o = E.list[q]; if (!besideOK(w, o, E)) { lead = o; break; } }
+            if (lead && w.fo && w.dog < 0 && lead.s - w.s < PED.follow && (lead.vc || 0) > .3 && (lead.vc || 0) < w.v - .08 && E.len - w.s > PED.file.merge + 4 && w.s > PED.file.fade + 1 && Math.abs((lead.dg || 0) - (w.dg || 0)) < .5) {
+              const to = -w.fo * (PED.file.half + .1 * Math.max(0, E.sw - 3)); let free = (to > 0 ? w.fr1 : -w.fr0) >= Math.abs(to) - .05;
+              for (let q = Math.max(0, w.k - 4); free && q < Math.min(E.list.length, w.k + 5); q++) { const o = E.list[q]; if (o !== w && o !== lead && Math.abs(o.s - w.s) < PED.gap + 1.2 && Math.abs((o.dg || 0) - to) < PED.clear) free = false; }
+              if (free) w.fo = -w.fo; } }
+          gap = lead ? lead.s - w.s : 1e9; }
         if (!lead) for (const o of E.to.out) { const L = o.list; if (!L.length) continue;   // (the last walker on every way on from the corner ahead: one that just turned the other way is still in front of it)
           const q = o.cross && o === w.next ? entryLead(o) : L[L.length - 1]; if (!q) continue; if (o !== w.next && (q.s > .78 || (o.cross && latAt(q) >= .6))) continue;   // (walkers-fix: nor someone standing in a crossing's second file, 0.7 m off the corner's lines — a dog owner stopped short there by the flashing hand held a walker in the corner, and the walkers coming off the crossing behind it stood in the road)   // (traffic pass: into a crossing, the rear of the file it will take; someone standing well out on another way is not in its way — crowd grid: a dog owner at its spot, 0.8 m out, too: one stood there through a whole red and the zebra's walkers behind the one it held stood in the road)
           const g = E.len - w.s + q.s; if (g < gap) { gap = g; lead = q; } }
@@ -600,7 +717,7 @@ export function createPedSim({ night = false, seed = 0x9ed5, densityOf = () => 1
           if (((w.id + sf) & 1) === 0 || w._bsE !== E || w._bsF !== sf - 1) { v = bodyStep(w, E, dt, v); w._bsE = E; w._bsF = sf; w._bsS0 = w.s; w._bsV = BSV; w._bsH = BSH; }
           else { w._bsF = sf; v = Math.min(v, w._bsV); BSH = w._bsH < 1e9 ? Math.max(0, w._bsH - (w.s - w._bsS0)) : 1e9; }
           if (BSH < hold) hold = BSH; }   // (crowd grid: someone standing in its way — round them, or stop short)
-        if (PED.yieldOn && !w.agent && (movers.length || w.dg || t - w.sdT < .3)) v = yieldStep(w, E, dt, v);   // (riders avoid: a mover coming — step aside, or stop short)
+        if (PED.yieldOn && !w.agent && (movers.length || w.dg || t - w.sdT < .3 || (E.wk > 1 && PED.file.on))) v = yieldStep(w, E, dt, v);   // (riders avoid: a mover coming — step aside, or stop short; K2-walk: its file on a wider walk)
       } else if (w.dg) { w.dg = 0; w.dgv = 0; }   // (far from the camera: back on its lane)
       w.vc = v < w.vc ? v : Math.min(v, w.vc + PED.acc * dt);
       let ds = w.vc * dt; if (lead && act) ds = Math.min(ds, Math.max(0, gap - gp - dogGap));   // never into the walker ahead
@@ -621,10 +738,15 @@ export function createPedSim({ night = false, seed = 0x9ed5, densityOf = () => 1
 
   // ── animation merge · the drawn heading (after where(w)): chases the path's heading at ARC.turnRate (turn.js turnToward); a walker not
   // faced for 0.3 s (out of view, just arrived) takes the path's heading outright. w.dyaw: this frame's turn (the standing shuffle).
+  // K3-IDLES (the elbow round) · TURNING TO TALK: a walker paired to talk (w.faceTo, pickIdle) faces the other one, turning at TALK.turn, a
+  // calmer rate than a path's turn; one just let go turns back as calmly while it still stands
   const FT = { yaw: 0, omega: 0 };
-  function face(w) { const dt = t - (w.fT ?? -1e9), tgt = w.p[3]; w.fT = t;
+  function face(w) { const dt = t - (w.fT ?? -1e9), o = w.faceTo, tgt = o ? Math.atan2(o.p[0] - w.p[0], o.p[2] - w.p[2]) : w.p[3]; w.fT = t;
+    // (a second call in the same moment, dt 0, turns nothing: it took the target outright, a snap — a frame drawn twice, a shot's second view)
+    if (dt === 0 && w.yawS !== undefined) { w.dyaw = 0; return w.yawS; }
     if (w.yawS === undefined || !(dt > 0) || dt > .3) { w.yawS = tgt; w.omega = 0; w.dyaw = 0; return tgt; }
-    FT.yaw = w.yawS; FT.omega = w.omega; w.dyaw = turnToward(FT, tgt, dt, ARC.turnRate); w.yawS = FT.yaw; w.omega = FT.omega; return w.yawS; }
+    const calm = o || ((w.vc || 0) < .05 && t - (w.calmT ?? -1e9) < TALK.calm);
+    FT.yaw = w.yawS; FT.omega = w.omega; w.dyaw = turnToward(FT, tgt, dt, calm ? TALK.turn : ARC.turnRate); w.yawS = FT.yaw; w.omega = FT.omega; return w.yawS; }
   // the near walkers' gait and idles (gait2.js, idle.js), driven by the distance the drawn walker actually moved (arcs, the kerb row's
   // shuffle, an agent's step off the lanes and the lane settle included). fresh: it was not animated last frame (it just came near):
   // the gait starts where the walker is — walking at its pace, or already idling if it has stood a while — so the switch never pops.
@@ -634,7 +756,25 @@ export function createPedSim({ night = false, seed = 0x9ed5, densityOf = () => 1
       const d = Math.hypot(q.x - X.to.x, q.z - X.to.z) - Math.hypot(q.x - X.from.x, q.z - X.from.z); if (d < bd) { bd = d; best = [q.x, q.z]; } }
     return X._sig = best; }
   const kerbX = w => { const E = w.E; if (!E || w.off) return null; if (E.cross) return w.s <= STEP + .05 ? E : null; const X = w.next; return X?.cross && E.len - w.s < PED.node + 3.5 && !open(X) ? X : null; };
-  function pickIdle(w) { w.nIdle = (w.nIdle || 0) + 1; return kerbX(w) ? IDLE.crossing : IDLE_POOL[hash(w.id, w.nIdle) % IDLE_POOL.length]; }
+  // K3-IDLES (the elbow round) · which idle a walker plays when it stops: a pair's talk if it is paired; at a kerb the crossing's wait;
+  // else the pool (by night with the cold twice more: the cold reads at night)
+  function pickIdle(w) { w.nIdle = (w.nIdle || 0) + 1; if (w.faceTo) return IDLE.chat; const h = hash(w.id, w.nIdle);
+    return kerbX(w) ? IDLE.crossing : (night ? POOL_NIGHT : IDLE_POOL)[(h >>> 3) % (night ? POOL_NIGHT : IDLE_POOL).length]; }
+  // once a stop has settled (TALK.still s, both still: a kerb's row shuffles its waiters up as it fills, and a pair formed at the moment of
+  // stopping was let go by the next shuffle), one stop in TALK.share looks for someone to talk to; it turns, and the other crosses to the talk
+  function talkCheck(w, g) { if (w.faceTo || w.talkCk === w.nIdle || g.still < TALK.still || g.iw < .5) return; w.talkCk = w.nIdle; const h = hash(w.id, w.nIdle);
+    if (h % TALK.share) return; const o = talkTo(w); if (o) { pairUp(w, o, h); g.swap = IDLE.chat; } }
+  // someone to talk to: a crowd walker standing in its idle (not an agent, nobody fixed, off the lanes or already talking), TALK.r away
+  // (from the body map, sim.near: the bodies standing near the camera; heads 1.0 × 0.85 m: closer, two heads turning to face meet)
+  function talkTo(w) { if (w.agent || w.fix || w.off || w.hide || !BG.n) return null; let best = null, bd = TALK.r[1];
+    near(w.p[0], w.p[2], TALK.r[1], k => { const o = BG.w[k]; if (!o || BG.b[k] || o === w || o.faceTo || o.agent || o.fix || o.off || o.hide || o.gone || !o.g || o.g.iw < .5 || (o.vc || 0) >= .05 || o.g.still < TALK.still) return;
+      const d = Math.hypot(o.p[0] - w.p[0], o.p[2] - w.p[2]); if (d >= TALK.r[0] && d < bd) { bd = d; best = o; } }, true);
+    return best; }
+  // (both turn to face: face(); the one who looked talks first)
+  function pairUp(w, o, h) { w.faceTo = o; o.faceTo = w; w.talks = true; o.talks = false; w.swapT = t + TALK.swap[0] + (h % 100) / 100 * (TALK.swap[1] - TALK.swap[0]); o.g.swap = IDLE.chat; }
+  // let go: the other one, still standing, plays a fresh idle (stepIdle crosses to it)
+  function letGo(w) { const o = w.faceTo; w.faceTo = null; w.calmT = t; if (w.g?.swap === IDLE.chat) w.g.swap = undefined;
+    if (o && o.faceTo === w) { o.faceTo = null; o.calmT = t; if (o.g && (o.g.idle === IDLE.chat || o.g.swap === IDLE.chat) && (o.vc || 0) < .05) { o.g.swap = undefined; o.g.swap = pickIdle(o); } } }
   function animate(w, dt, G, fresh) {
     const p = w.p; let g = w.g;
     if (!g || fresh) { const v = w.vc || 0, moving = v > .04, x = Math.max(0, Math.min(1, v / WALK2.vRef));
@@ -645,6 +785,13 @@ export function createPedSim({ night = false, seed = 0x9ed5, densityOf = () => 1
     let d = Math.hypot(p[0] - w.gx, p[2] - w.gz); w.gx = p[0]; w.gz = p[2]; if (d > 1.5) d = 0;   // (a jump: no stride through it)
     stepGait2(g, d, dt, WALK2, G, fresh ? 0 : w.dyaw || 0); g.omega = w.omega || 0;
     stepIdle(g, (w.vc || 0) < .05 && Math.abs(g.omega) < .25, dt, () => pickIdle(w));
+    // (a pair: let go when either walks on or is gone; the one talking hands over every few seconds; the look slot eases between talking,
+    // 1, and listening, 0: anim/idle.js idle 18)
+    if (w.faceTo) { const o = w.faceTo; if ((w.vc || 0) >= .05 || o.gone || o.hide || o.faceTo !== w || (o.vc || 0) >= .05) letGo(w);
+      else { if (w.talks && t >= w.swapT) { w.talks = false; o.talks = true; o.swapT = t + TALK.swap[0] + (hash(o.id, w.nIdle) % 100) / 100 * (TALK.swap[1] - TALK.swap[0]); }
+        if (g.idle === IDLE.chat) g.look += ((w.talks ? 1 : 0) - g.look) * (1 - Math.exp(-dt / TALK.ease)); } }
+    else if (g.idle === IDLE.chat && g.swap === undefined && (w.vc || 0) < .05) g.swap = pickIdle(w);
+    else if ((w.vc || 0) < .05) talkCheck(w, g);
     if (g.idle === IDLE.crossing && g.iw > .001) { const X = kerbX(w) || w.E, sg = X?.cross ? signalOf(X) : null; g.look = sg ? wrapPi(Math.atan2(sg[0] - p[0], sg[1] - p[2]) - (w.yawS ?? p[3])) : 0; }
     return g; }
 
@@ -657,7 +804,12 @@ export function createPedSim({ night = false, seed = 0x9ed5, densityOf = () => 1
     crossings, inRoad, walkOK, setCars(c) { cars = c; },   // (traffic pass: traffic/render.js wires the cars and walkers together)
     kerb: X => ({ ...kerbOf(X), cap: kCap(X), row: row1(X), demand: demandOf(X.dist) }),   // (walkers-fix: a crossing's kerb-wait row, for looking into one)
     get t() { return t; }, set looks(n) { looks = Math.max(1, n); }, get looks() { return looks; },
-    setDemand(c, r) { crowd = c; rush = r || null; }, addLanes(key, l) { const [i, j] = key.split(/[,_]/).map(Number);
+    setDemand(c, r) { crowd = c; rush = r || null; },
+    // K2-walk: fewer walkers near one point (see THIN): thin(x, z, r, f) — a point, a radius (m), the share kept (0 … 1); thin(null) ends it.
+    // Cheap to call every frame (the edges' shares are made again only when the point has moved 2 m, or r or f changed)
+    thin(x, z, r, f) { if (x === null || x === undefined || !(r > 0) || !(f < 1)) { TH = null; return; } f = Math.max(0, f);
+      if (TH && Math.hypot(TH.x - x, TH.z - z) < 2 && TH.r === r && TH.f === f) return; TH = { x, z, r, f, v: (TH?.v || 0) + 1 }; },
+    get thinning() { return TH ? { x: TH.x, z: TH.z, r: TH.r, f: TH.f } : null; }, addLanes(key, l) { const [i, j] = key.split(/[,_]/).map(Number);
       settle(i, j, () => { lanes.set(key, l); laneVer++; if (l?.detour?.length) applyDetours(i, j, l.detour); }); },
     // walkers per 100 m of sidewalk per district over the edges near the focus (crossings count as sidewalk; agents not counted)
     density(focus, radius = PED.radius) { const out = {}, R2 = radius * radius;

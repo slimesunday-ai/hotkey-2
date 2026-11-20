@@ -30,7 +30,8 @@
 // with each other, whose heads overlap in the picture for more than half a second of the game's own clock:
 // actors.js auditHeads, demo/stage/heads.js) or any `offLine` (somebody of ours whose walk ended with a step aside still on
 // them, more than 5 cm beside their mark), or any time the player's door's leaf, or what is mounted on it, met a body of
-// ours (`door:`, demo/stage/doorway.js swept).
+// ours (`door:`, demo/stage/doorway.js swept), or any `stretch` (a body posed by hand, a fight's or a look's, drawn
+// with a part of it further from its hips than a body reaches: a streak across the picture, demo/fight/puppet/reach.js).
 import { writeFileSync, readFileSync } from 'node:fs';
 import { launch } from './chrome.mjs';
 
@@ -47,7 +48,7 @@ if (reloadAt) params.set('save', '1');
 const url = `http://127.0.0.1:${opt('--port', 5470)}/demo/?${params}${opt('--query', '') ? '&' + opt('--query', '') : ''}`;
 // (the first load starts the run fresh and replaces any save; the reload is the same link without it)
 const firstUrl = reloadAt ? `${url}&new=1` : url;
-const COUNTS = ['scenes', 'walks', 'overlaps', 'furniture', 'vanish', 'feet', 'heads', 'unseated', 'slides', 'pushes', 'seams', 'jumps', 'pops', 'close', 'through', 'flips', 'speedSteps', 'headingSnaps', 'inRoad', 'squeezes', 'offLine'];
+const COUNTS = ['scenes', 'walks', 'overlaps', 'furniture', 'vanish', 'feet', 'heads', 'unseated', 'slides', 'pushes', 'seams', 'jumps', 'pops', 'close', 'through', 'flips', 'speedSteps', 'headingSnaps', 'inRoad', 'squeezes', 'offLine', 'stretch'];
 
 const browser = await launch();
 let ok = false;
@@ -124,8 +125,8 @@ try {
   for (const [k, n] of Object.entries(cut?.audit ?? {})) if (typeof audit[k] === 'number') audit[k] += n;
   // (notes-1: the player's door, doorway.js swept(): a leaf, or what is mounted on it, never meets a body of ours)
   const door = await page.evaluate('window.__demo.stage.doorway?.swept?.() ?? null', 10000).catch(() => null);
-  ok = title === 'run-ok' && !bad.length && (audit.overlaps ?? 1) === 0 && (audit.furniture ?? 1) === 0 && (audit.vanish ?? 1) === 0 && (audit.feet ?? 1) === 0 && (audit.heads ?? 1) === 0 && (audit.offLine ?? 1) === 0 && !(door?.through > 0);
-  const verdict = ok ? 'run-ok' : `run-fail: ${title.startsWith('run-fail') ? title.slice(10) : bad.length ? `${bad.length} page errors` : door?.through > 0 ? `${door.through} times a door's leaf met a body` : (audit.overlaps ?? 0) > 0 ? `${audit.overlaps} overlaps` : (audit.furniture ?? 0) > 0 ? `${audit.furniture} in furniture` : (audit.vanish ?? 0) > 0 ? `${audit.vanish} came on or went off in the picture` : (audit.feet ?? 0) > 0 ? `${audit.feet} with their feet off the ground` : (audit.heads ?? 0) > 0 ? `${audit.heads} heads over each other` : (audit.offLine ?? 0) > 0 ? `${audit.offLine} arrived off their mark` : title || 'no verdict'}`;
+  ok = title === 'run-ok' && !bad.length && (audit.overlaps ?? 1) === 0 && (audit.furniture ?? 1) === 0 && (audit.vanish ?? 1) === 0 && (audit.feet ?? 1) === 0 && (audit.heads ?? 1) === 0 && (audit.offLine ?? 1) === 0 && (audit.stretch ?? 1) === 0 && !(door?.through > 0);
+  const verdict = ok ? 'run-ok' : `run-fail: ${title.startsWith('run-fail') ? title.slice(10) : bad.length ? `${bad.length} page errors` : door?.through > 0 ? `${door.through} times a door's leaf met a body` : (audit.overlaps ?? 0) > 0 ? `${audit.overlaps} overlaps` : (audit.furniture ?? 0) > 0 ? `${audit.furniture} in furniture` : (audit.vanish ?? 0) > 0 ? `${audit.vanish} came on or went off in the picture` : (audit.feet ?? 0) > 0 ? `${audit.feet} with their feet off the ground` : (audit.heads ?? 0) > 0 ? `${audit.heads} heads over each other` : (audit.offLine ?? 0) > 0 ? `${audit.offLine} arrived off their mark` : (audit.stretch ?? 0) > 0 ? `${audit.stretch} bodies drawn stretched past their reach` : title || 'no verdict'}`;
   if (R) {
     const perDay = R.daySeconds ?? [];
     const lengths = (R.lengths ?? []).slice().sort((a, b) => a - b);
@@ -153,9 +154,21 @@ try {
     if (T) console.log(`trust: witnesses called ${T.called}, kept quiet ${T.quiet}; turned against you ${T.against.length}${T.against.length ? ` (${T.against.join(', ')})` : ''}; won over ${T.with.length}${T.with.length ? ` (${T.with.join(', ')})` : ''}; looked away ${T.lookedAway}; sore ${T.sore}; notices ${T.notices}; at the end ${T.end?.length ? T.end.join(', ') : 'everyone neutral'}`);
   }
   console.log(`page errors ${bad.length} · ${COUNTS.map(k => `${k} ${audit[k] ?? '-'}`).join(' · ')}`);
+  // (walk-1: the city's crowd against ours, actors.js auditCrowd: its meetings with the player and the rest of ours)
+  const Cw = audit.crowd;
+  if (Cw) {
+    const kinds = ['through', 'squeezed', 'held', 'aside', 'clear'];
+    const row = (T, p = '') => kinds.map(k => `${k} ${T[p ? p + k[0].toUpperCase() + k.slice(1) : k]}`).join(', ');
+    for (const who of ['player', 'ours']) {
+      const T = Cw[who];
+      console.log(`crowd vs ${who}: meetings ${T.meet} (${row(T)}); on the walk ${T.walkMeet} (${row(T, 'walk')}); of those at a pinch ${T.pinchMeet} (${row(T, 'pinch')}); ours walking ${T.movingMeet} (${row(T, 'moving')})`);
+    }
+    const P = audit.crowdPops;
+    console.log(`crowd round the player: ${(Cw.streetSeconds / 60).toFixed(1)} min of the game on the street, ${Cw.near20Frames ? (Cw.near20 / Cw.near20Frames).toFixed(1) : '-'} walkers within 20 m (mean); the crowd's update ${Cw.pedFrames ? (Cw.pedMs / Cw.pedFrames).toFixed(2) : '-'} ms (mean), frame ${Cw.frames ? (Cw.frameMs / Cw.frames).toFixed(1) : '-'} ms (mean); the crowd's walkers came on in the picture ${P?.spawns ?? '-'}, went off in it ${P?.removals ?? '-'}${P && P.spawns + P.removals ? ` (${JSON.stringify(P.spawnWhy)} / ${JSON.stringify(P.removalWhy)})` : ''}`);
+  }
   if (door) console.log(`door: leaves used ${door.walks}, nearest to a body's edge outside ${door.nearest.out?.gap ?? '-'} m, inside ${door.nearest.in?.gap ?? '-'} m; met a body ${door.through}${door.examples.length ? ` (${door.examples.join('; ')})` : ''}`);
   if (bad.length) console.log(`  ${[...new Set(bad)].slice(0, 8).join('\n  ').slice(0, 2500)}`);
-  const seen = (audit.examples ?? []).filter(e => /^(vanish|furniture|overlap|feet|heads|offLine) /.test(e));
+  const seen = (audit.examples ?? []).filter(e => /^(vanish|furniture|overlap|feet|heads|offLine|stretch) /.test(e));
   if (seen.length) console.log(`  ${seen.slice(0, 10).join('\n  ')}`);
   // (the longest spells of heads over each other, noted or not: seconds of the game and of the wall, actors.js auditHeads)
   const spells = audit.spells ?? [];

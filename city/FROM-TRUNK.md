@@ -7,11 +7,14 @@ A change the city needs goes in our own files (`demo/`), or upstream by slime.
 
 | | |
 |---|---|
-| Trunk commit | `d5a6e641f95df0c1312d3e18a6f54d031ebb4911` (`d5a6e64`, committed 2026-11-19: `e04d2bf` plus the cart man's cart, drawn and approved: `world/named/props/` (`cart.js`, `build.js`), `world/named/index.js` (`PROPS`, `propOf`, `propByKey`), its check, its preview and pictures, and one option of `style/city/studio/audit/chrome.mjs`. Nothing else of the city moved) |
-| Pin before | `e04d2bf31a037c621aa84041230205ee70112e58` (`e04d2bf`, committed 2026-11-18: `c370dfb` plus `world/named/` only, 40 new files: the named cast's own pool, all 34 people drawn by name, each with a `scale`) |
-| Pin before that | `c370dfb94e6ded26faf51c9c4482c8ff5dab7527` (`c370dfb`, committed 2026-11-18: trunk's `8b0b8df` plus the asset passes' lane `lane/H1-homekit`: the home kit's fine pass, its new pieces, the second pass's fine grain for small things and its redraws, and the third pass: the owner's shortlist and thirteen more redrawn shape first, gold that reads as gold, clear case lids, the Doorman and the Long-eye; then the owner's calls after it: the tiger rug back to its drawing from before the third pass, the bust with the chain taken out) |
-| Copied | 2026-11-19, by `node scripts/bring-city.mjs --pin d5a6e641` (trunk at `~/Desktop/ai-city/trunk`) |
-| Files | 1,061, 20.6 MB |
+| Trunk commit | `3548e5379cf841a0fe2973e844a90bb5c4c48c62` (`3548e53`, committed 2026-11-19, the original city's lane commit on `lane/K4-vhs`, not yet joined into trunk (the join is slime's): the walkers this repo already had (`9cfd6788`) plus the people's effects switch (`style/city/pedfx.js`, `peds.fx.set / change / clear` in `style/city/peds.js`), its `mix` and `band`, the rainbow, glitch and the tape look (`vhs`). Of the copy only `style/city/pedfx.js` and `style/city/peds.js` differ from `9cfd6788`. Brought in by pot-3 for the drug looks on the pot's people) |
+| Pin before (the main line's) | `9cfd678895a876935e79d1e06b6298d5a4522bea` (`9cfd678`: the walkers, joined by walk-1) |
+| Pin before (looks-1's) | `4b089746be4f0478297481dfec13445bdf97052b` (`4b08974`, on the `looks-1` branch only: `ade4475` plus the switch's `mix` and `band`); before it `ade4475e` (`d5a6e64` plus the people's effects switch) |
+| Earlier | `d5a6e641f95df0c1312d3e18a6f54d031ebb4911` (`d5a6e64`, committed 2026-11-19: `e04d2bf` plus the cart man's cart, drawn and approved: `world/named/props/` (`cart.js`, `build.js`), `world/named/index.js` (`PROPS`, `propOf`, `propByKey`), its check, its preview and pictures, and one option of `style/city/studio/audit/chrome.mjs`. Nothing else of the city moved) |
+| Earlier | `e04d2bf31a037c621aa84041230205ee70112e58` (`e04d2bf`, committed 2026-11-18: `c370dfb` plus `world/named/` only, 40 new files: the named cast's own pool, all 34 people drawn by name, each with a `scale`) |
+| Earlier | `c370dfb94e6ded26faf51c9c4482c8ff5dab7527` (`c370dfb`, committed 2026-11-18: trunk's `8b0b8df` plus the asset passes' lane `lane/H1-homekit`: the home kit's fine pass, its new pieces, the second pass's fine grain for small things and its redraws, and the third pass: the owner's shortlist and thirteen more redrawn shape first, gold that reads as gold, clear case lids, the Doorman and the Long-eye; then the owner's calls after it: the tiger rug back to its drawing from before the third pass, the bust with the chain taken out) |
+| Copied | 2026-11-20, by `node scripts/bring-city.mjs --pin 3548e537` (trunk at `~/Desktop/ai-city/trunk`) |
+| Files | 1,064, 20.6 MB |
 | Stamp | `city/from-trunk/PIN.json`, written by the script |
 
 The script reads the committed tree only (`git -C <trunk> archive <commit> … | tar -x`). It never reads trunk's
@@ -20,7 +23,7 @@ there.
 
 - `node scripts/bring-city.mjs` replaces `city/from-trunk/` with the pinned commit.
 - `node scripts/bring-city.mjs --check` compares every file on disk with the commit by its git hash. It passes today
-  (1,061 files). Run it before a commit: it proves nobody edited the copy.
+  (1,064 files). Run it before a commit: it proves nobody edited the copy.
 - To move the pin, change `PIN` at the top of the script, run it, then run the proof again (`demo/tools/proof-shots.mjs`).
 
 ## What was copied

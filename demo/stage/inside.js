@@ -1181,6 +1181,13 @@ export function createInside({ city, actors, fade, lead = () => null, who = () =
       keptAlso = kept && also?.length ? also.slice() : null;
       keptView = null;
     },
+    /**
+     * camera.js (touch-1): a finger is dragging the picture. The camera is left alone until the next cut, as when
+     * followLead sees a drag itself (a finger's drag on a phone never shows it the 6 cm a frame it looks for).
+     */
+    hand() {
+      if (onInside && up && follow.key === up.key && !(held && held.key === up.key && !held.from)) follow.free = true;
+    },
     /** camera.js, at every cut: the inside view draws its layer alone; any other shot, the city. */
     cut(key) {
       if (mask0 === null) mask0 = cam.layers.mask;

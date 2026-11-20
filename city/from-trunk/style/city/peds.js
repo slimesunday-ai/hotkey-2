@@ -22,6 +22,8 @@
 // bake.js), posed in the vertex shader from a keyed cycle (anim/walk2.js: three texels per walker, written from pedsim.js animate's gait
 // and idle state); the heading is pedsim.js face()'s (rate-limited, all three tiers, so a tier switch mid-turn never snaps), the corners
 // are arcs (pedsim.js where). No instance-matrix bob on the near tier: the pelvis height is keyed. Mid and far are as before.
+// K0-LOOKS (2026-11-19) · one person drawn differently on demand (a skin over them, the far body close up, see-through echoes): pedfx.js,
+// peds.fx (the calls are documented there). Nobody switched: nothing more is done per walker and nothing more is drawn.
 import * as THREE from 'three';
 import { tierize } from './gpu.js';
 import { createPedSim, CROWD, PED, pedsPer100 } from './pedsim.js';
@@ -33,18 +35,26 @@ import { ELBOW } from './anim/cast/elbow/styles.js';   // (THE ELBOW, 2026-10-08
 import { createFineAtlas, installFine, fineAttr } from './anim/cast/fine.js';   // (cast pass: fine detail on the near tier, ai-city-fresh PORTING.md §3)
 import { sdata } from '../../world/city.js';   // (SPREAD: the data this spread reads)
 import { installFade, onLens, fadeOfWalker, lensGone } from './camera/fade.js';   // (CAMERA FADE 10-09b: near the camera or on its line to the person followed, a walker dissolves)
+// (K0-looks: one person's effect)
+import { createPedFx } from './pedfx.js';
 const TURN_LEAN = .09;   // lean into a turn (rad per rad/s per m/s; the lab's v1 WALK.turnLean, shared by v2)
 export { CROWD, PED, pedsPer100 };
 
 export function createPeds({ scene, night, R, bake, seed = 0x9ed5, densityOf = () => 1, avoid = true }) {   // (avoid false: nobody follows or waits at corners — the bench's A/B of the avoidance cost, ?avoid=0)
   const sim = createPedSim({ night, seed, densityOf, clock: () => CLOCK.t });   // (traffic pass: the crossings read the lights on the shared clock)
+  const pfx = createPedFx(THREE, sim);
   // RIDERS AVOID (2026-10-08) · the side room table (simstate/room.json, tools/riderprobe.mjs --room): the clear strip round every side's
   // lane, so a walker stepping aside for a rider (pedsim.js) and a rider's weave (simstate/movement.js) stay clear of what is on the sidewalk.
   // ?ridersavoid=0: the crowd doesn't make way (and movement.js doesn't weave) — as before
+  // K2-WALK (2026-11-19) · ?k2walk=0: the crowd as it was before (one line on a wide walk, the 2 m walk's step aside) — the before/after clips
+  if (typeof location !== 'undefined' && new URLSearchParams(location.search).get('k2walk') === '0') { PED.k2 = false; PED.file.on = false; }
   if (typeof location !== 'undefined' && new URLSearchParams(location.search).get('ridersavoid') === '0') PED.yieldOn = false;
   else fetch(new URL(sdata('./simstate/room.json'), import.meta.url), { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(T => { if (T) sim.setRoom(T); }).catch(() => {});
   // ── drawing: near + mid BatchedMesh (a geometry per look), far boxes
   let nearM = null, midM = null, farM = null, pedTex = null, G = null, uni = null, nearIds = [], midIds = [], farIds = [], nearCap = 0, midCap = 0, farCap = 0, farV = 0, farI = 0, ready = false, looks = 0, driver = null;
+  // (K0-looks: the near batch's instances past nearCap, kept for split's, aura's and glitch's copies of a near body (pedfx.js): never drawn while nobody
+  // wears one. nearW = nearCap + COPIES is the near batch's and the gait texture's width; nearCU the end of the copies drawn last frame)
+  const COPIES = 72; let nearW = 0, nearCU = 0;
   const farMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .75 }), BOXES = [[.24, .46, .48, .3], [.72, .56, .5, .36], [1.28, .8, .66, .74]];   // (y, w, h, d)
   const farGeo = main => { const P = [], N = [], C = [], I = [], c = new THREE.Color();   // the far body: legs · torso · head, in the look's three main colours (linear)
     BOXES.forEach(([y, w, h, d], q) => { const g = new THREE.BoxGeometry(w, h, d).translate(0, y, 0), p = g.attributes.position.array, n = g.attributes.normal.array, o = P.length / 3; c.setHex(main[q], THREE.SRGBColorSpace);
@@ -71,12 +81,12 @@ export function createPeds({ scene, night, R, bake, seed = 0x9ed5, densityOf = (
   function build(res) {
     const L = res.looks; looks = L.length; sim.looks = looks; nearCap = Math.max(8, Math.min(128, R.charFull)); midCap = 720; farCap = 2048;   // (cleanup pass: room for Neon Row's night crowd; fidelity pass: the preset's full budget (120 on high, it stopped at 64), and mid and far grow)
     const vN = L.reduce((s, l) => s + l.full.P.length / 3, 0), iN = L.reduce((s, l) => s + l.full.I.length, 0), vM = L.reduce((s, l) => s + l.mid.P.length / 3, 0), iM = L.reduce((s, l) => s + l.mid.I.length, 0);
-    pedTex = createAnimTexture2(nearCap); [uni, G] = animUniforms2(pedTex, WALK2, { turnLean: TURN_LEAN }); installAnim2(nearMat, uni, { elbow: ELBOW }); installAnim2(depthMat, uni, { elbow: ELBOW });   // (animation merge: walk v2; the elbow compiled in: the bake is band-tagged, Float32 aPart)
-    nearM = new THREE.BatchedMesh(nearCap, vN, iN, nearMat); nearM.customDepthMaterial = depthMat; midM = new THREE.BatchedMesh(midCap, vM, iM, midMat);
+    nearW = nearCap + COPIES; nearCU = nearCap; pedTex = createAnimTexture2(nearW); [uni, G] = animUniforms2(pedTex, WALK2, { turnLean: TURN_LEAN }); installAnim2(nearMat, uni, { elbow: ELBOW }); installAnim2(depthMat, uni, { elbow: ELBOW });   // (animation merge: walk v2; the elbow compiled in: the bake is band-tagged, Float32 aPart)
+    nearM = new THREE.BatchedMesh(nearW, vN, iN, nearMat); nearM.customDepthMaterial = depthMat; midM = new THREE.BatchedMesh(midCap, vM, iM, midMat);
     for (const m of [nearM, midM]) { m.castShadow = true; m.receiveShadow = true; m.sortObjects = false; m.perObjectFrustumCulled = true; m.frustumCulled = false; }   // the batch's own bounding sphere is computed once and never refreshed as walkers move (three r185), so whole-batch culling hid every walker at some angles: cull per walker only
     nearIds = L.map(l => nearM.addGeometry(nearGeo(l))); midIds = L.map(l => midM.addGeometry(geoOf(l.mid)));
     Object.assign(room, { nv: vN, ni: iN, mv: vM, mi: iM, nvCap: vN, niCap: iN, mvCap: vM, miCap: iM });
-    for (let k = 0; k < nearCap; k++) { nearM.addInstance(nearIds[0]); nearM.setVisibleAt(k, false); } for (let k = 0; k < midCap; k++) { midM.addInstance(midIds[0]); midM.setVisibleAt(k, false); }
+    for (let k = 0; k < nearW; k++) { nearM.addInstance(nearIds[0]); nearM.setVisibleAt(k, false); } for (let k = 0; k < midCap; k++) { midM.addInstance(midIds[0]); midM.setVisibleAt(k, false); }
     // far: three boxes each (legs · torso · head) in the look's main colours, one geometry per look in one BatchedMesh (fidelity pass)
     const fg = L.map(l => farGeo(l.main)); farV = fg[0].attributes.position.count; farI = fg[0].index.count;
     farM = new THREE.BatchedMesh(farCap, farV * (L.length + 24), farI * (L.length + 24), farMat); farM.castShadow = false; farM.receiveShadow = true; farM.sortObjects = false; farM.perObjectFrustumCulled = true; farM.frustumCulled = false;
@@ -85,6 +95,7 @@ export function createPeds({ scene, night, R, bake, seed = 0x9ed5, densityOf = (
     if (geos.length) { dogM = new THREE.BatchedMesh(DOG_CAP, geos.reduce((n, g) => n + g.attributes.position.count, 0), geos.reduce((n, g) => n + g.index.count, 0), dogMat); dogM.castShadow = true; dogM.receiveShadow = true; dogM.sortObjects = false; dogM.perObjectFrustumCulled = true; dogM.frustumCulled = false;
       dogIds = geos.map(g => dogM.addGeometry(g)); for (let k = 0; k < DOG_CAP; k++) { dogM.addInstance(dogIds[0]); dogM.setVisibleAt(k, false); } scene.add(dogM); }
     for (const m of [nearMat, midMat, farMat, dogMat]) installFade(m, 'walker');
+    pfx.install(0, nearMat, nearW); pfx.install(1, midMat, midCap); pfx.install(2, farMat, farCap);
     onLens(lens);
     scene.add(nearM, midM, farM); ready = true; }
   // THE LINE, CLEAR (C2-camera2, camera/fade.js): a body the fade has dissolved to nothing this frame — on the line to the person
@@ -101,6 +112,7 @@ export function createPeds({ scene, night, R, bake, seed = 0x9ed5, densityOf = (
       if (LO[0] < x0 || LO[0] > x1 || LO[2] < z0 || LO[2] > z1) return;
       if (lensGone(fadeOfWalker(LO, p, s))) { m.setVisibleAt(i, false); lensNow++; } };
     for (let i = 0; i < near.length; i++) one(nearM, i);
+    for (let i = nearCap; i < nearCU; i++) one(nearM, i);
     for (let i = 0; i < mid.length; i++) one(midM, i);
     if (dogM) for (let i = 0; i < dogN; i++) one(dogM, i); }
   bake().then(build).catch(e => console.error('peds: bake failed', e));
@@ -158,8 +170,8 @@ export function createPeds({ scene, night, R, bake, seed = 0x9ed5, densityOf = (
     setDemand(c, r) { sim.setDemand(c, r); lastPop = -1e9; },
     addLanes(key, l) { sim.addLanes(key, l); },
     addAgent: o => sim.addAgent(o), setAgentTarget: (id, to) => sim.setAgentTarget(id, to), removeAgent: id => sim.removeAgent(id), set demoAgents(n) { demo = n; },
-    get anim() { return { batch: nearM, mid: midM, far: farM, uni, G, tex: pedTex, cap: nearCap, mat: nearMat, near: near.slice(), fine: fineAtlas.stats() }; },   // (animation merge: the near batch, for the pixel checks)
-    addLook, get ready() { return ready; }, get looks() { return looks; }, set driver(f) { driver = f; }, get driver() { return driver; },   // (SIM LIVE)
+    get anim() { return { batch: nearM, mid: midM, far: farM, uni, G, tex: pedTex, cap: nearCap, stride: nearW, mat: nearMat, near: near.slice(), fine: fineAtlas.stats() }; },   // (animation merge: the near batch, for the pixel checks)
+    addLook, fx: pfx.api, get ready() { return ready; }, get looks() { return looks; }, set driver(f) { driver = f; }, get driver() { return driver; },   // (SIM LIVE)
     update(t, dt, camera, Rp, focusIn) {
       if (!ready) return 0; const T0 = performance.now(); R = Rp || R; frame++; const focus = focusIn || camera.position; cam = camera.position; camera0 = camera; activeR2 = (R.charMid * 1.3) ** 2;
       camera.updateMatrixWorld(); PM.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); FR.setFromProjectionMatrix(PM);
@@ -174,33 +186,43 @@ export function createPeds({ scene, night, R, bake, seed = 0x9ed5, densityOf = (
       sim.step(Math.min(dt, .1), avoid ? active : NONE);
       // tiers: in view (3 m margin: a body's shadow reaches into it) and in range; the tier a walker had comes first under its cap
       near.length = mid.length = far.length = nearB.length = midB.length = pri.length = 0; let moving = 0; const now = sim.t;
+      // (K0-looks: false with nobody switched; a chunky body goes to the far batch at any distance)
+      const fxOn = pfx.begin(t);
       for (const w of sim.walkers) { let p = w.p, d = Math.hypot(p[0] - cam.x, p[1] - cam.y, p[2] - cam.z);
         if (w.hide) { if (w.drawnF === frame - 1) T.bagged++; w.tier = 0; w.dn = 0; continue; }
         if (d > R.charNear * 1.2 && (d > rng + 4 || !inView(p, 3))) { if ((frame + w.id) % 6 === 0) sim.where(w); w.tier = 0; w.dn = 0; w.outF = frame; continue; }   // (out of view: its place is refreshed now and then)
         if (d < R.charMid || (frame + w.id) & 1 || w.tier === 0) { p = sim.where(w); sim.face(w); d = Math.hypot(p[0] - cam.x, p[1] - cam.y, p[2] - cam.z); }   // (far bodies move every other frame; the heading turns at a limited rate: pedsim.js face)
         if (d >= rng) { w.tier = 0; w.dn = 0; continue; } if (d < 160) moving++; w.dn = d;
-        if ((w.gore || w.cleaner) && inView(p, 3)) pri.push(w);
+        if (fxOn && pfx.chunky(w)) far.push(w);
+        else if ((w.gore || w.cleaner) && inView(p, 3)) pri.push(w);
         else if (d < R.charNear * (w.tier === 1 ? 1.1 : 1)) (w.tier === 1 ? near : nearB).push(w); else if (d < R.charMid * (w.tier === 2 ? 1.08 : 1)) (w.tier === 2 ? mid : midB).push(w); else far.push(w); }
       for (const w of nearB) near.push(w); if (pri.length) near.unshift(...pri);
       for (let k = nearCap; k < near.length; k++) midB.push(near[k]); if (near.length > nearCap) near.length = nearCap;
-      for (const w of midB) mid.push(w); midCap = growTo(midM, midCap, mid.length); for (let k = midCap; k < mid.length; k++) far.push(mid[k]); if (mid.length > midCap) mid.length = midCap;
-      farCap = growTo(farM, farCap, far.length); if (far.length > farCap) far.length = farCap;
+      for (const w of midB) mid.push(w); midCap = growTo(midM, midCap, mid.length + (fxOn ? pfx.copyN : 0)); for (let k = midCap; k < mid.length; k++) far.push(mid[k]); if (mid.length > midCap) mid.length = midCap;
+      farCap = growTo(farM, farCap, far.length + (fxOn ? pfx.echoN : 0)); if (far.length > farCap) far.length = farCap;
       for (const w of near) w.tier = 1; for (const w of mid) w.tier = 2; for (const w of far) w.tier = 3;
       const tex = pedTex.image.data, adt = Math.min(dt, .1);
       for (let k = 0; k < nearCap; k++) { const w = near[k]; if (!w) { nearM.setVisibleAt(k, false); continue; }
         sim.animate(w, adt, G, w.aF !== frame - 1); w.aF = frame;   // (walk v2 gait + idles: pedsim.js animate; fresh when it just came near)
         nearM.setGeometryIdAt(k, nearIds[lk(w)]); Qn.setFromAxisAngle(Y, w.yawS ?? w.p[3]); V3.set(w.p[0], w.p[1], w.p[2]); if (w.tq) { Qn.multiply(w.tq); V3.y += w.lift || 0; } M4.compose(V3, Qn, S1); nearM.setMatrixAt(k, M4); nearM.setVisibleAt(k, true);   // (w.tq / w.lift: stage/ tilts a body: a stumble, a fall)
-        writeGait2(tex, nearCap, k, w.g); }
+        writeGait2(tex, nearW, k, w.g); if (fxOn) pfx.put(0, k, w); }
+      // (K0-looks: split's, aura's and glitch's copies of near bodies, past nearCap)
+      const nC = fxOn ? pfx.copy(0, nearCap, nearW, (k, j, w) => { nearM.setGeometryIdAt(k, nearIds[lk(w)]); nearM.getMatrixAt(j, M4); nearM.setMatrixAt(k, M4); nearM.setVisibleAt(k, true); writeGait2(tex, nearW, k, w.g); }) : nearCap;
+      for (let k = nC; k < nearCU; k++) nearM.setVisibleAt(k, false); nearCU = nC;
       pedTex.needsUpdate = true;
       for (let k = 0; k < midCap; k++) { const w = mid[k]; if (!w) { midM.setVisibleAt(k, false); continue; }
-        midM.setGeometryIdAt(k, midIds[lk(w)]); Qn.setFromAxisAngle(Y, w.yawS ?? w.p[3]); V3.set(w.p[0], w.p[1] + Math.abs(Math.cos(w.ph)) * .045 * Math.min(1, w.vc), w.p[2]); if (w.tq || w.lieQ) { Qn.multiply(w.tq || w.lieQ); V3.y += w.lift || 0; } M4.compose(V3, Qn, S1); midM.setMatrixAt(k, M4); midM.setVisibleAt(k, true); }
-      let nd = 0; if (dogIds.length) for (const list of [near, mid]) for (const w of list) { if (w.dog < 0 || nd >= DOG_CAP) continue; sim.ahead(w, PED.dogLead, DP);
+        midM.setGeometryIdAt(k, midIds[lk(w)]); Qn.setFromAxisAngle(Y, w.yawS ?? w.p[3]); V3.set(w.p[0], w.p[1] + Math.abs(Math.cos(w.ph)) * .045 * Math.min(1, w.vc), w.p[2]); if (w.tq || w.lieQ) { Qn.multiply(w.tq || w.lieQ); V3.y += w.lift || 0; } M4.compose(V3, Qn, S1); midM.setMatrixAt(k, M4); midM.setVisibleAt(k, true); if (fxOn) pfx.put(1, k, w); }
+      // (K0-looks: copies of mid bodies, after the mid walkers)
+      if (fxOn) pfx.copy(1, mid.length, midCap, (k, j, w) => { midM.setGeometryIdAt(k, midIds[lk(w)]); midM.getMatrixAt(j, M4); midM.setMatrixAt(k, M4); midM.setVisibleAt(k, true); });
+      let nd = 0; if (dogIds.length) for (const list of [near, mid, pfx.chunkyNow]) for (const w of list) { if (w.dog < 0 || nd >= DOG_CAP) continue; sim.ahead(w, PED.dogLead, DP);
         const g = w.vc < .1 ? 2 : ((w.ph / Math.PI) | 0) & 1; Qn.setFromAxisAngle(Y, DP[3]); V3.set(DP[0], DP[1] + (g < 2 ? Math.abs(Math.sin(w.ph * 2)) * .02 : 0), DP[2]); M4.compose(V3, Qn, SC);
         dogM.setGeometryIdAt(nd, dogIds[(w.dog % 20) * 3 + g]); dogM.setMatrixAt(nd, M4); dogM.setVisibleAt(nd, true); nd++; }
       if (dogM) for (let k = nd; k < DOG_CAP; k++) dogM.setVisibleAt(k, false); dogN = nd;
       for (let k = 0; k < far.length; k++) { const w = far[k], sz = sizeAt(w.dn); Qn.setFromAxisAngle(Y, w.yawS ?? w.p[3]); V3.set(w.p[0], w.p[1], w.p[2]); if (w.tq || w.lieQ) { Qn.multiply(w.tq || w.lieQ); V3.y += (w.lift || 0) * sz; } SF.set(sz, sz, sz); M4.compose(V3, Qn, SF);
-        farM.setGeometryIdAt(k, farIds[lk(w)]); farM.setMatrixAt(k, M4); farM.setVisibleAt(k, true); }
-      for (let k = far.length; k < farN; k++) farM.setVisibleAt(k, false); farN = far.length;
+        farM.setGeometryIdAt(k, farIds[lk(w)]); farM.setMatrixAt(k, M4); farM.setVisibleAt(k, true); if (fxOn) pfx.put(2, k, w); }
+      // (K0-looks: the echoes after the far walkers, in the far batch)
+      const fN = fxOn ? pfx.echo(farM, far.length, farCap, w => farIds[lk(w)]) : far.length; if (fxOn) pfx.end();
+      for (let k = fN; k < farN; k++) farM.setVisibleAt(k, false); farN = fN;
       // continuity (and when each walker was last seen: pedsim.js lets one leave only after PED.grace s unseen)
       const fresh = T.prev.length > 0; let vis = 0, mx = T.maxId;
       for (const list of [near, mid, far]) for (const w of list) { const on = onScreen(w, w.dn); if (on) { vis++; w.seenT = now; }

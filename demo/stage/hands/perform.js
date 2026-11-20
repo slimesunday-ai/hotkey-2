@@ -189,6 +189,54 @@ export function createHands({ actors, city, camera = null, map = null, rides = n
       for (const [role, A, yaw, s] of [['buyer', B, yawB, sb], ['seller', S, yawS, ss]]) P[role] = { x: A.x, y: actors.groundAt(A.x, A.z), z: A.z, yaw, from: drawn(A), scale: s };
       return { people: P, cam: camFrom(), told: {}, off: +Math.abs(Math.hypot(B.x - S.x, B.z - S.z) - want).toFixed(3) };
     }
+    // (pot-3) A SLEEPER'S WALLET (deals.js liftSleeper): he lies on his side where he went down; you are stood beside
+    // the hip that is up, in front of it or behind it (never at his head or his feet), on the side away from the
+    // camera and facing it, so the hand going down to the pocket is in front of your head in the picture. `told.pocket`
+    // (the stage's: looks.pocketOf) → { at, across }: the pocket in the world, and the way across the body there
+    if (deal === 'liftSleeper' && roles.you) {
+      const Y = at(roles.you);
+      const s = scaleOf(roles.you);
+      const pk = typeof told.pocket === 'function' ? told.pocket() : told.pocket;
+      const no = why => {
+        skips.push({ deal, why });
+        return null;
+      };
+      if (!pk?.at) return no('no pocket');
+      const g0 = actors.groundAt(pk.at[0], pk.at[2]);
+      const cam = camFrom();
+      const want = 0.44 * s;
+      const ok = q => !solidName(q[0], q[1]) && !actors.lowNear?.(q[0], q[1], 0.25) && Math.abs(actors.groundAt(q[0], q[1]) - g0) < 0.12;
+      // (the two sides across the body, the far one from the camera first; then a little round either way)
+      const sides = [1, -1].map(k => [pk.at[0] + pk.across[0] * want * k, pk.at[2] + pk.across[1] * want * k]).sort((a, b) => Math.hypot(b[0] - cam[0], b[1] - cam[1]) - Math.hypot(a[0] - cam[0], a[1] - cam[1]));
+      const cands = sides.filter(ok);
+      for (let k = 1; cands.length < 2 && k <= 6; k++) {
+        for (const sg of [1, -1]) {
+          const a = Math.atan2(sides[0][0] - pk.at[0], sides[0][1] - pk.at[2]) + sg * k * 0.25;
+          const q = [pk.at[0] + Math.sin(a) * want, pk.at[2] + Math.cos(a) * want];
+          if (ok(q)) cands.push(q);
+        }
+      }
+      // (stood there already, the walk up having brought him: as he is. Else a step to the first he can get to: a step
+      // to a place half a metre from a body on the ground can be refused, and then the other side is tried)
+      const near = q => Math.hypot(q[0] - Y.x, q[1] - Y.z);
+      let stand = cands.find(q => near(q) <= 0.12) ?? null;
+      // (he is who the step is TO: it does not stand and wait behind him, actors.js bodyAhead `meet`)
+      const meet0 = Y.meet;
+      if (roles.mark && actors.has(roles.mark)) Y.meet = at(roles.mark);
+      try {
+        for (const q of cands) {
+          if (stand) break;
+          await Promise.race([actors.stepTo(roles.you, q[0], q[1], { exact: true }).catch(() => {}), actors.seconds(1.6)]);
+          if (near(q) <= 0.3) stand = q;
+        }
+      } finally {
+        Y.meet = meet0;
+      }
+      if (!stand) return no(`nowhere to stand beside him: ${cands.length} places, he is at ${Y.x.toFixed(2)}, ${Y.z.toFixed(2)}, the pocket at ${pk.at[0].toFixed(2)}, ${pk.at[2].toFixed(2)}`);
+      const g = actors.groundAt(Y.x, Y.z);
+      P.you = { x: Y.x, y: g, z: Y.z, yaw: Math.atan2(pk.at[0] - Y.x, pk.at[2] - Y.z), from: drawn(Y), scale: s };
+      return { people: P, cam, told: { pocket: pk.at }, off: +Math.hypot(Y.x - stand[0], Y.z - stand[1]).toFixed(3) };
+    }
     // (hands-2) A WALL TO REACH TO (deals.js swipe: the sneaker wall at DROP): the nearest solid round where he stands,
     // within a step and a half. He is stood half a step off it, facing it, and his hand goes to it at the chest
     if (deal === 'swipe' && roles.you) {

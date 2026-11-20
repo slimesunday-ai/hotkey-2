@@ -29,7 +29,10 @@ export async function modulesOf(root) {
   const pol = await import(u('src/run/policies.mjs'));
   const ahead = await import(u('src/run/ahead.mjs'));
   const marks = await import(u('src/run/marks.mjs'));
-  return { cfg: run.RUN_CONFIG, newRun: run.newRun, view: run.view, step: run.step, rules, POLICIES: pol.POLICIES, decide: pol.decide, ahead, SLICE_KITS: marks.SLICE_KITS };
+  // (bench-1: the rules with the bench in, where a checkout has them: the page's config has none of it until its screens
+  // exist, and the bench's odds are sampled like a jump's, so they are recorded too; `ODDS_CFG=page` records the page's)
+  const cfg = process.env.ODDS_CFG !== 'page' && run.BENCH_CONFIG ? run.BENCH_CONFIG : run.RUN_CONFIG;
+  return { cfg, newRun: run.newRun, view: run.view, step: run.step, rules, POLICIES: pol.POLICIES, decide: pol.decide, ahead, SLICE_KITS: marks.SLICE_KITS };
 }
 
 /** The players: every policy (a policy that takes where to head home takes $120, as the page's auto-play does), buying; and the slice's. */
@@ -39,6 +42,8 @@ export function playersOf(M) {
     return { name, policy: { ...(typeof P0 === 'function' ? P0(120) : P0), buy: true }, kit: {} };
   });
   if (M.POLICIES.layLow && M.SLICE_KITS?.slice) out.push({ name: 'layLow+slice', policy: { ...M.POLICIES.layLow(120), buy: true }, kit: { bed: true, ...M.SLICE_KITS.slice } });
+  // (bench-1: the bottle player with its workbench, dog spray and paint in one bottle: the throw's odds, the blue man's card)
+  if (M.POLICIES.bottler && M.cfg.things?.workbench) out.push({ name: 'bottler+bench', policy: { ...M.POLICIES.bottler(120, ['painttin', 'spraycan']), buy: true }, kit: { workbench: true } });
   return out;
 }
 

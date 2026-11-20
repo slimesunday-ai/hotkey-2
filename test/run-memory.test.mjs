@@ -247,7 +247,7 @@ test('memory: the People view says what each one remembers and for how long', ()
 });
 
 test('memory: a version-8 save loads: nobody marked, nobody coming, and plays on', () => {
-  assert.equal(RUN_STATE_VERSION, 12); // (styles-1: 10; sixes-1: 11; raid-1: 12; a version-8 save is still read, through 9 and 10)
+  assert.equal(RUN_STATE_VERSION, 14); // (styles-1: 10; sixes-1: 11; raid-1: 12; pot-1: 13; bench-1: 14; a version-8 save is still read, through 9 and 10)
   const s = { ...at('park', { day: 3 }), v: 8 };
   delete s.marks;
   delete s.visits;

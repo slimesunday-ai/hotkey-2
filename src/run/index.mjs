@@ -4,7 +4,7 @@
 //   ({ state, events } = step(cfg, state, view(cfg, state).choices[0].choice))
 //   const text = saveRun(state); ({ ok, state, why } = loadRun(text))   → a run kept as text and picked up again
 
-export { RUN_CONFIG, withRunConfig } from './config.mjs';
+export { RUN_CONFIG, BENCH_CONFIG, withRunConfig } from './config.mjs';
 export { newRun, copyRun, RUN_STATE_VERSION } from './state.mjs';
 export { view, listChoices } from './view.mjs';
 export { step } from './step.mjs';

@@ -2,7 +2,7 @@
 // (world/chars.js), bake (anim/bake.js: pedbake.js's full tier with a finer rig), materials (gpu.js tierize, the walkers' material) and
 // drawing (one BatchedMesh per walk, an animation texture per instance, peds.js's way). Nothing in the city is touched.
 // URL: ?scene=treadmill|square|kerb|crowd|idles|feet · &ab=old|new(v1)|v2|ab(old · v1)|v12(v1 · v2) · &cam=side|tq|top|feet|knee|free · &n=20 (crowd) · &v=1.2 (m/s)
-//      &look=<i> (treadmill) · &t=<s> (deterministic: the scene simulated from 0 to t in 1/60 s steps) · &shot=1 (no UI; title "ready" when drawn)
+//      &from=<i> (idles: nine from idle i) · &vary=<n> (idles: each its own seed) · &look=<i> (treadmill) · &t=<s> (deterministic: the scene simulated from 0 to t in 1/60 s steps) · &shot=1 (no UI; title "ready" when drawn)
 //      &strip=8&sdt=<s>&cols=4&fw=400&fh=500 (a contact sheet of frames t, t+sdt, …) · &bench=1 (frame cost 20/200/2000, old vs new)
 //      any WALK (v1) tunable by name (&stride=.34&bob=1 …); v2's as v2.<name> (&v2.stride=.44 …) · &dbg=back: inside faces drawn magenta
 import * as THREE from 'three';
@@ -175,9 +175,12 @@ const SCENES = {
         let want = Math.atan2(dx, dz), vw = Math.min(a.vmax * S.v / 1.2, Math.sqrt(2 * 2.2 * dist));
         const [px, pz, block] = avoid(a); if (block) vw *= block; want += px;   // (a nudge round whoever is ahead)
         drive(a, dt, want, vw, { pick }); } } },
+  // (K3-IDLES: &from=<i> lines up nine idles from i, round the list (default 0: idles 0–8, the overlap check's actors 0–8); every one
+  // plays as authored (no seed) unless &vary=<n>, which gives actor k its own seed (idle.js: tempo, size, side))
   idles: { label: 'idle line-up', cam: 'front', focus: [0, .9, 8],
-    setup() { const out = [], pr = pairOf(), rows = pr ? [[pr[1], 8], [pr[0], 4.5]] : [[S.ab, 8]];
-      rows.forEach(([mode, z], r) => { for (let k = 0; k < 9; k++) out.push(actor(mode, [0, 1, 2, 3, 5, 7, 9, 12, 15][k], -6.8 + 1.7 * k, z, 0, { idle: k, it: k * 1.37, label: r === 0 && mode !== 'old' ? IDLE_NAMES[k] : (k === 0 ? (mode === 'old' ? 'OLD: no idle' : NAME[mode]) : null), glance: k === 8 ? -.9 : 0 })); });
+    setup() { const out = [], pr = pairOf(), rows = pr ? [[pr[1], 8], [pr[0], 4.5]] : [[S.ab, 8]], N = IDLE_NAMES.length, from = +(Q.get('from') || 0), vary = Q.has('vary') ? +Q.get('vary') : -1;
+      rows.forEach(([mode, z], r) => { for (let k = 0; k < 9; k++) { const v = (from + k) % N, a = actor(mode, [0, 1, 2, 3, 5, 7, 9, 12, 15][k], -6.8 + 1.7 * k, z, 0, { idle: v, it: k * 1.37, label: r === 0 && mode !== 'old' ? IDLE_NAMES[v] : (k === 0 ? (mode === 'old' ? 'OLD: no idle' : NAME[mode]) : null), glance: v === 8 ? -.9 : 0 });
+        if (mode !== 'old') a.g.iseed = vary < 0 ? -1 : (vary * 7 + k * 131) % 1000; out.push(a); } });
       return out; },
     update(dt) { for (const a of actors) { if (a.mode !== 'old') a.g.look = a.glance; gaitStep(a, 0, dt, 0, undefined, true); } } },
 };

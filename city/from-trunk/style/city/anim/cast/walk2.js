@@ -14,7 +14,7 @@
 // Standing: the idles (idle.js, unchanged) still pose the ankles, and a standing leg is solved from them exactly as in v1; the
 // walk weight blends the two sets of joint ANGLES (never positions), so starting and stopping are smooth.
 import * as THREE from 'three';
-import { IDLE_GLSL } from './idle.js';
+import { IDLE_GLSL, idleSlot } from './idle.js';
 import { WALK2, NK, LEVELS, buildGait, R2 } from './gait2.js';
 import { GRIP_GLSL, GRIP_DIV } from './grip.js';   // (held + grip: the holding arm's pose)
 import { CLIPS_GLSL } from './clips/index.js';   // (authored clips: robberies, falls, rides… ride the idle slot; clips/CLIPS.md)
@@ -33,7 +33,7 @@ export function setAnimUniforms2(u, K = WALK2, shared = {}) {
   u.uB0.value.set(K.arm, K.arc, K.overlap, K.twist); u.uB1.value.set(K.sway, K.roll, K.lean, K.vRef); u.uB2 = u.uB2 || { value: new THREE.Vector4() }; u.uB2.value.set(shared.turnLean ?? .09, K.armOut ?? .05, K.elbow ?? 0, K.elbowSwing ?? 0); return G; }
 export function writeGait2(data, cap, k, g) {
   let o = k * 4; data[o] = g.u; data[o + 1] = g.a; data[o + 2] = g.w; data[o + 3] = g.v;
-  o = (cap + k) * 4; data[o] = g.omega; data[o + 1] = g.hp; data[o + 2] = g.idle; data[o + 3] = g.iw;
+  o = (cap + k) * 4; data[o] = g.omega; data[o + 1] = g.hp; data[o + 2] = idleSlot(g); data[o + 3] = g.iw;   // (the idle, its seed in the fraction: anim/idle.js)
   o = (cap * 2 + k) * 4; data[o] = g.it; data[o + 1] = g.look; data[o + 2] = g.hr; data[o + 3] = g.py; }
 
 // o.elbow: a bend style (elbow/styles.js: { id, glsl }); default the cast's (elbow/styles.js ELBOW: 'thick'), null = no elbow (the
@@ -89,7 +89,9 @@ void animCompute() {
   P.elb += vec2(uB2.z) * w + uB2.w * max(vec2(-fw, fw), 0.) * wa;   // ELBOW: a soft bend while walking, more at the front of the swing (WALK2.elbow / elbowSwing; 0 = no elbow)
   P.torso.x += uB1.z * clamp(v / uB1.w, 0., 1.6) * w; P.torso.y += cYaw;
   P.head.y -= cYaw; P.head.x -= .5 * P.torso.x * w;                    // the head keeps looking ahead, and level
-  int iv = gripIdle(grip, int(A1.z + .5)); idlePose(P, iv, A2.x, A1.w * (1. - w), A2.y);
+  // (K3-IDLES: the walker's own seed rides the idle slot's fraction, anim/idle.js idleSlot)
+  int iv0 = int(A1.z + .5); float isd = A1.z - float(iv0); aIdN = iv0 >= 0 && iv0 < 32 && isd > .02 ? int((isd - .05) * 2500. + .5) : -1;
+  int iv = gripIdle(grip, iv0); idlePose(P, iv, A2.x, A1.w * (1. - w), A2.y);
   gripPose(P, grip, u, lag, uB0.x * wa, uB2.y * w, iv, A1.w * (1. - w));   // (grip.js: the holding arm)
   clipPose(P, iv, A2.x, A1.w, u, w, A2.y);   // (a clip in the idle slot: over the walk and the hold; clips/index.js. A2.y: the look yaw, a clip's cLook)
 #ifdef ELBOW_LAB

@@ -208,6 +208,12 @@ const OWN = {
   // where he stands, and flicks the end away. Nobody walks off after: he stands smoking, and his own day takes him on
   // at the next hour. At the bus stop you go to him; in the crowd at the market he comes to you, `come`)
   sell: (paid, come = false) => [come ? ['buyer', 'approach', 'dealer'] : ['dealer', 'walk', 'buyer'], ['dealer', 'hand_off', 'buyer', null, null, { deal: 'sell', roles: { seller: 'actor', buyer: 'target' }, paid, gap: 2 * STAND }]],
+  // (pot-3: a bag of what you cook: he pays and TAKES IT there and then, and stays where he is (what it does to him is
+  // the look's, stage/looks/under.js, as the scene ends); gone wrong, he just takes it and keeps it: deals.js sellBag)
+  sellBag: (paid, come, goods) => [come ? ['buyer', 'approach', 'dealer'] : ['dealer', 'walk', 'buyer'], ['dealer', 'hand_off', 'buyer', null, null, { deal: 'sellBag', roles: { seller: 'actor', buyer: 'target' }, paid, goods, gap: 2 * STAND }]],
+  // (pot-3: A SLEEPER'S WALLET: up to him where he lies, down beside him, the hand in his pocket: deals.js liftSleeper.
+  // He sleeps on through it: his body is the look's)
+  liftSleeper: [['agent', 'walk', 'mark'], ['agent', 'hand_off', 'mark', null, null, { deal: 'liftSleeper', roles: { you: 'actor', mark: 'target' }, gap: 0.9 }]],
   // (stage 2: a bootleg disc: he pays and gets it, or just takes it; he looks it over and puts it away: deals.js sellDisc)
   sellDisc: (paid, come = true) => [come ? ['buyer', 'approach', 'dealer'] : ['dealer', 'walk', 'buyer'], ['dealer', 'hand_off', 'buyer', null, null, { deal: 'sellDisc', roles: { seller: 'actor', buyer: 'target' }, paid, gap: 2 * STAND }]],
   // (sixes-1: Dutch has a word: she walks up to you and says it; at the steps she is waiting and asks)
@@ -419,6 +425,9 @@ export function scenesOf(runEvents) {
         if (them) locals.set(them, at);
         if (k === 'odd') {
           events.push(scene('run:odd', at, { agent: YOU, neighbour: them }, { steps: OWN.odd(WORK[them] ?? WORK['npc:neighbour']) }));
+        } else if (e.goods?.made && !OLD_DEALS && (k === 'loosies' || k === 'crowd')) {
+          // (pot-3: a bag of what you cook, at the bus stop (you go to him) or in the crowd (they come to you): OWN.sellBag)
+          events.push(scene(win ? 'work:deal' : 'work:deal:dry', at, { dealer: YOU, buyer: them }, { steps: OWN.sellBag(win, k === 'crowd', `bag-${e.goods.product}`) }));
         } else if (k === 'loosies') {
           // (anim-1, stage 2: a loose cigarette, performed: OWN.sell)
           events.push(scene(win ? 'work:deal' : 'work:deal:dry', at, { dealer: YOU, buyer: them }, { steps: OLD_DEALS ? (win ? OWN.saleAt : OWN.saleAtFail) : OWN.sell(win) }));
@@ -577,6 +586,27 @@ export function scenesOf(runEvents) {
         const piece = e.type === 'thing' && e.kind === 'home' && !dog && !OLD_DEALS ? kitKind(pieceOf(RUN_CONFIG, e.item) ?? '') : null;
         const steps = dog ? OWN.buyDog : worn ? OWN.buyWear(worn) : piece ? (handHeld(piece) ? OWN.buy(piece) : OWN.buyBig(piece)) : e.type === 'lesson' && !OLD_DEALS ? OWN.lesson(e.style) : e.type === 'pack' && !OLD_DEALS ? OWN.buy(e.good === 'smokes' ? 'carton' : 'pack') : OWN.shop;
         events.push(scene(`run:${e.type}`, at, { agent: YOU, shop: them }, { steps }));
+        break;
+      }
+      // ── pot-2 (RUN.md "The pot (pot-1)"): what you cook with, bought from whoever sells it where they stand; the cook
+      // at your crib, the stage's own `cook` action (its clip and the cook's set: actors.js), for the hour; (pot-3) a
+      // sleeper's wallet, lifted off him where he lies asleep: walked up to, down on your heels beside him, a hand in his
+      // pocket (OWN.liftSleeper)
+      case 'making': {
+        const them = e.who?.id;
+        if (!them) break;
+        locals.set(them, at);
+        events.push(scene('run:making', at, { agent: YOU, shop: them }, { steps: OWN.shop }));
+        break;
+      }
+      case 'cook':
+        events.push(scene('run:cook', 'projects', { agent: YOU }, { spot: pad, steps: [['agent', e.scene?.action ?? 'cook']] }));
+        break;
+      case 'lift': {
+        const them = e.who?.id;
+        if (!them) break;
+        locals.set(them, at);
+        events.push(scene('run:lift:sleeper', at, { agent: YOU, mark: them }, { steps: OLD_DEALS ? OWN.lift.slice(0, 2) : OWN.liftSleeper }));
         break;
       }
       case 'rough':

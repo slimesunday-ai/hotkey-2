@@ -798,7 +798,7 @@ export function createRoom({ actors, city, director = null }) {
     },
     stress,
     get state() {
-      return cur ? { on: !OFF, c: cur.c, r: cur.r, keep: [...cur.keep], edge: edgeOf(cur), letOut: cur.letOut, taken: taken.size, stats } : { on: false, taken: taken.size, stats };
+      return cur ? { on: !OFF, c: cur.c, r: cur.r, keep: [...cur.keep], quiet: !!cur.quiet, edge: edgeOf(cur), letOut: cur.letOut, taken: taken.size, stats } : { on: false, taken: taken.size, stats };
     },
   };
 

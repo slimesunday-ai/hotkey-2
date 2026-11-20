@@ -14,10 +14,18 @@
 // atw: pitch forward, roll out, yaw in across the body, twist in about its own length; aArmRot), and every idle keeps each arm clear
 // of the chest and the head (the big head is wider than the shoulders: a raised arm stays under the chin or outside the ears).
 //   8 waiting at a crossing weight shift + a glance at the light every few seconds (+ now and then an impatient lean)
+// K3-IDLES (2026-11-19): 9–16 and the per-person variation (each walker's own tempo, size and side; a seeded walker's own waiting style
+// at a crossing) are anim/idle.js's (IDLE_VARY_GLSL), shared with the lab; this file plays them on the cast's body. IDLE_POOL here stays
+// the eight (the subway's riders and the mainland's walkers pick from it); the street's walkers pick from anim/idle.js's (pedsim.js).
+// (the elbow round, 2026-11-19: aIdMore takes the look slot too: a pair's talk, who talks and who listens. tools/sync-cast.mjs would
+// overwrite this file and walk2.js and drop these hooks: tools/idlepoolcheck.mjs fails loudly when they are gone)
 // Every idle breathes (the chest and shoulders rise, hardening pass: visibly) and keeps the feet planted: the legs are solved by the walk's IK from the pose's
 // ankles, so a hip that sways or drops bends the knees instead of sliding the feet.
-export const IDLE = { shift: 0, look: 1, face: 2, pockets: 3, crossed: 4, stretch: 5, music: 6, hips: 7, crossing: 8 };
-export const IDLE_NAMES = ['weight shift', 'look around', 'hand to face', 'pockets + foot tap', 'arms crossed', 'stretch / neck roll', 'nod to music', 'hands on hips', 'waiting at a crossing'];
+import { IDLE_VARY_GLSL, IDLE_MORE_NAMES, idleSlot } from '../idle.js';
+export { idleSlot };
+export const IDLE = { shift: 0, look: 1, face: 2, pockets: 3, crossed: 4, stretch: 5, music: 6, hips: 7, crossing: 8,
+  call: 9, up: 10, wave: 11, watch: 12, shrug: 13, yawn: 14, cold: 15, talk: 16 };
+export const IDLE_NAMES = ['weight shift', 'look around', 'hand to face', 'pockets + foot tap', 'arms crossed', 'stretch / neck roll', 'nod to music', 'hands on hips', 'waiting at a crossing', ...IDLE_MORE_NAMES];
 export const IDLE_POOL = [0, 1, 2, 3, 4, 5, 6, 7];   // what a walker picks from when it stops (8 is the crossing's own)
 export const CLIP_BASE = 32;   // idle ids from here on are CLIPS (anim/clips/: they ride the idle slot; idlePose skips them, clips/index.js clipPose poses them)
 
@@ -40,9 +48,12 @@ void aShift(inout Pose P, float t, float k) {   // weight shift, k = how much (h
   float s = (aKeys(t, 8., vec4(1., .75, -1., -.8)) + .22 * sin(6.2832 * t / 5.3)) * k;
   P.bodyX += .036 * s; P.pRoll += .095 * s; P.torso.z -= .045 * s; P.head.z += .055 * s;
   P.armR += vec2(.03, .03) + vec2(-.01, .01) * s; }
-void idlePose(inout Pose P, int v, float t, float W, float look) {
-  if (W < .001 || v >= ${CLIP_BASE}) return;   // (a clip: clips/index.js clipPose)
+${IDLE_VARY_GLSL}
+void idlePose(inout Pose P, int v0, float t, float W, float look) {
+  if (W < .001 || v0 >= ${CLIP_BASE}) return;   // (a clip: clips/index.js clipPose)
   Pose Q = P;   // work on a copy, blend by W at the end
+  // (K3-IDLES: the idle to play, the crossing's seeded waiting style; the walker's own tempo)
+  int v = aIdSub(v0); t *= aIdTempo();
   // breathing (hardening pass: was 0.012 rad, invisible at street distance: a standing walker looked frozen): the chest rises and
   // settles every 3.6 s, the shoulders with it, the body dips a few mm on the out-breath; the head drifts slowly (a look that never
   // quite becomes one). Calm: nothing faster than the breath, nothing bigger than a hand's width
@@ -68,8 +79,10 @@ void idlePose(inout Pose P, int v, float t, float W, float look) {
     Q.head.x += .05 + .1 * pow(max(b, 0.), 1.5); Q.drop += .012 * (.5 + .5 * b); Q.torso.z += .045 * h; Q.head.z += .05 * h; Q.bodyX += .01 * h;
     Q.armP += vec2(.1, -.1) * h; Q.armR += vec2(.04); }
   else if (v == 7) { aShift(Q, t, .6); Q.armR += HP.yy; Q.armP -= HP.xx; Q.atw += HP.ww; Q.head.z += .06 * sin(t * .7); }   // (straight arms angled out, the palms turned back to the hips)
-  else { aShift(Q, t, .6); float g = aKeys(t, 5.5, vec4(0., 1., 1., 0.)), lk = clamp(look, -1.3, 1.3);
+  else if (v == 8) { aShift(Q, t, .6); float g = aKeys(t, 5.5, vec4(0., 1., 1., 0.)), lk = clamp(look, -1.3, 1.3);
     Q.head.y += lk * .8 * g; Q.torso.y += lk * .2 * g; Q.head.x -= .05 * g; Q.torso.x += .03 * aWin(fract(t / 13.) * 13., 7., 10., .8); }
+  else aIdMore(Q, v, t, look);
+  aIdVary(P, Q, v); if (v0 == 8 && v != 8) aIdGlance(Q, t, look);
   P.ank = mix(P.ank, Q.ank, W); P.fp = mix(P.fp, Q.fp, W); P.drop = mix(P.drop, Q.drop, W); P.bodyX = mix(P.bodyX, Q.bodyX, W); P.pRoll = mix(P.pRoll, Q.pRoll, W);
   P.torso = mix(P.torso, Q.torso, W); P.head = mix(P.head, Q.head, W); P.armP = mix(P.armP, Q.armP, W); P.armR = mix(P.armR, Q.armR, W); P.ayaw = mix(P.ayaw, Q.ayaw, W); P.atw = mix(P.atw, Q.atw, W); P.elb = mix(P.elb, Q.elb, W);
 }`;

@@ -22,7 +22,7 @@ import { ACTION_CLIPS } from '../../src/clips.mjs';
 import { BACK_FP, SHOT_D, COWER, grid, placeFor, around, reactors } from './staging.js';
 import { clearPlace, HEADS_SHARE } from './heads.js';
 import { BLOWS } from './gore.js';
-import { workAt } from './set/workbench.js';
+import { workAt, benchNear } from './set/workbench.js';
 
 /** How far apart a pair stands when no clip says. */
 const REACH = 1.15;
@@ -570,6 +570,9 @@ export function createDirector({ city, actors, map, stands, travel = null, hooks
     // its bus stop fifty metres off)
     const far = beside && P.stand && !P.stand.way && Math.hypot(P.stand.x - beside[0], P.stand.z - beside[1]) > 4;
     if (P.block === block && P.spot === spot && P.held === held && !P.astray && !far) return P.going;
+    // (pot-3: UNDER SOMETHING the rules put on them, asleep or dancing at a place of theirs (pin, below): they stay where
+    // it took them for as long as it lasts, whatever the hour would have them do. Only a trip to another place moves them)
+    if (P.pinned && !P.away && placeOf(P) === (held ?? block)) return P.going;
     const to = held ?? block;
     // (between a departure and an arrival, bound for that very place: the trip under way is the trip)
     if (P.transit && placeOf(P) === to) return P.going;
@@ -1101,7 +1104,8 @@ export function createDirector({ city, actors, map, stands, travel = null, hooks
     P.tripId += 1;
     P.going = null;
     P.busy = 0;
-    P.down = false;
+    // (pot-3: one held by a look stays held where they are put: pin)
+    P.down = !!P.pinned;
     P.transit = false;
     if (P.inside) {
       open(P, P.inside, false);
@@ -2124,6 +2128,31 @@ export function createDirector({ city, actors, map, stands, travel = null, hooks
       // city's own stand-in, deal_lookout), and a one-shot that needs a room is left out. A haggle away from any
       // counter is talked through
       let name = asked === 'haggle_counter' && !String(scene.spot).startsWith('counter') ? 'talk_gesture_b' : asked;
+      // (notes-2: WORK AT A BENCH OF OURS IS DONE AT THE BENCH, by whoever does it: set/workbench.js. The player's odd
+      // job for Mr. Pruitt hammered the air where he had walked up to talk to him, 1.6 m off the bench. He is stood at
+      // its point facing it, and Mr. Pruitt, if he stands there, steps aside first to the bench's free end, a heads'
+      // gap off, so the two are never in each other)
+      const bench = !T && !P.down && !P.inside ? benchNear(name, at(P.id).x, at(P.id).z) : null;
+      if (bench) {
+        const K = bench.who !== P.id && actors.has(bench.who) ? at(bench.who) : null;
+        const gap = actors.headGap(P.id, bench.who);
+        if (K && !K.w?.hide && Math.hypot(K.x - bench.at[0], K.z - bench.at[1]) < gap) {
+          // (to the free place beside it furthest off the worker's way to it, from where he stands: the first that is
+          // a heads' gap off all of that way. Stepped to beside where the player had stood to talk to him, he was in
+          // the player's head as the player came by to the bench)
+          const A0 = at(P.id);
+          const off = q => segGap(q, [A0.x, A0.z], bench.at);
+          const free = bench.asides.filter(q => !actors.solidAt(q[0], q[1]));
+          const aside = free.find(q => off(q) >= gap) ?? free.reduce((m, q) => (!m || off(q) > off(m) ? q : m), null);
+          if (aside) await limit(actors.stepTo(bench.who, aside[0], aside[1], { v: LIFE.walk * rate, yaw: aside[2], exact: true }), 5);
+        }
+        if (epoch !== mine) return;
+        const A1 = at(P.id);
+        if (Math.hypot(A1.x - bench.at[0], A1.z - bench.at[1]) > 0.03) await limit(actors.stepTo(P.id, bench.at[0], bench.at[1], { v: LIFE.walk * rate, yaw: bench.at[2], exact: true }), 6);
+        if (epoch !== mine) return;
+        actors.turn(P.id, bench.at[2]);
+        await actors.turned([P.id], 1);
+      }
       const seat = seatFor(P, name);
       if (seat && !T && !P.down) {
         const A1 = at(P.id);
@@ -2455,6 +2484,9 @@ export function createDirector({ city, actors, map, stands, travel = null, hooks
           const after = () => {
             // (an extra sent off meanwhile, the scene over: they are on their way out of the picture. dismiss)
             if (epoch !== mine || P.busy || P.ambient || P.going || P.off) return;
+            // (pot-3: what they were sold takes them where the scene left them: not walked back, nothing started.
+            // stay(), below; the look is put on at the scene's 'end')
+            if (P.stay) return;
             if (!P.down) {
               actors.stop(P.id);
               actors.face(P.id, null);
@@ -2827,6 +2859,33 @@ export function createDirector({ city, actors, map, stands, travel = null, hooks
       const P = people.get(id);
       if (P) stopRoutine(P);
     },
+    /**
+     * (pot-3) LEFT WHERE THEIR SCENE ENDS (`on`): not walked back to their place nor given their routine when it ends,
+     * for what they were sold in it to take them there (demo/stage/looks/under.js, at the scene's 'end').
+     */
+    stay(id, on) {
+      const P = people.get(id);
+      if (P) P.stay = !!on;
+    },
+    /**
+     * (pot-3) HELD BY A LOOK (demo/stage/looks/under.js: the rules say they are asleep or dancing): kept where they are
+     * as somebody left on the ground is (`down`: no routine, no walk, nobody moves them for a scene, a scene's walk up to
+     * them stops beside them), until let go (`on` false), when their own hour takes them again. → was anybody there?
+     */
+    pin(id, on) {
+      const P = people.get(id);
+      if (!P) return false;
+      if (on) {
+        P.pinned = true;
+        P.down = true;
+        stopRoutine(P);
+      } else if (P.pinned) {
+        P.pinned = false;
+        P.down = false;
+        if (!P.busy && !P.going && !P.away && !P.held && !P.inside) startRoutine(P);
+      }
+      return true;
+    },
     /** The seat a person plays (or null): their own pad opens when they are home. */
     setPlayer(id) {
       player = id ?? null;
@@ -2939,4 +2998,11 @@ export function createDirector({ city, actors, map, stands, travel = null, hooks
     },
     playHour,
   };
+}
+
+/** (notes-2) How far a point ([x, z]) is from a straight way from `a` to `b` ([x, z] each), m. */
+function segGap(p, a, b) {
+  const [ex, ez] = [b[0] - a[0], b[1] - a[1]];
+  const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * ex + (p[1] - a[1]) * ez) / (ex * ex + ez * ez || 1)));
+  return Math.hypot(p[0] - a[0] - ex * t, p[1] - a[1] - ez * t);
 }

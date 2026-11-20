@@ -5,7 +5,8 @@ import { POLICIES, playSeason } from './policies.mjs';
 import { newRun } from './state.mjs';
 import { withRunConfig } from './config.mjs';
 import { step } from './step.mjs';
-import { deal, placeOf, streetPlaces, guardOf, crewChance } from './rules.mjs';
+import { deal, placeOf, streetPlaces, guardOf, crewChance, jumpChances } from './rules.mjs';
+import { productById, bottleOn } from './make.mjs';
 import { raidChance, gunThings } from './raid.mjs';
 
 export const KITS = Object.freeze([
@@ -28,12 +29,16 @@ export function trial(cfg, policy, kit, { seeds = 3000, days = 6, firstSeed = 1 
   const more = { robbed: 0, rough: 0, door: 0, fights: 0, robs: 0, bins: 0, drinks: 0, packs: 0, sales: 0, goodsLost: 0, goodsSeized: 0, walks: 0, cards: 0, cardPay: 0, footLost: 0, footGoods: 0, footJumped: 0,
     warnings: 0, raids: 0, raidsDoor: 0, raidsGuard: 0, raidsTaken: 0, burgled: 0, guardPaid: 0, alarms: 0, raced: 0, pressureSum: 0,
     crews: 0, sneaks: 0, burgledCrew: 0, burgledSneak: 0, crewFights: 0, crewLost: 0, earlDown: 0, taxPaid: 0, taxRefused: 0, sixesJumps: 0, sixesWon: 0, dogFood: 0,
-    sixesRaids: 0, sixesRaidsHome: 0, sixesRaidsWon: 0, sixesRaidsOut: 0, sixesRaidTaken: 0, roundsFired: 0, roundsCost: 0, gunsLost: 0, gunHeat: 0, raidWarnings: 0 };
+    sixesRaids: 0, sixesRaidsHome: 0, sixesRaidsWon: 0, sixesRaidsOut: 0, sixesRaidTaken: 0, roundsFired: 0, roundsCost: 0, gunsLost: 0, gunHeat: 0, raidWarnings: 0,
+    cooks: 0, lifts: 0, liftPay: 0, doses: 0, dirtyDoses: 0, awayHours: 0, awayDosed: 0,
+    benchPacks: 0, throws: 0, thrownJumped: 0, thrownCrew: 0, thrownSixes: 0, jumpsBottle: 0, jumpsBottleWon: 0, blueMade: 0, blueTook: 0, takeBacks: 0, takeBackWon: 0, takeBackPay: 0, throwHeat: 0 };
   // home pressure, per run: runs with an attempt, attempts on the day after one, attempts fewer than three days after
   // one (two quiet days between), attempts with no warning the day before
   const home = { runs: 0, withRaid: 0, backToBack: 0, shortGap: 0, unwarned: 0, minGap: Infinity };
+  const cooked = {}; // (pot-1) cooks by product, every season
   for (let s = firstSeed; s < firstSeed + seeds; s++) {
     const r = playSeason(cfg, { seed: s, policy, kit, days });
+    for (const [p, k] of Object.entries(r.tally.cooked ?? {})) cooked[p] = (cooked[p] ?? 0) + k;
     per.push(...r.takes);
     jumped += r.tally.jumped; bad += r.tally.bad; stopped += r.tally.stopped;
     earned += r.tally.earned; lost += r.tally.lost; trips += r.tally.trips;
@@ -69,6 +74,7 @@ export function trial(cfg, policy, kit, { seeds = 3000, days = 6, firstSeed = 1 
     // home pressure: what attempts took of what was earned, and the run-level counts above
     burgledPct: pct(more.burgled, earned),
     home: { ...home, withRaidPct: pct(home.withRaid, home.runs), raids: more.raids, perRun: more.raids / Math.max(1, home.runs) },
+    cooked,
   };
 }
 
@@ -957,4 +963,228 @@ export function judgeRaid(x) {
 
 export function raidText(marks) {
   return ['Marks of the raid on your home (raid-1)', ...marks.map(mk => `  ${mk.n}. ${mk.pass ? 'PASS' : 'FAIL'}  ${mk.name}: ${mk.got}   [target: ${mk.target}]`)].join('\n');
+}
+
+// ── pot-1: the pot (RUN.md "The pot (pot-1)"; the crafting plan's slice 1, its balance targets C1 to C6) ─────────────
+// Ten-day seasons (C1's "over ten days"). The cigarette seller is the dealer (both places, sells first, buys cartons from
+// Cousin Earl); the cook is the same player who cooks what it sells instead (policies.mjs `cook`), the hot plate a kit
+// (owned from the start, as the raid's guns are: its $30 is a tenth of a $30 a day, said beside). The best of each is
+// the best go-home amount (and carry, and recipe) of POT_STOPS.
+export const POT_DAYS = 10;
+export const POT_STOPS = Object.freeze([90, 160, 220]);
+/** The scripted cooks: what goes in the pot, and how it sells. */
+export const POT_COOKS = Object.freeze({
+  zonked: [['tea']],
+  rash: [['sticks']],
+  coma: [['tea', 'sticks']],
+  fewer: ['fewer', { cook: { sale: 'cover' } }],
+  // (Disco Rash every day for its cover, and on the day it leaves Zonked, lifting every sleeper: C3's right answer)
+  leaver: [['sticks'], { cook: { sale: 'cover', last: ['tea'] }, lift: 'last', lastDay: POT_DAYS }],
+});
+/** The bars, as the plan words them (crafting-plan.md B14, slice 1); where the plan says no number, the one chosen (RUN.md). */
+export const POT_MARK = Object.freeze({ mattress: 5, bedLo: 5, bedHi: 15, products: 2, uses: 10, fanDays: 8, asleepHour: 14, asleepPct: 75, dosedPct: 50, seconds: 4 });
+const POT_KITS = Object.freeze([['mattress', {}], ['+bed', { bed: true }]]);
+
+/** The pot's numbers: the cigarette seller and each cook at each go-home amount; lifting; the smell and the fan; day 1. */
+export function measurePot(cfg, { seeds = 3000, stops = POT_STOPS } = {}) {
+  const days = POT_DAYS;
+  const t = (policy, kit) => trial(cfg, policy, kit, { seeds, days });
+  const plate = { hotplate: true };
+  const out = { days, seeds, stops: [...stops], price: cfg.things.hotplate?.price ?? 0, fan: cfg.things.boxfan?.price ?? 0 };
+  out.kits = Object.fromEntries(POT_KITS.map(([k, kit]) => {
+    const dealers = stops.flatMap(x => [2, 4].map(c => ({ name: `home at $${x}, carry ${c}`, stop: x, t: t(POLICIES.dealer(x, c), kit) })));
+    const cooks = Object.entries(POT_COOKS).flatMap(([name, args]) => stops.map(x => ({ name, stop: x, t: t(POLICIES.cook(x, ...args), { ...kit, ...plate }) })));
+    const best = list => list.reduce((a, b) => (b.t.mean > a.t.mean ? b : a));
+    const cook = best(cooks);
+    const dealer = best(dealers);
+    // C3: the Zonked cook at its best go-home amount, lifting every sleeper it can, never, or only on the last day
+    const z = best(cooks.filter(c => c.name === 'zonked'));
+    const lift = Object.fromEntries(['always', 'never', 'last'].map(w => [w, w === 'never' ? z.t : t(POLICIES.cook(z.stop, ...POT_COOKS.zonked.slice(0, 1), { lift: w, lastDay: days }), { ...kit, ...plate })]));
+    // C4: the cook who leaves home quiet (no Dee, nothing but the odd job at home), and the cook who sells at home (Dee and
+    // the trailer park's crimes first), each with the box fan in the window and without
+    const quiet = POLICIES.cook(cook.stop, ...POT_COOKS[cook.name].slice(0, 1), { ...(POT_COOKS[cook.name][1] ?? {}), regular: 'avoid', homeQuiet: true });
+    const home = POLICIES.cook(cook.stop, ...POT_COOKS[cook.name].slice(0, 1), { ...(POT_COOKS[cook.name][1] ?? {}), parkFirst: true });
+    // (and beside them, the cook whose only selling at home is a bag to Dee, nothing else there but the odd job)
+    const dee = POLICIES.cook(cook.stop, ...POT_COOKS[cook.name].slice(0, 1), { ...(POT_COOKS[cook.name][1] ?? {}), homeQuiet: 'sell' });
+    const two = p => ({ without: t(p, { ...kit, ...plate }), with: t(p, { ...kit, ...plate, boxfan: true }) });
+    const fan = { quiet: two(quiet), home: two(home), dee: two(dee) };
+    return [k, { dealers: dealers.map(d => ({ name: d.name, mean: d.t.mean })), cooks: cooks.map(c => ({ name: c.name, stop: c.stop, mean: c.t.mean, cooked: c.t.cooked })), dealer: { name: dealer.name, t: dealer.t }, cook: { name: cook.name, stop: cook.stop, t: cook.t }, lift, liftStop: z.stop, fan }];
+  }));
+  // C5: day 1, $20 banked and the hot plate, the cook who sells at home (Dee first): the first hour anybody is asleep
+  const c5 = POLICIES.cook(160, ['tea'], { parkFirst: true });
+  let by = 0;
+  const hours = [];
+  for (let s = 1; s <= seeds; s++) {
+    const r = playSeason(cfg, { seed: s, policy: c5, kit: plate, days: 1 });
+    const f = r.tally.firstAsleep;
+    if (f && f.day === 1) hours.push(f.hour);
+    if (f && f.day === 1 && f.hour <= POT_MARK.asleepHour) by += 1;
+  }
+  out.day1 = { by: pct(by, seeds), seeds, median: hours.length ? hours.sort((a, b) => a - b)[Math.floor(hours.length / 2)] : null };
+  out.seconds = Object.values(cfg.make.makers).flatMap(m => Object.values(m.carriers)).map(c => c.scene?.seconds ?? null);
+  return out;
+}
+
+/** Marks C1 to C6 of the pot, pass or fail, with the numbers behind each. */
+export function judgePot(x) {
+  const M = POT_MARK;
+  const D = x.days;
+  const $ = n => `$${n.toFixed(1)}`;
+  const pc = (a, b) => (100 * (a - b)) / b;
+  const sg = n => `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`;
+  const m = [];
+  const K = x.kits;
+  const mat = K.mattress;
+  const bed = K['+bed'];
+  const c1 = k => pc(K[k].cook.t.mean, K[k].dealer.t.mean);
+  const words1 = k => `${k}: the best cook ${$(K[k].cook.t.mean)} (${K[k].cook.name}, home at $${K[k].cook.stop}; ${(K[k].cook.t.perDay.cooks * D).toFixed(1)} cooks, ${(K[k].cook.t.perDay.doses * D).toFixed(1)} bags taken in ${D} days), the best cigarette seller ${$(K[k].dealer.t.mean)} (${K[k].dealer.name}): ${sg(c1(k))} (the hot plate's $${x.price} spread over the season: ${sg(pc(K[k].cook.t.mean - x.price / D, K[k].dealer.t.mean))})`;
+  m.push({ n: 'C1', name: 'The pot pays like the trade it joins', target: `over ${D} days a cook banks within ${M.mattress}% of the best cigarette seller on the mattress, ${M.bedLo} to ${M.bedHi}% more on the bed`,
+    got: `${words1('mattress')}; ${words1('+bed')}`, pass: Math.abs(c1('mattress')) <= M.mattress && c1('+bed') >= M.bedLo && c1('+bed') <= M.bedHi });
+  const uses = k => {
+    const c = K[k].cook.t.cooked;
+    const all = Object.values(c).reduce((a, n) => a + n, 0);
+    return Object.entries(c).filter(([, n]) => all && (100 * n) / all >= M.uses).map(([p, n]) => `${p} ${((100 * n) / Math.max(1, all)).toFixed(0)}%`);
+  };
+  const ranks = k => K[k].cooks.slice().sort((a, b) => b.mean - a.mean).slice(0, 5).map(c => `${c.name} $${c.stop} ${$(c.mean)}`).join(', ');
+  m.push({ n: 'C2', name: 'A choice at the pot matters', target: `the best scripted cook uses at least ${M.products} of the three products (each at least ${M.uses}% of its cooks), on the mattress and on the bed`,
+    got: POT_KITS.map(([k]) => `${k}: the best ${K[k].cook.name} (${uses(k).join(', ') || 'nothing'}); the top five: ${ranks(k)}`).join('; '),
+    pass: POT_KITS.every(([k]) => uses(k).length >= M.products) });
+  const L = k => K[k].lift;
+  m.push({ n: 'C3', name: 'Keep or burn', target: 'robbing your sleepers every day banks less than selling to them; never robbing banks less than robbing on the day you leave (the Zonked cook, at its best go-home amount)',
+    got: POT_KITS.map(([k]) => `${k} (home at $${K[k].liftStop}): every day ${$(L(k).always.mean)} (${(L(k).always.perDay.lifts * D).toFixed(1)} wallets, $${(L(k).always.perDay.liftPay * D).toFixed(0)}), never ${$(L(k).never.mean)}, on the last day ${$(L(k).last.mean)} (${(L(k).last.perDay.lifts * D).toFixed(2)} wallets)`).join('; '),
+    pass: POT_KITS.every(([k]) => L(k).always.mean < L(k).never.mean && L(k).never.mean < L(k).last.mean) });
+  const F = k => K[k].fan;
+  const back = f => { const gain = f.with.mean - f.without.mean; return { gain, days: gain > 0 ? x.fan / gain : Infinity }; };
+  const dd = n => (Number.isFinite(n) ? `${n.toFixed(1)} days` : 'never');
+  m.push({ n: 'C4', name: 'The smell is a level; the fan has a job', target: `a daily cook alone never reaches the warning; the fan ($${x.fan}) pays back inside ${M.fanDays} days for a cook who also sells at home, and never for one who does not`,
+    got: POT_KITS.map(([k]) => `${k}: the cook who leaves home quiet ${(F(k).quiet.without.perDay.warnings * D).toFixed(3)} warnings in ${D} days (${(F(k).quiet.without.perDay.cooks * D).toFixed(1)} cooks), the fan ${sg(pc(F(k).quiet.with.mean, F(k).quiet.without.mean))}: ${dd(back(F(k).quiet).days)}; the cook who sells at home (Dee and the trailer park's crimes first) ${(F(k).home.without.perDay.warnings * D).toFixed(2)} warnings, ${(F(k).home.with.perDay.warnings * D).toFixed(2)} with the fan, ${back(F(k).home).gain >= 0 ? '+' : ''}${$(back(F(k).home).gain)} a day: ${dd(back(F(k).home).days)}; (beside: the cook whose only selling at home is Dee ${(F(k).dee.without.perDay.warnings * D).toFixed(2)} warnings, the fan ${dd(back(F(k).dee).days)})`).join('; '),
+    pass: POT_KITS.every(([k]) => F(k).quiet.without.perDay.warnings === 0 && !Number.isFinite(back(F(k).quiet).days) && back(F(k).home).days <= M.fanDays) });
+  m.push({ n: 'C5', name: 'Fast to the first sleeper', target: `with $20 and a hot plate, a buyer is asleep on screen by ${M.asleepHour}:00 on day 1 (the cook who sells at home, in at least ${M.asleepPct}% of seasons: the plan names no share)`,
+    got: `asleep by ${M.asleepHour}:00 in ${x.day1.by.toFixed(1)}% of ${x.day1.seeds} day-ones (the first sleeper's median hour ${x.day1.median ?? 'never'})`, pass: x.day1.by >= M.asleepPct });
+  const dosed = k => pc(K[k].cook.t.perDay.awayDosed, K[k].cook.t.perDay.awayHours) + 100;
+  m.push({ n: 'C6', name: 'What you cook is seen', target: `a dosed person is on screen in most (over ${M.dosedPct}%) of a cook's market hours; the cook gives control back inside ${M.seconds} seconds (the cook scene the rules ask for: config make, the page's own measure later)`,
+    got: `${POT_KITS.map(([k]) => `${k}: the best cook ${dosed(k).toFixed(0)}% of ${(K[k].cook.t.perDay.awayHours * D).toFixed(1)} market hours`).join('; ')}; the cook scene asked for ${x.seconds.join(', ')} s`,
+    pass: POT_KITS.every(([k]) => dosed(k) > M.dosedPct) && x.seconds.every(s => s != null && s <= M.seconds) });
+  return m;
+}
+
+export function potText(marks) {
+  return ['Marks of the pot (pot-1)', ...marks.map(mk => `  ${mk.n}. ${mk.pass ? 'PASS' : 'FAIL'}  ${mk.name}: ${mk.got}   [target: ${mk.target}]`)].join('\n');
+}
+
+// ── bench-1: the bench and the bottle (RUN.md "The bench and the bottle (bench-1)"; the addition's slice 2, its Balance
+// row B1 to B4) ──────────────────────────────────────────────────────────────────────────────────────────────────────────
+// Fourteen-day seasons (B2's "over 14 days"). The player is the dealer (both places, home at $X, sells first, carry 2 or
+// 4: the best cigarette seller of the pot's C1), the workbench a kit (owned from the start: its $60 is B4's payback, not a
+// day's cost), with a bottle of one fill always on its belt (policies.mjs `bottler`), going for the blue man when the card
+// says it wins at least half the time. "The same player without": the same at the same go-home amount, never packing.
+export const BENCH_DAYS = 14;
+export const BENCH_STOPS = Object.freeze([90, 160, 220]);
+export const BENCH_FILLS = Object.freeze({ spray: ['spraycan'], paint: ['painttin'], both: ['painttin', 'spraycan'] });
+/** The bars, as the addition words them (crafting-plan-addendum.md G2, slice 2's Balance row); B4's is the raid's (RAID_MARK.payback). */
+export const BENCH_MARK = Object.freeze({ lift: 'cutter', seeOff: 90, within: 10, payback: 16 });
+const BENCH_KITS = Object.freeze([['mattress', {}], ['+bed', { bed: true }]]);
+
+/** B1's table: getting jumped's fight (seen off, of jumped.sample fights), with what you fight with and each bottle, fresh and tired, at each place with jumpers. */
+export function benchTable(cfg) {
+  const s0 = newRun({ cfg });
+  const places = streetPlaces(cfg).filter(p => cfg.tiers[cfg.places[p].tier]?.jump);
+  const bottles = [null, ...Object.keys(cfg.make.products).filter(id => cfg.goods[id]?.kind === 'bottle')];
+  const out = {};
+  for (const place of places) {
+    out[place] = {};
+    for (const tired of [false, true]) {
+      for (const arm of ['hands', 'cutter']) {
+        const st = { ...s0, owned: { ...s0.owned, cutter: arm === 'cutter' } };
+        const row = {};
+        for (const id of bottles) {
+          const b = id ? bottleOn(cfg, { ...st, belt: { good: id, n: 1 } }) : null;
+          row[id ?? 'none'] = jumpChances(cfg, st, place, { arm, tired, bottle: b }).fail;
+        }
+        out[place][`${arm}${tired ? ', tired' : ''}`] = row;
+      }
+    }
+  }
+  return { places, bottles: bottles.map(b => b ?? 'none'), table: out };
+}
+
+/** The bench's numbers: the table (B1), and the dealer without bottles and with each fill, on each kit; the two players of B3. */
+export function measureBench(cfg, { seeds = 3000, stops = BENCH_STOPS } = {}) {
+  const days = BENCH_DAYS;
+  const t = (policy, kit) => trial(cfg, policy, kit, { seeds, days });
+  const bench = { workbench: true };
+  const out = { days, seeds, stops: [...stops], price: cfg.things.workbench?.price ?? 0, table: benchTable(cfg) };
+  const best = list => list.reduce((a, b) => (b.t.mean > a.t.mean ? b : a));
+  out.kits = Object.fromEntries(BENCH_KITS.map(([k, kit]) => {
+    const without = stops.flatMap(x => [2, 4].map(c => ({ name: `home at $${x}, carry ${c}`, stop: x, carry: c, t: t(POLICIES.bottler(x, null, { carry: c }), { ...kit, ...bench }) })));
+    const w = best(without);
+    const fills = Object.fromEntries(Object.entries(BENCH_FILLS).map(([f, fill]) => [f, t(POLICIES.bottler(w.stop, fill, { carry: w.carry }), { ...kit, ...bench })]));
+    return [k, { without: without.map(x => ({ name: x.name, mean: x.t.mean })), base: { name: w.name, stop: w.stop, carry: w.carry, t: w.t }, fills }];
+  }));
+  // B3: the dealer who carries a lot (home at $220, carry 4) and the market's own player (the market every day, home at $120), each with spray and with paint
+  const big = { stop: 220, carry: 4 };
+  out.big = { spray: t(POLICIES.bottler(big.stop, BENCH_FILLS.spray, { carry: big.carry }), bench), paint: t(POLICIES.bottler(big.stop, BENCH_FILLS.paint, { carry: big.carry }), bench), none: t(POLICIES.bottler(big.stop, null, { carry: big.carry }), bench), ...big };
+  out.market = { spray: t(POLICIES.bottler(120, BENCH_FILLS.spray, { base: 'homeAt' }), bench), paint: t(POLICIES.bottler(120, BENCH_FILLS.paint, { base: 'homeAt' }), bench), none: t(POLICIES.bottler(120, null, { base: 'homeAt' }), bench), stop: 120 };
+  return out;
+}
+
+/** Marks B1 to B4 of the bench, pass or fail, with the numbers behind each. */
+export function judgeBench(x) {
+  const M = BENCH_MARK;
+  const D = x.days;
+  const $ = n => `$${n.toFixed(1)}`;
+  const pc = (a, b) => (100 * (a - b)) / b;
+  const sg = n => `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`;
+  const m = [];
+  // B1: the bottle's lift against the box cutter's (bare hands to the cutter), place by place, fresh and tired
+  const T = x.table.table;
+  const rows = [];
+  for (const place of x.table.places) {
+    for (const tired of ['', ', tired']) {
+      const hands = T[place][`hands${tired}`];
+      const cutter = T[place][`cutter${tired}`];
+      const lift = cutter.none - hands.none;
+      for (const b of x.table.bottles.filter(b => b !== 'none')) {
+        rows.push({ place, tired: !!tired, b, liftHands: hands[b] - hands.none, liftCutter: cutter[b] - cutter.none, top: Math.max(hands[b], cutter[b]), cutterLift: lift, hands, cutter });
+      }
+    }
+  }
+  const worst = rows.reduce((a, r) => (Math.max(r.liftHands, r.liftCutter) - r.cutterLift > Math.max(a.liftHands, a.liftCutter) - a.cutterLift ? r : a));
+  const fails1 = rows.filter(r => Math.max(r.liftHands, r.liftCutter) > r.cutterLift + 1e-9 || r.top > M.seeOff);
+  const say1 = x.table.places.map(place => `${place}: ${['', ', tired'].map(tr => `${tr ? 'tired' : 'fresh'} hands ${T[place][`hands${tr}`].none} / cutter ${T[place][`cutter${tr}`].none} (the cutter +${(T[place][`cutter${tr}`].none - T[place][`hands${tr}`].none).toFixed(1)}); ${x.table.bottles.filter(b => b !== 'none').map(b => `${b} ${T[place][`hands${tr}`][b]} / ${T[place][`cutter${tr}`][b]}`).join(', ')}`).join('; ')}`).join(' · ');
+  // (bench-1, the orchestrator's reading of B1 with dog spray kept at the plan's 3 s: "about the cutter's lift, none above
+  // 90": each bottle's furthest over (or nearest under) the cutter's lift, in any cell)
+  const by = x.table.bottles.filter(b => b !== 'none').map(b => {
+    const rs = rows.filter(r => r.b === b);
+    const over = Math.max(...rs.map(r => Math.max(r.liftHands, r.liftCutter) - r.cutterLift));
+    return `${b} ${over >= 0 ? '+' : ''}${over.toFixed(1)}`;
+  });
+  m.push({ n: 'B1', name: 'A bottle helps a jump, no more than the box cutter does', target: `a bottle lifts the share you see two jumpers off by no more than the box cutter lifts it over bare hands, and never above ${M.seeOff} in 100 (each bottle, bare hands and the cutter, fresh and tired, at each place)`,
+    got: `${say1}; the furthest over: ${worst.b} at ${worst.place}${worst.tired ? ' tired' : ''}, +${Math.max(worst.liftHands, worst.liftCutter).toFixed(1)} against the cutter's +${worst.cutterLift.toFixed(1)}; ${fails1.length} of ${rows.length} cells over a bar; each bottle's furthest over the cutter's lift: ${by.join(', ')}; the highest seen off ${Math.max(...rows.map(r => r.top)).toFixed(1)}`,
+    pass: fails1.length === 0 });
+  // B2: the best fill against the same player without, on each kit
+  const K = x.kits;
+  const bestFill = k => Object.entries(K[k].fills).reduce((a, b) => (b[1].mean > a[1].mean ? b : a));
+  const b2 = k => pc(bestFill(k)[1].mean, K[k].base.t.mean);
+  const per = (r, key) => (r.perDay[key] * D).toFixed(1);
+  const say2 = k => `${k}: without ${$(K[k].base.t.mean)} (${K[k].base.name}; jumped ${(K[k].base.t.jumped * D).toFixed(1)} times in ${D} days); ${Object.entries(K[k].fills).map(([f, r]) => `${f} ${$(r.mean)} (${sg(pc(r.mean, K[k].base.t.mean))}; ${per(r, 'benchPacks')} packs, ${per(r, 'throws')} thrown, seen off ${r.perDay.jumpsBottle ? ((100 * r.perDay.jumpsBottleWon) / r.perDay.jumpsBottle).toFixed(0) : '-'}% of jumps with a bottle, the place hotter ${per(r, 'throwHeat')}, ${per(r, 'takeBacks')} taken back for $${(r.perDay.takeBackPay * D).toFixed(0)})`).join(', ')}`;
+  m.push({ n: 'B2', name: 'The bottle earns its keep, and no more', target: `over ${D} days the player with bottles banks within ${M.within}% of the same player without on the mattress, and more on the bed (its best fill)`,
+    got: `${say2('mattress')}; ${say2('+bed')}`, pass: Math.abs(b2('mattress')) <= M.within && b2('+bed') > 0 });
+  // B3: spray better for the one who carries a lot; paint better for the one who works one market all week
+  const B = x.big;
+  const Mk = x.market;
+  m.push({ n: 'B3', name: 'Neither bottle every day', target: 'dog spray banks more than paint for the player who carries a lot; paint more than dog spray for the player who works one market all week',
+    got: `carries a lot (home at $${B.stop}, carry ${B.carry}): spray ${$(B.spray.mean)}, paint ${$(B.paint.mean)} (${per(B.paint, 'takeBacks')} taken back, $${(B.paint.perDay.takeBackPay * D).toFixed(0)}), none ${$(B.none.mean)}; the market every day (home at $${Mk.stop}): spray ${$(Mk.spray.mean)}, paint ${$(Mk.paint.mean)} (${per(Mk.paint, 'blueTook')} blue men with something of yours, ${per(Mk.paint, 'takeBacks')} taken back, $${(Mk.paint.perDay.takeBackPay * D).toFixed(0)}), none ${$(Mk.none.mean)}`,
+    pass: B.spray.mean > B.paint.mean && Mk.paint.mean > Mk.spray.mean });
+  // B4: the bench's price over what its best fill adds a day
+  const add = k => bestFill(k)[1].mean - K[k].base.t.mean;
+  const days = k => (add(k) > 0 ? x.price / add(k) : Infinity);
+  const dd = n => (Number.isFinite(n) ? `${n.toFixed(1)} days` : 'never');
+  m.push({ n: 'B4', name: 'The bench pays for itself', target: `the workbench ($${x.price}) pays back inside ${M.payback} days (the raid's bar) for the player it is for, on the bed (where B2 asks it to earn more); the mattress beside`,
+    got: BENCH_KITS.map(([k]) => `${k}: its best fill ${bestFill(k)[0]} ${add(k) >= 0 ? '+' : ''}${$(add(k))} a day: ${dd(days(k))}`).join('; '), pass: days('+bed') <= M.payback });
+  return m;
+}
+
+export function benchText(marks) {
+  return ['Marks of the bench and the bottle (bench-1)', ...marks.map(mk => `  ${mk.n}. ${mk.pass ? 'PASS' : 'FAIL'}  ${mk.name}: ${mk.got}   [target: ${mk.target}]`)].join('\n');
 }

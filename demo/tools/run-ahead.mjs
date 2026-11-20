@@ -8,7 +8,7 @@
 // (Input.dispatchKeyEvent), nothing of the page's own called to act:
 //   1. a new run at 1600 × 1000: the panel opened by its button on the rail, closed with Escape, opened again by its key
 //      (U); no card before anything is picked; every node's words are its name and nothing else; every name whole (its
-//      text as wide as its box at most) and all four trees in sight without scrolling;
+//      text as wide as its box at most) and all five trees in sight without scrolling (pot-2: Make the fifth);
 //   2. a node of each branch pressed (the throw, the real bed, the door bar, Low Tide Docks): its card comes up and is
 //      checked against the config (name, price, who and where, its numbers; the throw's table of fights against the
 //      rules' own sample, once every number is in), whole without scrolling inside; its × puts it away and a press
@@ -18,7 +18,7 @@
 //   4. a game set up at the trailer park with $90 on you (the page's own load, as every picture tool does): the
 //      haymaker's node pressed, its Learn pressed, the rules' learn made, and the node flips to yours;
 //   5. Escape closes the panel; then at 1280 × 720 (the smallest the page supports), a new run and one in the middle of
-//      the game: names whole and all four trees in sight again, and a card up.
+//      the game: names whole and all five trees in sight again, and a card up.
 // A picture of every step into --out. Fails on any page error. Prints `ahead-ok` or `ahead-fail: <why>`.
 import path from 'node:path';
 import { writeFileSync, mkdirSync } from 'node:fs';
@@ -123,7 +123,7 @@ try {
   };
 
   const cardUp = () => ev('(c => !!c && !c.hidden && c.getBoundingClientRect().height > 0)(document.querySelector(".u-ah-card"))');
-  /** Every node's words its name alone, every name whole in its box, and the four trees in sight without scrolling. */
+  /** Every node's words its name alone, every name whole in its box, and the five trees in sight without scrolling. */
   async function fits(name) {
     const r = await ev(`(() => {
       const A = window.__demo.hud.ahead.data;
@@ -142,7 +142,7 @@ try {
     const unseen = r.nodes.filter(n => !n.seen);
     step(`${name}: every node's words are its name only (${r.nodes.length} nodes${words.length ? `; not: ${words.map(n => JSON.stringify(n.text)).join(', ')}` : ''})`, r.nodes.length > 0 && !words.length);
     step(`${name}: no name cut off${cut.length ? ` (${cut.map(n => `${n.name} ${n.w}px in ${n.box}px`).join(', ')})` : ''}`, !cut.length);
-    step(`${name}: all four trees in sight without scrolling (${r.sh}px of trees in ${r.ch}px${unseen.length ? `; out of sight: ${unseen.map(n => n.name).join(', ')}` : ''})`, !r.scrolls && !unseen.length);
+    step(`${name}: all five trees in sight without scrolling (${r.sh}px of trees in ${r.ch}px${unseen.length ? `; out of sight: ${unseen.map(n => n.name).join(', ')}` : ''})`, !r.scrolls && !unseen.length);
   }
 
   // 1. OPENED BY ITS BUTTON, CLOSED WITH ESCAPE, OPENED BY ITS KEY
@@ -159,7 +159,12 @@ try {
   const lead = await textOf('.u-ah-lead');
   step(`the lead says the money and the next thing (${lead})`, lead.includes(`$${A0.have} to spend`) && lead.includes(A0.nodes[A0.next.id].name));
   const counts = await ev('[...document.querySelectorAll(".u-ah-branch")].map(b => [b.dataset.branch, b.querySelectorAll(".u-ah-node").length])');
-  step(`four branches, every node of the rules' tree drawn (${JSON.stringify(counts)})`, JSON.stringify(counts) === JSON.stringify(A0.branches.map(b => [b.id, b.groups.flatMap(g => g.nodes).length])));
+  // (pot-2: the rules' four trees and the page's fifth, Make, from the rules' view of the pot: the hot plate moved to it
+  // from Gear; every other node of the rules' tree where the rules put it)
+  const pageTree = await ev('window.__demo.hud.ahead.data.branches.map(b => [b.id, b.groups.flatMap(g => g.nodes).length])');
+  const rulesIds = A0.branches.flatMap(b => b.groups.flatMap(g => g.nodes));
+  const drawn = await ev('[...document.querySelectorAll(".u-ah-node")].map(b => b.dataset.node)');
+  step(`five branches, Make the fifth, every node of the rules' tree drawn (${JSON.stringify(counts)})`, JSON.stringify(counts) === JSON.stringify(pageTree) && counts.map(c => c[0]).join() === 'fight,gear,home,places,make' && rulesIds.every(id => drawn.includes(id)));
   step('no card before anything is picked', !(await cardUp()));
   await fits('1600x1000, a new run');
   // (the fight's numbers come in a few at a time while the panel is open)

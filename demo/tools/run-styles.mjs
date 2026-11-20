@@ -357,9 +357,11 @@ try {
   await page.sleep(500);
   await shot('6-pay-after');
 
-  const audit = await ev('(a => a && { overlaps: a.overlaps, vanish: a.vanish, feet: a.feet, heads: a.heads, furniture: a.furniture })(window.__demo.stage.actors.audit())').catch(() => null);
+  const audit = await ev('(a => a && { overlaps: a.overlaps, vanish: a.vanish, feet: a.feet, heads: a.heads, furniture: a.furniture, stretch: a.stretch })(window.__demo.stage.actors.audit())').catch(() => null);
   report.audit = audit;
   console.log(`the stage's audit: ${JSON.stringify(audit)}`);
+  // (streak-1: a body posed by hand drawn with a part of it past a body's reach, demo/fight/puppet/reach.js)
+  if (audit?.stretch) fail(`the stage's audit: ${audit.stretch} bodies drawn stretched past their reach`);
 } catch (err) {
   fail(String(err?.stack ?? err));
   if (page) console.error(page.logs.filter(l => !l.startsWith('[log]')).slice(-12).join('\n').slice(0, 3000));

@@ -55,7 +55,8 @@
 import { view } from './view.mjs';
 import { step } from './step.mjs';
 import { newRun } from './state.mjs';
-import { fullEnergy, heatHere, doneToday, ITEMS, goodsWorth, pressureOf, sixesOf } from './rules.mjs';
+import { fullEnergy, heatHere, doneToday, ITEMS, goodsWorth, pressureOf, sixesOf, behind, shownGoods } from './rules.mjs';
+import { placeEffects, underHere } from './effects.mjs';
 import { holdsOf, holdOf, raidChance, roundsOf } from './raid.mjs';
 
 const NEVER = Infinity;
@@ -141,7 +142,153 @@ export const POLICIES = Object.freeze({
   armed: stopAt => ({ ...mixed(stopAt), tax: 'refuse', hold: 'best', restock: true }),
   handsOnly: stopAt => ({ ...mixed(stopAt), tax: 'refuse', hold: 'best', earlRaid: true }),
   moved: (stopAt, other = 'plaza', at = 5) => ({ ...mixed(stopAt), moveAt: at, moveTo: other }),
+  // (pot-1, RUN.md "The pot (pot-1)") THE COOK: the dealer's shape (both places, home at $stopAt, sells first, carries
+  // out up to `carry` bags), but what it sells it cooks: no pack from a connect. Each morning it is short of bags (under
+  // `cook.at` on you and at home) it buys the makings on its own street and cooks once at its crib (the hot plate a kit).
+  // `recipe`: what goes in the pot: ['tea'], ['sticks'], ['tea', 'sticks'], or 'fewer' (whichever of Zonked and Disco
+  // Rash it has fewer bags of) or 'alternate' (one a day, then the other). `sale`: 'cover' sells Disco Rash where nobody
+  // is dancing yet, else Zonked (the dance covers the selling that follows); unset, the card's own pick. `lift`: a
+  // sleeper's wallet: 'always' (whenever there is one where it stands), 'last' (only on the season's last day, `lastDay`),
+  // 'never' (the default). `cook.last`: on the last day it cooks this whatever is on the shelf. `homeQuiet`: nothing at home but the odd job and the pot (a cook who does not sell at home
+  // also leaves Dee be: `regular: 'avoid'`); `parkFirst`: the trailer park's crimes and Dee first (the home seller).
+  cook: (stopAt, recipe = ['tea'], { cook: ck = {}, ...more } = {}) => ({ ...mixed(stopAt), sell: 'lean', buyAt: [], carry: 5, ...more, cook: { recipe, at: 4, perDay: 1, ...ck } }),
+  // (bench-1, RUN.md "The bench and the bottle (bench-1)") THE ONE WHO KEEPS A BOTTLE ON HIS BELT: the dealer's shape
+  // (both places, home at $stopAt, sells first, `carry`), the workbench a kit. Each morning at the crib with nothing on
+  // its belt it puts a bottle of `fill` on it; with none at home it buys what goes in on its own street and packs once
+  // (an hour, three bottles). `fill`: ['spraycan'], ['painttin'] or both. `takeBack`: where a blue man who took
+  // something from it is, it goes for him when the card says it wins at least `takeBackMin` in 100 (and it has the
+  // energy for the fight and the way home). `base`: another player's shape instead of the dealer's (`homeAt`: the market
+  // only). Unset `fill`: it never packs (the same player without bottles).
+  bottler: (stopAt, fill = ['spraycan'], { base = 'dealer', carry = 2, ...more } = {}) => ({ ...(base === 'dealer' ? { ...mixed(stopAt), sell: 'lean', restock: 2 * carry, carry } : homeAt(stopAt)),
+    ...(fill ? { bench: { fill: [...fill].sort() } } : {}), takeBack: true, takeBackMin: 50, ...more }),
 });
+
+// ── (bench-1) the bottle on the belt (RUN.md "The bench and the bottle (bench-1)") ─────────────────────────────────────
+/** The bottle a bench player packs: its product (config make.products by `from`). */
+const benchProduct = (cfg, policy) => Object.keys(cfg.make?.products ?? {}).find(id => [...(cfg.make.products[id].from ?? [])].sort().join('+') === policy.bench.fill.join('+')) ?? null;
+/** It wants to pack today: it owns a working bench, nothing on its belt, none of its bottle at home, not packed today. → the fill, or null. */
+function benchWant(cfg, state, policy) {
+  if (!policy.bench || !state.things?.workbench || !cfg.make?.makers?.bench) return null;
+  if ((state.home?.out?.workbench ?? 0) >= state.day) return null;
+  if ((state.make?.bench?.cooked?.[state.day] ?? 0) >= 1) return null;
+  const p = benchProduct(cfg, policy);
+  if (state.belt || (state.stash?.[p] ?? 0) > 0) return null;
+  return policy.bench.fill;
+}
+/** At the crib: a bottle onto the empty belt; else pack, or step out for what goes in first. */
+function benchNow(cfg, state, v, policy) {
+  if (!policy.bench || !cfg.make?.makers?.bench) return null;
+  const p = benchProduct(cfg, policy);
+  if (!state.belt && (state.stash?.[p] ?? 0) > 0) return { do: 'belt', good: p };
+  const want = benchWant(cfg, state, policy);
+  if (!want || state.energy < cfg.energy.perHour + (policy.minOut ?? 3)) return null;
+  const c = v.choices.find(x => x.choice.do === 'cook' && x.choice.maker === 'bench' && x.available && x.choice.with.join('+') === want.join('+'));
+  if (c) return c.choice;
+  const missing = want.filter(k => !(state.stash?.[k] ?? 0));
+  const cost = missing.reduce((a, k) => a + cfg.make.makings[k].price, 0);
+  return missing.length && state.banked >= cost ? { do: 'out', take: cost, goods: {} } : null;
+}
+/** On its own street: what goes in that it still needs, then inside to pack. */
+function fillingNow(cfg, v, state, policy) {
+  const want = benchWant(cfg, state, policy);
+  if (!want) return null;
+  for (const k of want) {
+    if ((state.goods?.[k] ?? 0) + (state.stash?.[k] ?? 0)) continue;
+    const m = v.moves.find(x => x.what === 'making' && x.item === k && x.available);
+    if (m && state.carried >= m.price) return m.choice;
+    return null;
+  }
+  return state.energy >= cfg.energy.perHour + (policy.minOut ?? 3) ? { do: 'inside' } : null;
+}
+/** Where a blue man who took something from it is: go for him when the card says it wins often enough, with the energy for it. */
+function takeBackNow(cfg, state, v, policy) {
+  if (!policy.takeBack) return null;
+  const m = v.moves.find(x => x.what === 'takeBack' && x.available && x.fight?.pct >= (policy.takeBackMin ?? 50));
+  if (!m) return null;
+  const away = !cfg.places[state.place]?.door;
+  return state.energy >= cfg.energy.perHour + cfg.duel.cost.lose + (away ? cfg.energy.perHour : 0) ? m.choice : null;
+}
+
+// ── (pot-1) the cook (RUN.md "The pot (pot-1)") ────────────────────────────────────────────────────────────────────────
+const madeHas = (cfg, state, g) => behind(cfg, state, g).reduce((a, k) => a + (state.goods?.[k] ?? 0) + (state.stash?.[k] ?? 0), 0);
+const bagsHeld = (cfg, state) => Object.keys(cfg.goods ?? {}).filter(g => cfg.goods[g].made).reduce((a, g) => a + (state.goods?.[g] ?? 0) + (state.stash?.[g] ?? 0), 0);
+const hasMaking = (state, k) => (state.goods?.[k] ?? 0) + (state.stash?.[k] ?? 0);
+/** What the cook puts in the pot today (makings, sorted). */
+function recipeOf(cfg, state, policy) {
+  const r = policy.cook.recipe;
+  if (Array.isArray(r)) return [...r].sort();
+  if (r === 'alternate') return [state.day % 2 ? 'sticks' : 'tea'];
+  // 'fewer': whichever of the two singles it holds fewer bags of (Disco Rash on a tie: it covers the selling)
+  return madeHas(cfg, state, 'disco-rash') <= madeHas(cfg, state, 'zonk') ? ['sticks'] : ['tea'];
+}
+/** The cook wants to cook today: it owns the hot plate, has not cooked today, and is short of bags. → the recipe, or null. */
+function cookWant(cfg, state, policy) {
+  if (!policy.cook || !state.things?.hotplate) return null;
+  // (smashed in a raid: no cooking until it is mended)
+  if ((state.home?.out?.hotplate ?? 0) >= state.day) return null;
+  if ((state.make?.kitchen?.cooked?.[state.day] ?? 0) >= (policy.cook.perDay ?? 1)) return null;
+  // (`cook.last`: on the season's last day, this, whatever is on the shelf: the leaver's Zonked, to lift the sleepers)
+  if (policy.cook.last && state.day === policy.lastDay) return [...policy.cook.last].sort();
+  if (bagsHeld(cfg, state) >= (policy.cook.at ?? 4)) return null;
+  return recipeOf(cfg, state, policy);
+}
+/** At the crib: cook, or step out to buy the makings first (the trailer park's case buys them and comes back in). */
+function cookNow(cfg, state, v, policy) {
+  const want = cookWant(cfg, state, policy);
+  if (!want || state.energy < cfg.energy.perHour) return null;
+  const c = v.choices.find(x => x.choice.do === 'cook' && x.available && x.choice.with.join('+') === want.join('+'));
+  if (c) return c.choice;
+  const missing = want.filter(k => !(state.stash?.[k] ?? 0));
+  const cost = missing.reduce((a, k) => a + cfg.make.makings[k].price, 0);
+  return missing.length && state.banked >= cost ? { do: 'out', take: cost, goods: {} } : null;
+}
+/** On its own street: the makings it still needs, then inside to cook. */
+function makingNow(cfg, v, state, policy) {
+  const want = cookWant(cfg, state, policy);
+  if (!want) return null;
+  for (const k of want) {
+    if (hasMaking(state, k)) continue;
+    const m = v.moves.find(x => x.what === 'making' && x.item === k && x.available);
+    if (m && state.carried >= m.price) return m.choice;
+    return null;
+  }
+  return state.energy >= cfg.energy.perHour ? { do: 'inside' } : null;
+}
+/** The bags a trip takes out (as they show): up to `carry` in all, Disco Rash first (it covers the selling). */
+function bagsOut(cfg, state, policy) {
+  let left = policy.carry ?? 5;
+  const shown = shownGoods(cfg, state, state.stash);
+  const out = {};
+  for (const g of Object.keys(shown).filter(k => cfg.goods[k]?.made).sort((a, b) => (a.startsWith('disco-rash') ? -1 : b.startsWith('disco-rash') ? 1 : 0))) {
+    const n = Math.min(shown[g], left);
+    if (n) out[g] = n;
+    left -= n;
+  }
+  return out;
+}
+/** Which bag a sale takes: `sale: 'cover'`, Disco Rash where nobody dances yet, else Zonked; else the card's own. */
+function saleBag(cfg, state, v, policy, c) {
+  if (c?.do !== 'job' || policy.cook?.sale !== 'cover') return c;
+  const o = v.options.find(x => x.id === c.id);
+  const here = (o?.goodsHere ?? []).filter(x => cfg.goods[x.good]?.made).map(x => x.good);
+  if (here.length < 2) return c;
+  const dancing = placeEffects(cfg, state, state.place).noTell.length > 0;
+  const rash = here.find(g => cfg.goods[g].product === 'disco-rash');
+  const zonk = here.find(g => cfg.goods[g].product === 'zonk');
+  // (the day it leaves, a lifter sells Zonked: every buyer a sleeper whose wallet it lifts)
+  const leaving = policy.lift === 'last' && state.day === policy.lastDay;
+  const good = leaving && zonk ? zonk : !dancing && rash ? rash : zonk ?? rash ?? here[0];
+  return { ...c, good };
+}
+/** A sleeper's wallet where it stands: `lift` 'always', or 'last' on the season's last day; with an energy for the way home. */
+function liftNow(cfg, state, v, policy) {
+  if (!policy.lift || policy.lift === 'never') return null;
+  if (policy.lift === 'last' && state.day !== policy.lastDay) return null;
+  const m = v.moves.find(x => x.what === 'lift' && x.available);
+  if (!m) return null;
+  const away = !cfg.places[state.place]?.door;
+  return state.energy >= cfg.energy.perHour * (away ? 2 : 1) ? m.choice : null;
+}
 
 // an option's worth: its expected pay, less what one sale of its good cost (a sale uses one, win or lose)
 const ev = o => (o.odds / 100) * ((o.pay[0] + o.pay[1]) / 2) - (o.uses?.cost ?? 0);
@@ -191,7 +338,8 @@ function packNow(cfg, v, state, policy) {
   return state.carried >= c.price + (away ? cfg.subway.fare : 0) ? { do: 'pack', good: c.good } : null;
 }
 /** Goods to take out for a market trip: up to `carry` sales of each (the crowd buys twice a day); the rest stay home. */
-const tripGoods = (state, policy) => Object.fromEntries(Object.entries(state.stash ?? {}).map(([g, n]) => [g, Math.min(n, policy.carry ?? 2)]));
+// (bench-1: never a bottle (it rides on the belt) nor what goes in one: only what sells)
+const tripGoods = (state, policy, cfg = null) => Object.fromEntries(Object.entries(state.stash ?? {}).filter(([g]) => !cfg || (cfg.goods[g]?.sold !== false && !cfg.goods[g]?.making)).map(([g, n]) => [g, Math.min(n, policy.carry ?? 2)]));
 /** The price of the market's pack, if the policy means to buy one there on arriving (0: it does not). */
 function marketPack(cfg, v, state, policy) {
   const c = (v.connects ?? []).find(x => x.place === awayOf(policy));
@@ -476,7 +624,14 @@ export function decide(cfg, state, given0, v = view(cfg, state)) {
   // (raid-1: a raid warned of: what to hold, Earl for the night, rounds where they are sold)
   const r = raidNow(cfg, state, v, given);
   if (r) return r;
-  const c = decide0(cfg, state, given, v);
+  // (pot-1: a sleeper's wallet first, when the cook lifts)
+  const lf = given.lift ? liftNow(cfg, state, v, given) : null;
+  if (lf) return lf;
+  // (bench-1: a blue man who took something from it, where it stands)
+  const tb = given.takeBack ? takeBackNow(cfg, state, v, given) : null;
+  if (tb) return tb;
+  const c0 = decide0(cfg, state, given, v);
+  const c = given.cook ? saleBag(cfg, state, v, given, c0) : c0;
   if (given.learn && c?.do !== 'learn' && !state.route) {
     const l = learnNow(cfg, v, state, given.learn);
     if (l) return l;
@@ -537,19 +692,37 @@ function decide0(cfg, state, given, v) {
       const guard = guardNow(v, policy);
       if (guard) return guard;
       if (policy.buy) for (const item of ITEMS) if (v.shop.find(s => s.item === item).available) return { do: 'buy', item };
-      if (goMarket) return { do: 'out', take: policy.carryAll ? state.banked : Math.min(fare + packCash(cfg, v, state, policy, fare, { market: true }), state.banked), goods: tripGoods(state, policy) };
+      // (pot-1: the cook cooks first, or steps out for the makings)
+      const ck = policy.cook ? cookNow(cfg, state, v, policy) : null;
+      if (ck) return ck;
+      // (bench-1: a bottle onto the belt, or pack, or step out for what goes in)
+      const bn = policy.bench ? benchNow(cfg, state, v, policy) : null;
+      if (bn) return bn;
+      if (goMarket) return { do: 'out', take: policy.carryAll ? state.banked : Math.min(fare + packCash(cfg, v, state, policy, fare, { market: true }), state.banked), goods: policy.cook ? bagsOut(cfg, state, policy) : tripGoods(state, policy, cfg) };
       if (parkHere && state.energy >= hour) return { do: 'out', take: policy.carryAll ? state.banked : packCash(cfg, v, state, policy, 0) };
       return { do: 'sleep' };
     }
     case 'park': {
       const pack = packNow(cfg, v, state, policy);
       if (pack) return pack;
+      // (pot-1: the cook buys what it needs to cook today, then goes in to cook)
+      const mk = policy.cook ? makingNow(cfg, v, state, policy) : null;
+      if (mk) return mk;
+      // (bench-1: what goes in a bottle, then inside to pack)
+      const fl = policy.bench ? fillingNow(cfg, v, state, policy) : null;
+      if (fl) return fl;
       // police about with heat on you here: bank what you carry first (going inside costs no hour)
       if (parkHere && !policy.carryAll && state.carried > 0 && v.danger.here && v.danger.thisHour.stop.chance > 0) return { do: 'inside' };
       if (parkHere && policy.fear) {
         // (fear: at home only what fear makes sure, else the odd job; never anything that brings the lane to the door)
         if (state.energy < hour) return { do: 'inside' };
         return fearJob(cfg, v, state, policy) ?? v.options.find(o => o.safe && o.available)?.choice ?? { do: 'inside' };
+      }
+      if (parkHere && policy.homeQuiet) {
+        // (pot-1: a cook who leaves home quiet: the odd job, nothing else; `homeQuiet: 'sell'`, and a bag to Dee)
+        if (state.energy < hour) return { do: 'inside' };
+        const sale = policy.homeQuiet === 'sell' ? v.options.find(o => o.available && o.uses) : null;
+        return sale?.choice ?? v.options.find(o => o.safe && o.available)?.choice ?? { do: 'inside' };
       }
       if (parkHere) {
         if (state.energy < hour) return eatNow(v, state, policy) ?? { do: 'inside' };
@@ -613,7 +786,14 @@ export function playSeason(cfg, { seed, policy, kit = {}, days = 6, until = null
     crews: 0, sneaks: 0, burgledCrew: 0, burgledSneak: 0, crewFights: 0, crewLost: 0, earlDown: 0, taxPaid: 0, taxRefused: 0, sixesJumps: 0, sixesWon: 0, dogFood: 0,
     // (raid-1) the Sixes' raids: warned, met at home and held (or lost), out; what they took (cash, and goods at cost);
     // rounds fired and their cost; guns lost; heat from gunfire; days of truce
-    sixesRaids: 0, sixesRaidsHome: 0, sixesRaidsWon: 0, sixesRaidsOut: 0, sixesRaidTaken: 0, roundsFired: 0, roundsCost: 0, gunsLost: 0, gunHeat: 0, raidWarnings: 0 };
+    sixesRaids: 0, sixesRaidsHome: 0, sixesRaidsWon: 0, sixesRaidsOut: 0, sixesRaidTaken: 0, roundsFired: 0, roundsCost: 0, gunsLost: 0, gunHeat: 0, raidWarnings: 0,
+    // (pot-1) cooks (and by product), sleepers' wallets lifted and what they paid, bags taken by a buyer; the hours spent at
+    // the place it rides out to, and of them the hours somebody there was under something at the hour's end; the first
+    // hour anybody was asleep on what it sold
+    cooks: 0, cooked: {}, lifts: 0, liftPay: 0, doses: 0, dirtyDoses: 0, awayHours: 0, awayDosed: 0, firstAsleep: null,
+    // (bench-1) the bench: packed, bottles thrown (and in which fight), jumps with a bottle and those seen off, blue men
+    // made and those who took something, takings back tried, won, and what they brought back (cash, goods at cost)
+    benchPacks: 0, throws: 0, thrownJumped: 0, thrownCrew: 0, thrownSixes: 0, jumpsBottle: 0, jumpsBottleWon: 0, blueMade: 0, blueTook: 0, takeBacks: 0, takeBackWon: 0, takeBackPay: 0, throwHeat: 0 };
   // what got banked, plus what was spent at the crib on the three things (food, the door and the guard's wages count
   // against it), and the goods in hand at what they cost (a pack is money turned into stock: it counts against the day
   // only when the stock is lost, or sold for less)
@@ -709,6 +889,29 @@ export function playSeason(cfg, { seed, policy, kit = {}, days = 6, until = null
         tally.gunHeat += e.heat ?? 0;
       }
       if (e.type === 'guard') tally.guardPaid += e.paid ?? 0;
+      // (bench-1: a bottle packed is the bench's, not a cook)
+      if (e.type === 'cook' && e.kind !== 'bag') tally.benchPacks += 1;
+      else if (e.type === 'cook') { tally.cooks += 1; tally.cooked[e.product] = (tally.cooked[e.product] ?? 0) + 1; }
+      if (e.bottle) {
+        tally.throws += 1;
+        tally.throwHeat += e.bottle.heat ?? 0;
+        if (e.bottle.at === 'jumped') tally.thrownJumped += 1;
+        if (e.bottle.at === 'crew') tally.thrownCrew += 1;
+        if (e.bottle.at === 'sixes') tally.thrownSixes += 1;
+        if (e.type === 'jumped') { tally.jumpsBottle += 1; if (e.duel?.result === 'won') tally.jumpsBottleWon += 1; }
+      }
+      if (e.blue) { tally.blueMade += e.blue.rows.length; tally.blueTook += e.blue.rows.filter(r => r.took).length; }
+      if (e.type === 'takeBack') { tally.takeBacks += 1; if (e.result === 'won') { tally.takeBackWon += 1; tally.takeBackPay += (e.back?.cash ?? 0) + goodsWorth(cfg, e.back?.goods ?? {}); } }
+      if (e.type === 'lift') { tally.lifts += 1; tally.liftPay += e.pay ?? 0; }
+      if (e.type === 'job' && e.dose) { tally.doses += 1; if (e.dose.dirty) tally.dirtyDoses += 1; }
+    }
+    if (next.under && next.place === state.place && next.hour > state.hour && next.day === state.day && next.place === awayOf(policy)) {
+      tally.awayHours += 1;
+      if (underHere(next, next.place).length) tally.awayDosed += 1;
+    }
+    if (next.under && !tally.firstAsleep) {
+      const t = next.day * 24 + next.hour;
+      if (Object.values(next.under).some(rows => rows.some(x => x.effect === 'asleep' && x.from <= t && t < x.until))) tally.firstAsleep = { day: next.day, hour: next.hour };
     }
     if (next.day !== state.day) {
       tally.pressureSum += pressureOf(cfg, next)?.value ?? 0;

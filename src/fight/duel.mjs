@@ -13,6 +13,9 @@
 // (styles-1: `foes` [foe, ...] instead of `foe`, and `arena.around`, for several at once: getting jumped in the run)
 // (sixes-1: `ally` { hp, weapon, way, hits }, Cousin Earl beside you, at `arena.ally` [metres, degrees]; `firstHurt`,
 // the health the first of them has lost breaking a barred door: the crew at your door)
+// (bench-1: a bottle thrown first, in a fight of several only: `blind` seconds, every one of them (the pepper fogger's
+// field); `asleep` { n, s, at }, the first n of them asleep s seconds from `at`; `slow` { s, by, at }, every one of them at
+// `by` of their speed for s seconds from `at`. src/run/make.mjs bottleFight says which)
 // (fight-3: never a gun on either side, the sim refuses one; a foe's `reel`, `heft`, `soak` and `slip` are a style's,
 // data.mjs RIVALS and rivalFoe(): left out, they fight as the run's opponents always have. A punch style of yours is
 // just your `weapon`: 'jab', 'haymaker' or 'throw', at bare hands' `hits`)
@@ -41,7 +44,9 @@ export function duelArena({ w = 8, h = 6, gap = 1.8, around = null, ally = null 
 
 /** A one-on-one, set up and not yet stepped (the page steps it itself, a tick at a time). */
 export function startDuel(inputs, seed) {
-  return createFight({ duel: { you: inputs.you, foe: inputs.foe, ...(inputs.foes ? { foes: inputs.foes } : {}), ...(inputs.ally ? { ally: inputs.ally } : {}), ...(inputs.firstHurt ? { firstHurt: inputs.firstHurt } : {}), cap: inputs.cap, hit: inputs.hit, brawl: inputs.brawl }, seed, arena: duelArena(inputs.arena) });
+  // (bench-1: a bottle thrown first in a fight of several: `blind` (the raid's field), `asleep`, `slow`; left out, nothing changes)
+  const bottle = { ...(inputs.blind ? { blind: inputs.blind } : {}), ...(inputs.asleep ? { asleep: inputs.asleep } : {}), ...(inputs.slow ? { slow: inputs.slow } : {}) };
+  return createFight({ duel: { you: inputs.you, foe: inputs.foe, ...(inputs.foes ? { foes: inputs.foes } : {}), ...(inputs.ally ? { ally: inputs.ally } : {}), ...(inputs.firstHurt ? { firstHurt: inputs.firstHurt } : {}), ...bottle, cap: inputs.cap, hit: inputs.hit, brawl: inputs.brawl }, seed, arena: duelArena(inputs.arena) });
 }
 
 /** How many one-on-ones this process has run to their end (for measuring what the run's fights cost). */

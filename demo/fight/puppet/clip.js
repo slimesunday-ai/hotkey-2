@@ -113,7 +113,7 @@ export function freeRows() {
 export function writeRow(n, pose, upper = 1) {
   if (!data) return;
   const o = n * TEXELS * 4;
-  packPose(pose, data, o);
+  packPose(pose, data, o, !upper);
   data[o + 39] = upper;
   tex.needsUpdate = true;
 }

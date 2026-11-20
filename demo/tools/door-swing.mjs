@@ -7,8 +7,11 @@
 // meets a body (nearer than BODY to the body's middle) or the doorway's own measure (doorway.swept()) saw one.
 // The server must be running: node demo/serve.mjs --port 5513
 //
-//   node demo/tools/door-swing.mjs --out <dir> [--port 5513] [--seed 3] [--only out,in] [--no-film] [--own deadbolt,doorbar]
+//   node demo/tools/door-swing.mjs --out <dir> [--port 5513] [--seed 3] [--only out,in] [--no-film] [--own deadbolt,doorbar] [--low]
 //
+// Also THE STEPS (notes-2, the owner: "when he walks out the door he goes right through the steps"): every frame, each
+// body over the stoop or its step has its feet within ON_STEP of the top drawn under it (a raycast down through the
+// city's own pieces), never under it; fails otherwise.
 // --own  the run's things owned first (the chain and deadbolt, the door bar: mounted on the room side of both leaves)
 // out   at home, the card that goes out (real keys): across the room, the door, onto the step and off
 // in    put at the market with cash on him, H and Enter (real keys) home: off the ride, up the step, in, to his place
@@ -27,12 +30,23 @@ const url = `http://127.0.0.1:${port}/demo/?mode=run&seed=${opt('--seed', '3')}`
 const only = opt('--only', null)?.split(',') ?? null;
 const want = name => !only || only.includes(name);
 const film = !process.argv.includes('--no-film');
+// (--low: the film from a low camera beside the stoop, at a knee's height, while he is outside; the game's camera is
+// left as it is and only the picture is taken from elsewhere, in the city's own frame before it is drawn)
+const lowView = process.argv.includes('--low');
 /**
  * A body on the ground (m): a square about its feet, square to its heading, this far each way from its middle. The
  * figures' heads are the widest of them: 0.89 m square seen from straight over a standing player (doorway.js BODY).
  */
 const BODY = 0.45;
 const KEY = 'pad:a1';
+/**
+ * THE STEPS (notes-2): over the stoop and its step a body's feet are on the top drawn under it, within this (m), and
+ * never under it. Inside FOOT of the trailer's wall the top is the doorway's sill (the step down out of the door).
+ */
+const ON_STEP = 0.03;
+const FOOT = 0.14;
+/** Under the top by more than this (m) is under it: a float's rounding, the city's route walkers' own few millimetres. */
+const UNDER = 0.005;
 
 // (in the page: every frame, each shown door leaf, with what is mounted on it, against each body of ours: the body a
 // square about its feet, square to its heading, BODY each way from its middle)
@@ -51,6 +65,12 @@ const RECORDER = `(() => {
   const boxesOf = L => { L.updateWorldMatrix(true, true); const inv = L.matrixWorld.clone().invert(); const out = [new T.Box3(new T.Vector3(-0.53, -1.1, -0.03), new T.Vector3(0.53, 1.1, 0.03))];
     for (const c of L.children) { if (!shown(c)) continue; const b = new T.Box3(); c.traverse(o => { if (!o.geometry || !shown(o)) return; o.geometry.boundingBox ?? o.geometry.computeBoundingBox(); b.union(o.geometry.boundingBox.clone().applyMatrix4(inv.clone().multiply(o.matrixWorld))); }); if (!b.isEmpty()) out.push(b); } return out; };
   const v = new T.Vector3();
+  // (the door leaves and what is mounted on them are never a step: a leaf swung out over the stoop is not stood on)
+  const isLeaf = o => { const p = o.geometry?.parameters; return !!p && Math.abs(p.width - 1.06) < 1e-3 && Math.abs(p.height - 2.2) < 1e-3; };
+  const leafy = o => { for (let p = o; p; p = p.parent) if (isLeaf(p)) return true; return false; };
+  const ray = new T.Raycaster(); ray.layers.set(0); ray.camera = c.camera; ray.far = 6;
+  const down = new T.Vector3(0, -1, 0);
+  let cand = null;
   function tick() {
     if (!R.on) return;
     const now = performance.now();
@@ -59,7 +79,7 @@ const RECORDER = `(() => {
       leaves = [];
       c.scene.traverse(o => { const p = o.geometry?.parameters; if (o.isMesh && p && Math.abs(p.width - 1.06) < 1e-3 && Math.abs(p.height - 2.2) < 1e-3 && Math.abs(p.depth - 0.06) < 1e-3) leaves.push(o); });
     }
-    const f = { t: +((now - R.t0) / 1000).toFixed(3), up: st.inside?.up ?? null, door: st.doorway?.info?.(${JSON.stringify(KEY)}, 'a1') ?? null, leaves: [] };
+    const f = { t: +((now - R.t0) / 1000).toFixed(3), up: st.inside?.up ?? null, door: st.doorway?.info?.(${JSON.stringify(KEY)}, 'a1') ?? null, leaves: [], feet: [] };
     for (const L of leaves) {
       if (!shown(L) || (L.material?.transparent && L.material.opacity < 0.02)) continue;
       const qs = boxesOf(L).map(b => [[b.min.x, b.min.z], [b.max.x, b.min.z], [b.max.x, b.max.z], [b.min.x, b.max.z]].map(([x, z]) => (v.set(x, b.min.y, z).applyMatrix4(L.matrixWorld), [v.x, v.z])));
@@ -74,6 +94,24 @@ const RECORDER = `(() => {
       // (how far it is turned off the wall and which way: + into the building or room, - out of it)
       e.turn = +(L.parent?.rotation?.y ?? 0).toFixed(3);
       f.leaves.push(e);
+    }
+    // (notes-2, THE STEPS: whoever stands over the stoop or its step, outside, their feet against the top drawn under
+    // them: the first of the city's pieces straight down, lower than a step's reach, never a door leaf; inside a foot's
+    // length of the wall, the doorway's own sill)
+    const O = st.inside.place(${JSON.stringify(KEY)}).door()?.outside;
+    if (O) {
+      for (const A of st.actors.all()) {
+        if (!A || A.w?.hide || A.y > 3) continue;
+        const [dx, dz] = [A.x - O.sill[0], A.z - O.sill[2]];
+        const side = dx * O.face[0] + dz * O.face[1], across = Math.abs(dx * O.face[1] - dz * O.face[0]);
+        if (side < 0 || side > 1.7 || across > 0.9) continue;
+        if (!cand) { cand = []; c.scene.updateMatrixWorld(true); c.scene.traverse(o => { if (!o.isMesh || leafy(o)) return; o.geometry.boundingSphere ?? o.geometry.computeBoundingSphere(); const sp = o.geometry.boundingSphere.clone().applyMatrix4(o.matrixWorld); if (Math.hypot(sp.center.x - O.sill[0], sp.center.z - O.sill[2]) < sp.radius + 3) cand.push(o); }); }
+        ray.set(v.set(A.x, 3, A.z), down);
+        const hit = ray.intersectObjects(cand.filter(shown), false).find(q => q.point.y < 1.0);
+        let top = hit ? hit.point.y : null;
+        if (side < ${FOOT}) top = Math.max(top ?? -1, O.sill[1]);
+        if (top !== null) f.feet.push({ id: A.id, y: +A.y.toFixed(3), top: +top.toFixed(3), side: +side.toFixed(3) });
+      }
     }
     R.frames.push(f);
     requestAnimationFrame(tick);
@@ -110,6 +148,7 @@ try {
     const dir = path.join(out, way);
     mkdirSync(dir, { recursive: true });
     await ev(RECORDER);
+    await low(true);
     const shots = [];
     const t0 = Date.now();
     let n = 0;
@@ -122,6 +161,7 @@ try {
         shots.push({ file, t });
       } else await page.sleep(100);
     }
+    await low(false);
     const frames = await ev('(R => (R.on = false, R.frames))(window.__doorRec)', 60000);
     writeFileSync(path.join(out, `${way}.json`), JSON.stringify({ shots, frames }));
     // the nearest a shown leaf came to a body, per leaf, over the whole walk
@@ -129,6 +169,15 @@ try {
     for (const f of frames) for (const e of f.leaves) if (e.near && (!best[e.which] || e.near.d < best[e.which].d)) best[e.which] = { ...e.near, t: f.t, turn: e.turn, door: f.door };
     // and the frame of the film nearest that moment, per leaf
     for (const b of Object.values(best)) b.shot = shots.reduce((m, s) => (!m || Math.abs(s.t - b.t) < Math.abs(m.t - b.t) ? s : m), null);
+    // THE STEPS: every frame of every body over the stoop and its step, its feet against the top under them
+    const feet = frames.flatMap(f => f.feet.map(e => ({ ...e, t: f.t, off: +(e.y - e.top).toFixed(3) })));
+    if (feet.length) {
+      const worst = feet.reduce((m, e) => (Math.abs(e.off) > Math.abs(m.off) ? e : m));
+      const lowest = feet.reduce((m, e) => (e.off < m.off ? e : m));
+      const bad = feet.filter(e => Math.abs(e.off) > ON_STEP || e.off < -UNDER);
+      console.log(`  the steps: ${feet.length} frames of feet over the stoop and the step (${[...new Set(feet.map(e => e.id))].join(', ')}); the feet off the top under them at most ${worst.off.toFixed(3)} m (${worst.id} at ${worst.side} m out, t ${worst.t} s), the lowest ${lowest.off.toFixed(3)} m; ${bad.length ? `${bad.length} frames OFF THE STEPS (more than ${ON_STEP} m off, or under the top), e.g. ${bad.slice(0, 3).map(e => `${e.id} feet ${e.y} over a top of ${e.top} at ${e.side} m out, t ${e.t}`).join('; ')}` : 'every frame on them'}`);
+      if (bad.length) failed = true;
+    } else console.log('  the steps: no frame had a body over the stoop or its step (not measured)');
     const turns = {};
     for (const f of frames) for (const e of f.leaves) if (Math.abs(e.turn) > 0.3) (turns[e.which] ??= new Set()).add(Math.sign(e.turn) > 0 ? 'in' : 'out');
     console.log(`${way}: ${frames.length} frames measured, ${shots.length} filmed; the leaves swung: ${Object.entries(turns).map(([k, s]) => `${k === 'out' ? 'the trailer\'s' : 'the room\'s'} ${[...s].join('+')}`).join(', ') || 'none'}`);
@@ -146,6 +195,19 @@ try {
     await phase('choose');
     await page.sleep(3000);
   }
+  // (on for a roll, and off again before the run goes on)
+  const low = on => lowView && ev(on ? `(() => { const c = window.__city, st = window.__demo.stage, O = st.inside.place(${JSON.stringify(KEY)}).door().outside;
+      const [fx, fz] = O.face, ax = fz, az = -fx;
+      const tgt = [O.stoop[0] + fx * 0.35, 0.75, O.stoop[2] + fz * 0.35], pos = [O.stoop[0] + ax * 2.0 + fx * 2.9, 0.7, O.stoop[2] + az * 2.0 + fz * 2.9], fov0 = c.camera.fov;
+      window.__lowFov = fov0;
+      const br = c.scene.onBeforeRender;
+      c.scene.onBeforeRender = function (...a) {
+        const A = st.actors.get('a1');
+        if (A && A.y < 6 && a[2] === c.camera) { c.camera.position.set(...pos); c.camera.up.set(0, 1, 0); c.camera.lookAt(...tgt); c.camera.updateMatrixWorld(true); if (c.camera.fov !== 50) { c.camera.fov = 50; c.camera.updateProjectionMatrix(); } }
+        return br?.apply(this, a);
+      };
+      window.__lowBr = br;
+      return true; })()` : '(() => { const c = window.__city; c.scene.onBeforeRender = window.__lowBr; c.camera.fov = window.__lowFov; c.camera.updateProjectionMatrix(); return true; })()');
   if (want('out')) {
     await choose(await ev(`window.__demo.hud.view.choices.find(c => c.choice.do === 'out').key`));
     await roll('out', `(d => !window.__demo.stage.debug().inside.length && d && d.step > 2.5)(window.__demo.stage.doorway.info(${JSON.stringify(KEY)}, 'a1'))`);

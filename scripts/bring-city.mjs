@@ -19,7 +19,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 /** The trunk commit this repo's city is pinned to. Change it here, run the script, then re-test the demo. */
-const PIN = 'd5a6e641f95df0c1312d3e18a6f54d031ebb4911';
+const PIN = '36073f5bae35611e8d0e9867ac45e942708abc9b';   // (the original city's lane commit lane/K4-vhs: the walkers, 9cfd6788, plus the colour switch, its mix and band, rainbow, glitch and the tape look)
 
 /** What the city page needs: the city itself, the world it imports, and the sim's place list its go-to menu reads. */
 const INCLUDE = ['style/city', 'world', 'sim2/places.json'];

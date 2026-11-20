@@ -172,7 +172,13 @@ const RAW = {
     bowling: { label: 'a Neon Row Silk shirt', kind: 'wear', slot: 'top', piece: 'top:neon_row_silk', desc: 'black silk camp shirt, dice and diamonds all over, short sleeves, open at the neck', price: 12, at: 'market', keeper: 'npc:stallholder:3', spot: 'clothes-rail' },
     hightops: { label: 'a pair of Tagged Customs', kind: 'wear', slot: 'feet', piece: 'shoes:tagged_customs', desc: 'white canvas high-tops a writer from Neon Row went over in pink, lime and cyan', price: 25, at: 'market', keeper: 'npc:stallholder:3', spot: 'clothes-rail' },
     lavalamp: { label: 'a lava lamp', kind: 'home', piece: 'kit:lava-lamp', desc: 'a lamp of coloured wax rising and falling in a glass', price: 8, at: 'park', keeper: 'npc:neighbour:2', spot: 'yard-sale', inTrailer: 'by-the-mattress' },
-    boxfan: { label: 'a box fan', kind: 'home', piece: 'kit:box-fan', desc: 'a square fan, one speed, loud', price: 10, at: 'park', keeper: 'npc:neighbour:2', spot: 'yard-sale', inTrailer: 'window' },
+    // (pot-1) the box fan's first job: in the window, the smell of the pot is `smellOff` lower (make.smell)
+    // (bench-1: `does`, the card's line, which it lacked; its price $7, not $10: the orchestrator's call the owner approved,
+    // where it pays back inside eight days on the mattress for a cook who also works his own street. Measured after the
+    // dance's change: that cook gains $0.90 a day with it (2,500 seasons), so $7 is 7.8 days; $8 would be 8.9. RUN.md
+    // "The bench and the bottle (bench-1)")
+    boxfan: { label: 'a box fan', kind: 'home', piece: 'kit:box-fan', desc: 'a square fan, one speed, loud', price: 7, at: 'park', keeper: 'npc:neighbour:2', spot: 'yard-sale', inTrailer: 'window',
+      smellOff: 1, does: 'The smell of your cooking is one lower', job: 'In the window it blows the smell of your cooking down the lane: the smell is one lower' },
     beanbag: { label: 'a beanbag', kind: 'home', piece: 'kit:beanbag', desc: 'cracked vinyl, leaks a little', price: 20, at: 'park', keeper: 'npc:neighbour:2', spot: 'yard-sale', inTrailer: 'floor' },
     fishtank: { label: 'a fish tank', kind: 'home', piece: 'kit:fish-tank', desc: 'a lit tank on a black stand, a few fish', price: 30, at: 'park', keeper: 'npc:neighbour:2', spot: 'yard-sale', inTrailer: 'counter' },
     overcoat: { label: 'a trench coat', kind: 'wear', slot: 'top', piece: 'top:npc_top_trench', desc: 'a beige trench, belted, collar up against the bay wind', price: 140, at: 'corner', keeper: null, spot: null },
@@ -254,6 +260,11 @@ const RAW = {
     // it paid nothing measurable (−$1.1 a day, mark D4 at 500). The decoy safe took its place: RUN.md)
     decoy: { label: 'a decoy safe', kind: 'home', piece: 'kit:decoy-safe', desc: 'a small safe in plain sight with a little cash in it, for show', late: 'raid', price: 60, at: 'park', keeper: 'npc:neighbour:2', spot: 'yard-sale', inTrailer: 'floor',
       defends: { decoy: 50 }, against: ['sixes'], does: 'When they make you open up, you open the wrong safe', job: 'Home and beaten by the Sixes, they make you open up and you open the decoy: they take half what they would have. It does nothing while you are out' },
+    // (pot-1, RUN.md "The pot (pot-1)") THE HOT PLATE: the kitchen's station (make.makers.kitchen). Owned, the Cook move
+    // at your crib. A station: knocked out by a raid, never taken (`raid: { out }`, as the door bar). `late: 'pot'`:
+    // listed after every older move (potMoves), so no older key moves. `station`: the maker it stands for.
+    hotplate: { label: 'a hot plate and pot', kind: 'home', piece: 'kit:hot-plate', desc: 'a single electric ring with a dented pot on it', late: 'pot', price: 30, at: 'park', keeper: 'npc:neighbour:2', spot: 'yard-sale', inTrailer: 'counter',
+      station: 'kitchen', raid: { out: 1, pct: 50 }, does: 'Cook at your crib: an hour, two things in the pot, six bags', job: 'At your crib, an hour: up to two things in the pot and six bags come out. Cooking smells' },
   },
 
   // THE LIBRARY (lib-1; the owner, 2026-11-16: "I want the full library"): every piece of the city's cast to wear
@@ -487,8 +498,72 @@ const RAW = {
       { id: 'cash', label: 'cash banked', of: 'banked' },
       { id: 'stock', label: 'goods kept at the crib, at cost', of: 'stash' },
       { id: 'things', label: 'things a raid can carry off', of: 'things' },
+      // (pot-1, the addition's G3.6: every made thing is a row) what you made, kept at the crib, at what it sells for (the
+      // best a selling job pays for its kind, the middle of the range); what you make it with, at cost
+      { id: 'made', label: 'what you made, kept at the crib, at what it sells for', of: 'made' },
+      { id: 'makings', label: 'what you cook with, at cost', of: 'makings' },
     ],
     steps: [600, 1400],
+  },
+
+  // (pot-1, RUN.md "The pot (pot-1)") MAKING THINGS: the crafting plan's one mechanic in its general form (the addition's
+  // G3: "a carrier takes these kinds of thing", not "the pot"). Read by src/run/make.mjs (the rules) and effects.mjs.
+  //   makers: a workshop, the station that stands for it (a thing of `things` with `station`), and its carriers. A
+  //     carrier takes `slots` things of the kinds in `takes` and gives `n` of the kind `gives`, in `hours` at your crib.
+  //     The bench (build step 2) is one more maker here, its fillings one more kind in `makings`.
+  //   kinds: what a carrier gives (a bag): its word (`unit`) and the art's piece (`prop:bag-<product>` per product).
+  //   makings: what goes in, each ONE thing it does (an `effect`), its family (the chip's colour), its rarity, and who sells
+  //     it where (`at`, `keeper`, `spot`) at what price: bought on the street from what you carry, no hour, from somebody
+  //     not against you, kept as goods (on you, then at the crib: config `goods` is made from these).
+  //   products: the art's ids (demo/stage/props/craft.js PRODUCTS) for what a set of makings makes, and the name it goes by
+  //     (the owner's: "Zonked"); a product of two or more is named by the player (`names`), this name the default.
+  //   effects: what being under it does, to the person (`person`) and to the place while anyone there is under it
+  //     (`place`), how long (`hours`), which part of the body it wants (`part`: two on the same part take turns, the
+  //     downer last, B3), and how it is seen (`look`, for the page). An effect does not care where it came from.
+  //   outcomes: the odds of a batch, shown before you cook (B4): clean, dirty (`tired`: cooked tired), something else got
+  //     in (one more making, free, from anything ever on your shelf; none possible: it is clean).
+  //   dirty: what rides along in a dirty batch (slice 1: the Pukes), found out when the first person takes it.
+  //   smell: a LEVEL, not a pile (B9): the most cooks on today or yesterday, at most `max`, less each fan's `smellOff`;
+  //     a reason on HOME.
+  //   lift: a sleeper's wallet (the asleep effect's `person.lift`): sure, an hour, it pays what the place's `like` job
+  //     pays (its wallet), and he knows who sold it: a mark of `mark` for the week, `trust`, `pressure` at home.
+  //   names: what a name you give may be. belt: what can be on you without being for sale.
+  make: {
+    makers: {
+      kitchen: { label: 'the kitchen', station: 'hotplate',
+        carriers: { pot: { label: 'the pot', takes: ['ingredient'], slots: 2, gives: 'bag', n: 6, hours: 1, scene: { action: 'cook', seconds: 3.5 } } } },
+    },
+    kinds: { bag: { label: 'a bag', unit: 'bag', piece: 'prop:bag' } },
+    makings: {
+      tea: { label: 'night tea', pack: 'a tin of night tea', unit: 'tin', kind: 'ingredient', maker: 'kitchen', family: 'downer', effect: 'asleep', rarity: 'common',
+        price: 8, at: 'park', keeper: 'npc:neighbour', spot: 'yard', piece: 'prop:tea-tin' },
+      sticks: { label: 'rave sticks', pack: 'a box of rave sticks', unit: 'box', kind: 'ingredient', maker: 'kitchen', family: 'trip', effect: 'dancing', rarity: 'common',
+        price: 10, at: 'park', keeper: 'npc:neighbour:2', spot: 'yard-sale', piece: 'prop:rave-sticks' },
+    },
+    families: { downer: 'blue', upper: 'red', trip: 'violet', mutagen: 'green' },
+    products: {
+      zonk: { name: 'Zonked', from: ['tea'] },
+      'disco-rash': { name: 'Disco Rash', from: ['sticks'] },
+      'disco-coma': { name: 'Disco Coma', from: ['tea', 'sticks'] },
+    },
+    rarities: ['common', 'rare', 'epic', 'grail'],
+    effects: {
+      asleep: { label: 'asleep', short: 'sleeps', hours: 3, part: 'legs', family: 'downer', person: { lift: true },
+        words: 'asleep where they stand', look: { legs: 'asleep', overhead: 'zzz' } },
+      // (bench-1: the dance's cover trimmed from "jumped half as often" to "a quarter less often", the orchestrator's call
+      // the owner approved, "Go with your calls": crafting-discussion.md, 2026-11-19 night. RUN.md "The pot (pot-1)")
+      dancing: { label: 'dancing', short: 'dances', hours: 2, part: 'legs', family: 'trip', place: { noTell: true, jumpPct: 75, heat: 1 },
+        words: 'rainbow skin, cannot stop dancing', look: { skin: 'rainbow', legs: 'dance', crowd: true } },
+      // (a dirty batch's bad thing, an effect like the rest, so the page can show it on a body: the owner's rule)
+      pukes: { label: 'the Pukes', short: 'pukes', hours: 1, bad: true, words: 'throws up green', look: { trail: 'puke', overhead: 'sick' } },
+    },
+    outcomes: { clean: 84, dirty: 12, extra: 4, tired: 26 },
+    dirty: { pukes: { effect: 'pukes', mood: 'sour', trust: -2, heat: 1, says: 'One bad thing rode along: the Pukes. The rest of that batch is the same' } },
+    smell: { perCook: 1, max: 2, days: 2 },
+    lift: { like: 'wallet', label: 'Lift the wallet off {who} while {they} sleeps', mark: 'lifted', trust: -2, pressure: { win: 1 }, scene: { action: 'hand_off', later: 'pickpocket_dip' } },
+    names: { max: 24 },
+    // the belt (the addition's G3.3): a made thing on you without being for sale, one of the kinds it takes
+    belt: { label: 'your belt', takes: ['bag', 'bottle'], n: 1 },
   },
 
   // THE FIGHTS (duel-1, RUN.md "Fights"): when you cross somebody to their face and it goes wrong, they fight you there
@@ -611,6 +686,8 @@ const RAW = {
       // (sixes-1) two of the Sixes who jumped you and were seen off: they keep off you for the week, and do not come back for another go
       seenOff: { fear: true, hates: true, did: 'you saw {them} off on day {day}', words: 'keeps off you for {left}', gone: "{Name} isn't scared of you any more" },
       shut: { hates: true, did: 'you shut the door on {them} on day {day}', words: "won't buy from you for {left}", gone: '{Name} has let the door go' },
+      // (pot-1) a buyer whose wallet you lifted while he slept on what you sold him: he knows who sold it (the plan, B9)
+      lifted: { hates: true, did: 'you lifted {their} wallet while {they} slept on day {day}', words: "won't buy from you for {left}", gone: '{Name} has let it go' },
     },
     fear: { pressure: -1 },
     due: { tougher: 10, price: 20, warnHour: 18 },
@@ -651,7 +728,7 @@ const RAW = {
       ],
       jobs: {
         odd: { label: 'An odd job for a neighbour', named: 'An odd job for {who}', role: 'neighbour', with: 'a neighbour', safe: true, odds: 100, base: [6, 10], mood: { win: 'friendly' }, trust: { win: 1 }, pressure: { win: -1 }, scene: { win: { action: 'carry' } } },
-        loosies: { label: 'Sell loose cigarettes at the bus stop', named: 'Sell loose cigarettes to {who} at the bus stop', role: 'buyer', with: 'the bus stop', odds: 85, base: [8, 17], goods: { smokes: [8, 17] }, mood: { win: 'friendly', fail: 'wary' }, trust: { win: 1, fail: 0 }, pressure: { win: 1, fail: 1 }, scene: { win: { kind: 'work:deal' }, fail: { kind: 'work:deal:dry' } } },
+        loosies: { label: 'Sell loose cigarettes at the bus stop', named: 'Sell loose cigarettes to {who} at the bus stop', madeNamed: 'Sell {what} to {who} at the bus stop', role: 'buyer', with: 'the bus stop', odds: 85, base: [8, 17], goods: { smokes: [8, 17] }, made: { common: [17, 25] }, mood: { win: 'friendly', fail: 'wary' }, trust: { win: 1, fail: 0 }, pressure: { win: 1, fail: 1 }, scene: { win: { kind: 'work:deal' }, fail: { kind: 'work:deal:dry' } } },
         wallet: { label: 'Lift a wallet at the bus stop', named: 'Lift a wallet off {who}', role: 'mark', with: 'a mark', odds: 60, base: [18, 30], failHeat: 1, fight: 'fail', mood: { win: 'unaware', fail: 'wary' }, trust: { win: 0, fail: -2 }, pressure: { win: 1, fail: 2 }, scene: { win: { action: 'hand_off', later: 'pickpocket_dip' }, fail: { action: 'hand_off', later: 'pickpocket_dip' } } },
         collect: { label: 'Collect a debt for Darlene at the office', named: 'Collect a debt from {who} for Darlene at the office', role: 'debtor', with: 'Darlene at the office', odds: 70, base: [14, 22], failEnergy: 2, fight: 'fail', mark: { win: 'robbed' }, feared: 'sure', mood: { win: 'sour', fail: 'wary' }, trust: { win: -1, fail: -2 }, pressure: { win: 1, fail: 1 }, scene: { win: { kind: 'collect:win' }, fail: { kind: 'collect:lose' } } },
       },
@@ -679,7 +756,7 @@ const RAW = {
       ],
       jobs: {
         stall: { label: 'Work a stall for the shopkeeper', named: 'Work a stall for {who}', role: 'shopkeeper', with: 'the shopkeeper', safe: true, odds: 100, base: [11, 15], mood: { win: 'friendly' }, trust: { win: 1 }, pressure: { win: -1 }, scene: { win: { action: 'haggle', spot: 'counter:shop' } } },
-        crowd: { label: 'Sell to the crowd', named: 'Sell to {who} in the crowd', role: 'buyer', with: 'the crowd', odds: 75, base: [32, 48], goods: { discs: [32, 48], smokes: [30, 46] }, failHeat: 1, mood: { win: 'friendly', fail: 'wary' }, trust: { win: 1, fail: 0 }, pressure: { win: 1, fail: 1 }, scene: { win: { kind: 'work:deal' }, fail: { kind: 'work:deal:dry' } } },
+        crowd: { label: 'Sell to the crowd', named: 'Sell to {who} in the crowd', madeNamed: 'Sell {what} to {who} in the crowd', role: 'buyer', with: 'the crowd', odds: 75, base: [32, 48], goods: { discs: [32, 48], smokes: [30, 46] }, made: { common: [34, 50] }, failHeat: 1, mood: { win: 'friendly', fail: 'wary' }, trust: { win: 1, fail: 0 }, pressure: { win: 1, fail: 1 }, scene: { win: { kind: 'work:deal' }, fail: { kind: 'work:deal:dry' } } },
         wallet: { label: 'Lift a wallet in the crowd', named: 'Lift a wallet off {who}', role: 'mark', with: 'a mark', odds: 55, base: [30, 50], failHeat: 1, mood: { win: 'unaware', fail: 'wary' }, trust: { win: 0, fail: -2 }, pressure: { win: 1, fail: 2 }, scene: { win: { action: 'hand_off', later: 'pickpocket_dip' }, fail: { action: 'hand_off', later: 'pickpocket_dip' } } },
         till: { label: 'Grab a till', named: "Grab {who}'s till", role: 'stallholder', with: 'the shopkeeper', odds: 40, base: [60, 95], winHeat: 1, failHeat: 2, mark: { win: 'robbed' }, mood: { win: 'sour', fail: 'wary' }, trust: { win: -3, fail: -2 }, pressure: { win: 2, fail: 2 }, scene: { win: { action: 'grab', spot: 'counter:shop', later: 'till_grab' }, fail: { action: 'grab', spot: 'counter:shop', later: 'till_grab' } } },
         stickup: { label: 'A stick-up behind the stalls', named: 'Stick up {who} behind the stalls', role: 'stallholder', with: 'a stallholder', odds: 60, base: [50, 80], winHeat: 1, failHeat: 2, needs: 'cutter', mark: { win: 'robbed' }, mood: { win: 'sour', fail: 'wary' }, trust: { win: -3, fail: -2 }, pressure: { win: 2, fail: 2 }, scene: { win: { kind: 'rob:clean' }, fail: { kind: 'rob:fail' } } },
@@ -759,15 +836,132 @@ const RAW = {
 
   // the city's one roll formula and its four bands, unchanged (src/contest.mjs)
   contest: CONFIG.contest,
+
+  // (bench-1, RUN.md "The bench and the bottle (bench-1)") THE BENCH IS OFF ON THE PAGE until its screens exist: the
+  // config the page plays (RUN_CONFIG) has none of BENCH below, so nothing of it is sold, listed, thrown or drawn there.
+  // `withRunConfig({ bench: true })` (BENCH_CONFIG, the rules' tests and the marks) has all of it. The screens' builder
+  // turns it on by setting this true.
+  bench: false,
+};
+
+/**
+ * (bench-1, RUN.md "The bench and the bottle (bench-1)") THE BENCH AND THE BOTTLE: build step 2 of crafting, the
+ * addition's slice 2 (crafting-plan-addendum.md B3, Part C, Part E). Read by make.mjs, rules.mjs (the throw's odds) and
+ * step.mjs. One more maker, its fillings one more kind of making, its bottle one more kind of made thing, a bag from the
+ * kitchen one more thing it takes; a home piece that stands on the floor spot; the dye pack given its job.
+ *   things.workbench: the bench's station, $60 from Mr. Pruitt. `floor`: it stands on the trailer's one floor spot
+ *     (approved decision 8: the stove or the bench; both can be owned, one stands, an hour to change; the hot plate is a
+ *     counter piece and never leaves). Knocked out by a raid as the hot plate is.
+ *   things.dyepack: the home kit's dye pack (drawn, with no job before): in your floor safe (`needs`), whoever gets into
+ *     the safe comes out blue (`tags`). Spent when it goes off.
+ *   make.makers.bench: the bottle takes one or two fillings, or one bag alone (`alone`); three come out, an hour, no smell
+ *     (`smells: false`), no batch odds (packing is a clamp and a funnel, not chemistry: it comes out as packed).
+ *   make.effects: blind and tagged, and what each effect does in a fight (`fight`: the plan's fixed sizes, B11) and says
+ *     on a bottle (`inBottle`).
+ *   make.bottle: the fights it is thrown in (`fights`: several of them, never a one-on-one), the heat of a cloud that changes
+ *     the fight where the police are about (paint alone: none), and the blue man (`blue`: how long, what taking it back gets you, its heat).
+ *   memory.kinds is untouched: a blue man is a row of who is under what (effects.mjs), not a mark.
+ */
+const BENCH = {
+  things: {
+    workbench: { label: 'a workbench', kind: 'home', piece: 'kit:tool-bench', desc: 'a heavy bench with a vice on one end and a pegboard of tools over it', late: 'bench', price: 60, at: 'park', keeper: 'npc:neighbour:2', spot: 'yard-sale', inTrailer: 'floor-spot',
+      floor: true, station: 'bench', raid: { out: 1, pct: 50 }, does: 'Pack bottles at your crib: an hour, three bottles', job: 'At your crib, an hour: dog spray, blue paint or a bag from the kitchen into three bottles. It stands on the floor spot' },
+    dyepack: { label: 'a dye pack', kind: 'home', piece: 'kit:dye-pack', desc: 'a fat bundle of notes with a dye charge hidden in it, for the safe', late: 'bench', price: 30, at: 'market', keeper: 'npc:stallholder:2', spot: 'stall:6', inTrailer: 'under-the-counter',
+      needs: 'floorsafe', tags: true, does: 'Whoever gets into your safe comes out blue', job: 'In your floor safe: whoever gets into the safe comes out bright blue for a week, and is at his usual place all week, where you can take it back off him. It goes off once' },
+  },
+  make: {
+    makers: {
+      bench: { label: 'the bench', station: 'workbench', smells: false, outcomes: false, verb: 'Pack',
+        carriers: { bottle: { label: 'a bottle', takes: ['filling', 'bag'], slots: 2, alone: ['bag'], gives: 'bottle', n: 3, hours: 1, scene: { action: 'bench_clamp', seconds: 3.5 } } } },
+    },
+    kinds: { bottle: { label: 'a bottle', unit: 'bottle', piece: 'prop:bottle', sold: false } },
+    makings: {
+      spraycan: { label: 'dog spray', pack: 'a can of dog spray', unit: 'can', kind: 'filling', maker: 'bench', family: 'sting', effect: 'blind', rarity: 'common',
+        price: 8, at: 'park', keeper: 'npc:connect:projects', spot: 'truck', piece: 'prop:spray-can', does: 'In a bottle: all of them blind 3 seconds' },
+      painttin: { label: 'blue paint', pack: 'a tin of blue paint', unit: 'tin', kind: 'filling', maker: 'bench', family: 'dye', effect: 'tagged', rarity: 'common',
+        price: 5, at: 'park', keeper: 'npc:neighbour:2', spot: 'yard-sale', piece: 'prop:paint-tin', does: 'In a bottle: all of them blue for a week' },
+    },
+    families: { sting: 'orange', dye: 'blue' },
+    products: {
+      spray: { name: 'Dog Spray', from: ['spraycan'] },
+      paint: { name: 'Blue Paint', from: ['painttin'] },
+      'spray-paint': { name: 'Dog Spray and Blue Paint', from: ['painttin', 'spraycan'] },
+      // (a bag from the kitchen in a bottle: its own effect, lightly, in the plan's fixed sizes; named after the bag)
+      'zonk-bottle': { bag: 'zonk' },
+      'disco-rash-bottle': { bag: 'disco-rash' },
+      'disco-coma-bottle': { bag: 'disco-coma' },
+    },
+    effects: {
+      blind: { label: 'blind', short: 'blind', hours: 0, part: 'eyes', family: 'sting', fight: { blind: 3 }, words: 'blind, hands over their eyes', inBottle: 'All of them blind 3 seconds: no blow, half speed',
+        look: { overhead: 'stars', legs: 'stumble' } },
+      tagged: { label: 'blue', short: 'blue', hours: 168, part: 'skin', family: 'dye', person: { tagged: true }, words: 'bright blue all over, for a week', inBottle: 'All of them blue for a week',
+        look: { skin: 'blue' } },
+      // (the kitchen's, in a bottle, at half the plan's fixed sizes: asleep 3 s, not 6; dancing 4 s, not 6 (bench-1's B1,
+      // the orchestrator's call: inside the box cutter's lift, so a kitchen bag is never the best weapon on the street))
+      asleep: { fight: { asleep: { n: 1, s: 3 } }, inBottle: 'The first of them asleep 3 seconds' },
+      dancing: { fight: { slow: { s: 4, by: 0.5 } }, inBottle: 'All of them dancing 4 seconds: half speed' },
+    },
+    // (bench-1, the orchestrator's calls on B3: a cloud is news only when it changes the fight (`heat`: dog spray, a bag;
+    // a splash of paint is not); taking it back gets ALL of what he took (`back` 100: never more, so being jumped never pays))
+    bottle: {
+      fights: ['jumped', 'crew', 'sixes'],
+      heat: 1,
+      blue: { days: 7, back: 100, heat: 1, label: 'Take it back off {who}' },
+    },
+  },
 };
 
 const scale = (range, by) => range.map(x => Math.round(x * by));
 
 /**
+ * (pot-1) THE GOODS MAKING BRINGS: every making (an ingredient) and every product as a good of `goods` (so a bag is on you
+ * or at the crib, sold through the selling jobs, taken by a jump and seized by the police as any good is), and each
+ * product's dirty batch as a good of its own (`<product>~<bad thing>`, "zonk~pukes": its bad thing in `dirty`): the rules show it as its
+ * product until it is found out (make.mjs). A making has no `at` (no connect sells it: its seller is make.makings'); a
+ * product costs what its makings cost, over the bags a batch gives. Listed after the bought goods, so their order stays.
+ */
+function madeGoods(raw) {
+  const M = raw.make;
+  if (!M) return {};
+  const out = {};
+  for (const [id, m] of Object.entries(M.makings ?? {})) {
+    out[id] = { label: m.label, pack: m.pack, unit: m.unit ?? 'one', price: m.price, sales: 1, making: true, kind: m.kind, maker: m.maker, piece: m.piece ?? null };
+  }
+  const rank = r => (M.rarities ?? []).indexOf(r);
+  for (const [id, p] of Object.entries(M.products ?? {})) {
+    // (bench-1: a bag from the kitchen in a bottle: its carrier the one that takes bags, three bottles from one bag, at
+    // the bag's cost; named after the bag ("Zonked in a bottle"); never sold: no selling job takes a bottle)
+    if (p.bag) {
+      const B = out[p.bag];
+      const [mk, C] = Object.entries(M.makers).flatMap(([m, x]) => Object.values(x.carriers).map(c => [m, c])).find(([, c]) => c.takes.includes(B.kind));
+      const kind = M.kinds[C.gives];
+      out[id] = { label: `${B.label} in a ${kind?.unit ?? 'bottle'}`, unit: kind?.unit ?? 'one', price: B.price / B.sales, sales: C.n, made: true, kind: C.gives, maker: mk, product: id, bag: p.bag, rarity: B.rarity, piece: `prop:${C.gives}-${p.bag}`, ...(kind?.sold === false ? { sold: false } : {}) };
+      continue;
+    }
+    const makings = p.from.map(k => M.makings[k]);
+    const maker = makings[0].maker;
+    const C = Object.values(M.makers[maker].carriers).find(c => c.takes.includes(makings[0].kind));
+    const rarity = makings.map(m => m.rarity).reduce((a, b) => (rank(b) > rank(a) ? b : a));
+    const kind = M.kinds[C.gives];
+    const good = { label: p.name, unit: kind?.unit ?? 'one', price: makings.reduce((a, m) => a + m.price, 0), sales: C.n, made: true, kind: C.gives, maker, product: id, rarity, piece: `prop:${C.gives}-${id}`, ...(kind?.sold === false ? { sold: false } : {}) };
+    out[id] = good;
+    // (bench-1: a bottle comes out as packed: no dirty batch of it)
+    if (kind?.sold !== false) for (const d of Object.keys(M.dirty ?? {})) out[`${id}~${d}`] = { ...good, dirty: d, clean: id };
+  }
+  return out;
+}
+
+/**
  * The config the rules read: each place's jobs with their pay in dollars (base × the tier's pay), and `jobs` and
  * `people` at the top as copies of the places' own. A job given `pay` and no `base` keeps its pay as it is.
  */
-function resolve(raw) {
+function resolve(raw0) {
+  // (pot-1) the goods making brings, after the bought ones; a selling job's `made` (what a made thing of each rarity pays
+  // there) becomes a line of its `goods` for every made good of that rarity, so the selling machinery reads them as any good
+  const made = madeGoods(raw0);
+  const raw = Object.keys(made).length ? { ...raw0, goods: { ...raw0.goods, ...Object.fromEntries(Object.entries(made).filter(([k]) => !raw0.goods?.[k])) } } : raw0;
+  // (bench-1: a made thing never sold, a bottle, is no line of any selling job)
+  const withMade = j => (j.made ? { ...j, goods: { ...(j.goods ?? {}), ...Object.fromEntries(Object.entries(made).filter(([, g]) => g.made && g.sold !== false && j.made[g.rarity]).map(([k, g]) => [k, j.made[g.rarity]])) } } : j);
   const places = {};
   for (const [id, p] of Object.entries(raw.places)) {
     const tier = p.tier ? raw.tiers[p.tier] : null;
@@ -775,7 +969,7 @@ function resolve(raw) {
     if (!p.jobs) { places[id] = p; continue; }
     const by = tier?.pay ?? 1;
     // a selling job's goods: what each pays there in dollars (base × the tier's pay), as `goodsPay`
-    const jobs = Object.fromEntries(Object.entries(p.jobs).map(([jid, j]) => [jid, Object.freeze({ ...j, pay: j.base ? scale(j.base, by) : j.pay,
+    const jobs = Object.fromEntries(Object.entries(p.jobs).map(([jid, j0]) => [jid, withMade(j0)]).map(([jid, j]) => [jid, Object.freeze({ ...j, pay: j.base ? scale(j.base, by) : j.pay,
       ...(j.goods ? { goodsPay: Object.freeze(Object.fromEntries(Object.entries(j.goods).map(([g, b]) => [g, scale(b, by)]))) } : {}) })]));
     places[id] = Object.freeze({ ...p, jobs: Object.freeze(jobs) });
   }
@@ -808,6 +1002,8 @@ export const RUN_CONFIG = resolve(withConfig(RAW, {}));
  */
 export function withRunConfig(overrides, base = RUN_CONFIG) {
   const o = { ...(overrides ?? {}) };
+  // (bench-1: `bench: true` brings the bench and the bottle in, under whatever else the overrides change)
+  if (o.bench === true && !base.make?.makers?.bench) base = withConfig(BENCH, base);
   if (o.jobs || o.people) {
     const places = { ...(o.places ?? {}) };
     for (const [id, jobs] of Object.entries(o.jobs ?? {})) places[id] = { ...(places[id] ?? {}), jobs };
@@ -818,3 +1014,6 @@ export function withRunConfig(overrides, base = RUN_CONFIG) {
   delete o.people;
   return resolve(withConfig(o, base));
 }
+
+/** (bench-1) The rules with the bench and the bottle in: what the tests and the marks play until the page has its screens. */
+export const BENCH_CONFIG = withRunConfig({ bench: true });

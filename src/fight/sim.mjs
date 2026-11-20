@@ -161,6 +161,11 @@ function createDuelFight({ duel, seed, arena }) {
   // (raid-1: the pepper fogger, `duel.blind`: every one of them comes in blind for that many seconds, slowed and unable
   // to hit; left out, nothing changes)
   if (duel.blind) for (const q of them) q.reel = Math.max(q.reel, duel.blind);
+  // (bench-1: a bottle thrown first. `duel.asleep` { n, s, at }: the first n of them asleep from `at` for s seconds (no
+  // step, no blow); `duel.slow` { s, by, at }: every one of them at `by` of their speed, from `at` for s seconds (they
+  // dance). Left out, nothing changes: no field is set, and the fight is the same tick for tick)
+  if (duel.asleep) for (const q of them.slice(0, duel.asleep.n ?? 1)) q.sleep = [duel.asleep.at ?? 0, (duel.asleep.at ?? 0) + duel.asleep.s];
+  if (duel.slow) for (const q of them) q.slow = [duel.slow.at ?? 0, (duel.slow.at ?? 0) + duel.slow.s, duel.slow.by];
   return F;
 }
 
@@ -198,7 +203,10 @@ export function step(F, move = { x: 0, y: 0 }) {
     const n = Math.hypot(mx, my);
     if (n > 1) [mx, my] = [mx / n, my / n];
     // (one held, or holding on, does not move)
-    const v = p.pin > 0 ? 0 : p.speed * (p.reel > 0 ? 0.45 : 1);
+    let v = p.pin > 0 ? 0 : p.speed * (p.reel > 0 ? 0.45 : 1);
+    // (bench-1: asleep on a bottle's bag, no step; dancing, slowed. Only on one a bottle reached)
+    if (p.sleep && F.t >= p.sleep[0] && F.t < p.sleep[1]) v = 0;
+    else if (p.slow && F.t >= p.slow[0] && F.t < p.slow[1]) v *= p.slow[2];
     p.vx = mx * v;
     p.vy = my * v;
     p.x += p.vx * dt;
@@ -450,6 +458,8 @@ function apart(F) {
 function act(F, p) {
   const W = WEAPONS[p.arm];
   if (p.reel > 0 || p.reload > 0) return;
+  // (bench-1: asleep on a bottle's bag: no blow)
+  if (p.sleep && F.t >= p.sleep[0] && F.t < p.sleep[1]) return;
   // (one with no rounds left at all fights on with the fists)
   if (W.kind === 'gun' && p.mag <= 0) {
     if (p.rounds > 0) return startReload(F, p);

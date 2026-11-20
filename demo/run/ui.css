@@ -659,8 +659,15 @@ body:has(.sbw) .hk2-bubbles, body:has(.sbw) #k .rn-marks { visibility: hidden; }
 #k .u-ah-next.is-now b { background: var(--u-gain); color: var(--u-gain-on); }
 #k .u-ah-next span { min-width: 0; }
 #k .u-ah-next:hover { box-shadow: var(--u-key-shadow); }
-/* the four branches */
-#k .u-ah-tree { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 14px; align-items: start; padding: 2px 2px 4px; }
+/* the five branches (pot-2: Make the fifth). EVERY NODE IN SIGHT WITHOUT SCROLLING, at 1600 × 1000 and at 1280 × 720:
+   the panel is as wide as the picture beside the rail (over your numbers while it is open: Esc gives them back), six
+   columns, and Home, the longest tree, flows down two of them, a group never split */
+#k .rn .rn-sheet[data-sheet="ahead"] { max-width: none; width: calc(100% - var(--rn-side) - 2 * var(--rn-m) - var(--rn-g)); }
+#k .u-ah-tree { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px 12px; align-items: start; padding: 2px 2px 4px; }
+#k .u-ah-branch.is-home { grid-column: span 2; columns: 2; column-gap: 12px; }
+#k .u-ah-branch.is-home > .u-ah-bhead { column-span: all; }
+#k .u-ah-group { break-inside: avoid; }
+#k .u-ah-branch.is-home > .u-ah-group:first-of-type { margin-top: 5px; }
 @media (max-width: 720px) { #k .u-ah-tree { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 #k .u-ah-branch { min-width: 0; }
 #k .u-ah-bhead { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 6px; padding: 6px 2px 5px; background: var(--hk-plate, var(--u-panel)); border-bottom: 2px solid var(--u-line);
@@ -818,3 +825,114 @@ body:has(.sbw) .hk2-bubbles, body:has(.sbw) #k .rn-marks { visibility: hidden; }
 #k .rn .rn-notice.is-raid { flex-wrap: wrap; max-width: calc(460 * var(--k-px)); row-gap: 2px; padding-bottom: 5px; }
 #k .rn-notice.is-raid .rn-notice-h { flex: 1 1 auto; }
 #k .rn-notice.is-raid .rn-notice-text { order: 5; flex: 1 1 100%; }
+
+/* ── POT-2: THE POT'S SCREEN (pot.js; Cook on the dock, or P). Three columns, the plan's B10: ON YOUR SHELF (what you
+   cook with, a line each, a click puts it in; what you lack greyed with who sells it; the one line of why to cook
+   today; your bags), IN THE POT (its two places), THE LABEL (rewritten as things go in, and Cook). The game's own
+   panel, pills and keys; a family's colour is the chip the plan names (downer blue, trip violet) ─────────────────── */
+#k .rn .rn-sheet[data-sheet="pot"] { width: min(calc(860 * var(--k-px)), calc(100% - var(--rn-side) - 2 * var(--rn-m) - var(--rn-g))); }
+#k .rn-sheet[data-sheet="pot"] .rn-sheet-foot { display: none; }
+#k .rn-sheet[data-sheet="pot"] .rn-sheet-scroll { padding: 0 10px 10px; }
+#k .u-pot-head { flex: 1 1 auto; display: flex; justify-content: flex-end; min-width: 0; }
+#k .u-pot-hours { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; background: var(--u-mute-bg); font: 700 var(--u-fs-s)/1.2 var(--u-ui); white-space: nowrap; }
+#k .u-pot-hours .u-ico { width: calc(13 * var(--k-px)); height: calc(13 * var(--k-px)); }
+#k .u-pot-lead { padding: 0 10px 6px; border-bottom: 1px solid var(--u-rule); }
+#k .u-pot-where { margin: 0; font: 600 var(--u-fs)/1.3 var(--u-ui); color: var(--u-ink-2); }
+#k .u-pot { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .8fr) minmax(0, 1.3fr); gap: 12px; align-items: start; padding-top: 8px; }
+@media (max-width: 720px) { #k .u-pot { grid-template-columns: minmax(0, 1fr); } }
+#k .u-pot-col { display: grid; gap: 6px; min-width: 0; align-content: start; }
+#k .u-pot-col > h3 { margin: 0; padding-bottom: 3px; border-bottom: 2px solid var(--u-line); }
+#k .u-pot-list, #k .u-pot-rows { margin: 0; padding: 0; list-style: none; display: grid; gap: 5px; }
+#k .u-pot-thing { display: flex; align-items: center; gap: 8px; width: 100%; min-height: calc(36 * var(--k-px)); padding: 4px 8px; box-sizing: border-box; cursor: pointer; text-align: left;
+  border: 1.5px solid var(--u-line); border-radius: 7px; background: var(--u-inset); color: var(--u-ink); font: 600 var(--u-fs)/1.2 var(--u-ui); }
+#k .u-pot-thing:hover { box-shadow: var(--u-key-shadow); }
+#k .u-pot-thing.is-in { box-shadow: inset 6px 0 0 var(--u-you); padding-left: 12px; }
+#k .u-pot-thing.is-none { border-style: dashed; border-color: var(--u-slate); background: transparent; color: var(--u-ink-2); }
+#k .u-pot-thing-t { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+#k .u-pot-thing-t small { font: 600 var(--u-fs-s)/1.2 var(--u-ui); color: var(--u-mute); }
+#k .u-pot-count { flex: none; font: 700 var(--u-fs-s)/1 var(--u-ui); color: var(--u-ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+#k .u-pot-mark { flex: none; display: grid; place-items: center; width: calc(17 * var(--k-px)); height: calc(17 * var(--k-px)); border-radius: 50%; background: var(--u-ink); color: var(--u-inset); }
+#k .u-pot-mark .u-ico { width: 70%; height: 70%; stroke-width: 3; }
+#k .u-pot-chips { display: inline-flex; gap: 2px; flex: none; vertical-align: middle; }
+#k .u-pot-chip { display: inline-block; width: calc(11 * var(--k-px)); height: calc(11 * var(--k-px)); border-radius: 3px; box-shadow: 0 0 0 1.5px var(--u-line); background: var(--u-mute-bg); }
+#k .u-pot-chip.is-blue { background: #3d7bff; }
+#k .u-pot-chip.is-violet { background: #9b4dff; }
+#k .u-pot-chip.is-red { background: #e8232a; }
+#k .u-pot-chip.is-green { background: #3fbf4a; }
+#k .u-pot-reason { display: flex; align-items: flex-start; gap: 6px; margin: 2px 0 0; padding: 6px 8px; border-radius: 7px; background: var(--u-pale, var(--u-inset)); border-left: 4px solid var(--u-you);
+  font: 650 var(--u-fs-s)/1.35 var(--u-ui); }
+#k .u-pot-reason .u-ico { flex: none; margin-top: 1px; }
+#k .u-pot-made, #k .u-pot-in { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; padding: 4px 6px; border-radius: 6px; background: var(--u-inset); box-shadow: inset 0 0 0 1px var(--u-rule); }
+#k .u-pot-made-name { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font: 650 var(--u-fs)/1.2 var(--u-ui); }
+#k .u-pot-made .u-pot-count, #k .u-pot-in .u-pot-count { margin-left: auto; }
+#k .u-pot-belt { display: inline-flex; align-items: center; gap: 4px; font: 700 var(--u-fs-s)/1 var(--u-ui); color: var(--u-ink-2); }
+#k .u-pot-belt .u-ico, #k .u-pot-beltbtn .u-ico { width: calc(14 * var(--k-px)); height: calc(14 * var(--k-px)); }
+#k .u-pot-dirty { min-height: calc(17 * var(--k-px)); }
+#k .u-pot-slots { display: grid; gap: 6px; }
+#k .u-pot-slot { display: flex; align-items: center; gap: 7px; min-height: calc(40 * var(--k-px)); padding: 4px 9px; box-sizing: border-box; border-radius: 8px; font: 650 var(--u-fs)/1.2 var(--u-ui); }
+#k .u-pot-slot.is-full { width: 100%; cursor: pointer; text-align: left; border: 2px solid var(--u-line); background: var(--u-inset); color: var(--u-ink); box-shadow: var(--u-block); }
+#k .u-pot-slot.is-empty { justify-content: center; border: 2px dashed var(--u-slate); color: var(--u-mute); }
+#k .u-pot-x { margin-left: auto; font: 700 var(--u-fs)/1 var(--u-ui); color: var(--u-mute); }
+#k .u-pot-into { display: flex; align-items: center; gap: 6px; margin: 2px 0 0; font: 700 var(--u-fs)/1.2 var(--u-ui); }
+#k .u-pot-hint { margin: 0; font: 600 var(--u-fs-s)/1.2 var(--u-ui); color: var(--u-mute); }
+#k .u-pot-label { padding: 8px 10px 10px; border: 2px solid var(--u-line); border-radius: 9px; background: var(--u-inset); box-shadow: var(--u-block); }
+#k .u-pot-label.is-none { box-shadow: none; border-style: dashed; border-color: var(--u-slate); background: transparent; }
+#k .u-pot-label > h3 { border-bottom-width: 1px; }
+#k .u-pot-title { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; }
+#k .u-pot-name { font: 400 calc(22 * var(--k-px))/1.05 var(--u-sign); text-transform: uppercase; letter-spacing: .02em; overflow-wrap: anywhere; }
+#k .u-pot-note { font: 600 var(--u-fs-s)/1.2 var(--u-ui); color: var(--u-mute); }
+#k .u-pot-sub { margin: 0; font: 700 var(--u-fs-s)/1.2 var(--u-ui); color: var(--u-ink-2); }
+#k .u-pot-lines { margin: 0; padding-left: 20px; font: 650 var(--u-fs)/1.35 var(--u-ui); }
+#k .u-pot-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 10px; margin: 2px 0 0; font: 600 var(--u-fs-s)/1.3 var(--u-ui); }
+#k .u-pot-facts dt { color: var(--u-mute); font-weight: 700; }
+#k .u-pot-facts dd { margin: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+#k .u-pot-odds { margin: 0; font: 600 var(--u-fs-s)/1.3 var(--u-ui); color: var(--u-ink-2); }
+#k .u-pot-empty { margin: 0; font: 600 var(--u-fs)/1.35 var(--u-ui); color: var(--u-ink-2); }
+#k .u-btn.u-pot-cook { justify-content: space-between; width: 100%; min-height: calc(38 * var(--k-px)); margin-top: 4px; font-size: calc(14 * var(--k-px)); }
+#k .u-btn.u-pot-cook[aria-disabled="true"] { background: var(--u-pale, var(--u-panel)); color: var(--u-ink-2); border-style: dashed; box-shadow: none; }
+#k .u-btn.u-pot-cook small { font: 600 var(--u-fs-s)/1.2 var(--u-ui); white-space: normal; text-align: right; }
+#k .u-pot-naming { display: grid; gap: 5px; }
+#k .u-pot-name-in { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 2px solid var(--u-line); border-radius: 7px; background: #fff; color: var(--u-ink); font: 400 calc(20 * var(--k-px))/1.1 var(--u-sign); text-transform: uppercase; }
+#k .u-pot-name-in:focus { outline: 3px solid var(--u-focus); outline-offset: 1px; }
+#k .u-pot-naming-acts { display: flex; gap: 6px; flex-wrap: wrap; }
+#k .u-pot-name-why { min-height: 1em; font: 600 var(--u-fs-s)/1.2 var(--u-ui); color: var(--u-loss-text); }
+/* the street: who is under what at the place (the where card); a bag's sale, what it will do; a person's line */
+#k .u-where-under { display: flex; align-items: center; gap: 5px; margin-top: 4px; padding: 2px 8px; width: fit-content; max-width: 100%; box-sizing: border-box; border-radius: 999px;
+  background: var(--u-inset); color: var(--u-ink); font: 700 var(--u-fs-s)/1.3 var(--u-ui); box-shadow: inset 0 0 0 1px var(--u-line); }
+#k .u-where-under .u-ico { width: calc(14 * var(--k-px)); height: calc(14 * var(--k-px)); }
+#k .u-where.is-compact .u-where-under { display: none; }
+#k .u-pill.rn-made-pill { gap: 5px; background: var(--u-inset); color: var(--u-ink); box-shadow: inset 0 0 0 1.5px var(--u-line); }
+#k .u-pill.rn-made-pill .u-pot-chip { width: calc(9 * var(--k-px)); height: calc(9 * var(--k-px)); }
+#k .rn-under-line { margin: 2px 0 0; font: 600 var(--u-fs-s)/1.3 var(--u-ui); color: var(--u-ink-2); }
+#k .rn-under-line b { color: var(--u-ink); }
+#k .rn-under-line.is-bad b { color: var(--u-loss-text); }
+/* (pot-2) THE DOCK WITH SEVEN VERBS: Cook made the seventh, so in the full dock a verb is its word and its small line
+   (the letter on its corner): the icons stay on the one-row dock, where the words are not; the main button a little
+   narrower. Measured: no verb's small line cut at 1280 or 1600, at the crib, the trailer park and the market */
+#k .u-dock-verbs:not(.is-row) .u-verb > .u-ico { display: none; }
+#k .u-dock-verbs:not(.is-row) .u-verb { padding: 0 calc(8 * var(--k-px)); }
+#k .u-dock-verbs:not(.is-row) .u-btn.u-go { max-width: calc(270 * var(--k-px)); }
+#k .u-pill.rn-made-pill.is-pick { cursor: pointer; }
+#k .u-pill.rn-made-pill.is-pick > i { font-style: normal; color: var(--u-mute); }
+#k .u-pill.rn-made-pill.is-pick:hover { box-shadow: inset 0 0 0 1.5px var(--u-line), var(--u-key-shadow); }
+/* (pot-2) the pot's three columns as wide as what they hold; a short window (1280 × 720) a little tighter, so the
+   whole screen is in sight without scrolling */
+#k .u-pot { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr); }
+@media (max-width: 720px) { #k .u-pot { grid-template-columns: minmax(0, 1fr); } }
+@media (max-height: 820px) {
+  #k .u-pot { gap: 10px; padding-top: 6px; }
+  #k .u-pot-col { gap: 4px; }
+  #k .u-pot-thing { min-height: calc(30 * var(--k-px)); padding-top: 2px; padding-bottom: 2px; }
+  #k .u-pot-slot { min-height: calc(32 * var(--k-px)); }
+  #k .u-pot-label { padding: 6px 9px 8px; }
+  #k .u-pot-name { font-size: calc(19 * var(--k-px)); }
+  #k .u-btn.u-pot-cook { min-height: calc(32 * var(--k-px)); }
+  #k .u-pot-reason { padding: 4px 7px; }
+  #k .u-pot-made, #k .u-pot-in { padding: 2px 6px; }
+}
+/* (pot-2) a short window: the five trees' rows a little closer, so the longest (Make, with what you found) stays in sight */
+@media (max-height: 820px) {
+  #k .u-ah-li { margin-top: 2px; }
+  #k .u-ah-group { margin-top: 2px; }
+  #k .u-ah-glabel { padding-top: 1px; padding-bottom: 0; }
+}

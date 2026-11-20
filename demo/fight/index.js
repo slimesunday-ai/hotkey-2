@@ -142,7 +142,7 @@ export async function mountFight(host, { stage, demo = window.__demo, seed: seed
   }
 
   // THE COVER put on the lot for the fight (cover.js: the city's own kit; sites.js `cover`, among the rules' posts)
-  const cover = await placeCover({ city, CITY: demo?.CITY ?? '/city/from-trunk/style/city/', actors, site: SITE });
+  const cover = await placeCover({ city, CITY: demo?.CITY ?? new URL('../../city/from-trunk/style/city/', import.meta.url).href, actors, site: SITE });
 
   // ── the people on the stage ────────────────────────────────────────────────────────────────────────────────────
   const [sx, , sz] = W(...ARENA.start);
@@ -848,7 +848,11 @@ export async function mountFight(host, { stage, demo = window.__demo, seed: seed
     actors.show?.(YOU, true);
     actors.place(YOU, yx, yz, Math.atan2(tx - yx, tz - yz));
     const them = rivalId(foe);
-    if (!actors.has(them)) actors.add({ id: them, name: RIVALS[foe].name, x: tx, z: tz, ry: Math.atan2(yx - tx, yz - tz), look: (foe === 'bigman' ? LOOKS.bigman : foe === 'quick' || foe === 'knife' ? LOOKS.runner : LOOKS.heavy)(`rival:${foe}`) });
+    // (blood-1, for the tools: `?rivals=brawler:dee,quick:lou` draws a style's rival as one of the city's named people,
+    // in their own look at their own size: demo/tools/fight-blood.mjs's small and big faces)
+    const named = new URLSearchParams(location.search).get('rivals')?.split(',').map(s => s.split(':')).find(([s]) => s === foe)?.[1];
+    const look = named ? { seed: `rival:${foe}`, named } : (foe === 'bigman' ? LOOKS.bigman : foe === 'quick' || foe === 'knife' ? LOOKS.runner : LOOKS.heavy)(`rival:${foe}`);
+    if (!actors.has(them)) actors.add({ id: them, name: RIVALS[foe].name, x: tx, z: tz, ry: Math.atan2(yx - tx, yz - tz), look });
     else actors.place(them, tx, tz, Math.atan2(yx - tx, yz - tz));
     actors.show?.(them, true);
     camera.focus(YOU);

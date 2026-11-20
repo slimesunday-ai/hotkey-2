@@ -1,14 +1,16 @@
 #!/usr/bin/env node
-// Measures RUN.md's marks (seven of the first test, five of rules-2, two of trust, two of goods, R1 to R4 of routes, H1 to H8 of home pressure, P1 to P5 of the new places, S1 to S4 of the first slice) on the real engine (src/run/) with simple scripted policies, free.
+// Measures RUN.md's marks (seven of the first test, five of rules-2, two of trust, two of goods, R1 to R4 of routes, H1 to H8 of home pressure, P1 to P5 of the new places, S1 to S6 of the first slice, D1 to D6 of the raid, C1 to C6 of the pot) on the real engine (src/run/) with simple scripted policies, free.
 //   node scripts/run-marks.mjs                 3,000 seeded six-day seasons per cell (ten-day for the home marks)
 //   node scripts/run-marks.mjs --seeds 500     quicker, noisier
 //   node scripts/run-marks.mjs --home          only the home marks, H1 to H8
 //   node scripts/run-marks.mjs --places        only the new places' marks, P1 to P5 (batch-1; P5 bigman-1)
 //   node scripts/run-marks.mjs --sixes         only the first slice's marks, S1 to S4 (sixes-1)
 //   node scripts/run-marks.mjs --raid          only the raid's marks, D1 to D6 (raid-1)
+//   node scripts/run-marks.mjs --pot           only the pot's marks, C1 to C6 (pot-1); --pot --all: the pot's marks, then every other mark beside its last recorded reading
+//   node scripts/run-marks.mjs --bench         only the bench's marks, B1 to B4 (bench-1), on the rules with the bench in (BENCH_CONFIG)
 //   node scripts/run-marks.mjs --json          the numbers as JSON
-import { RUN_CONFIG } from '../src/run/config.mjs';
-import { measure, judge, tableText, measureWorld, judgeWorld, worldText, measureTrust, judgeTrust, trustText, measureGoods, judgeGoods, goodsText, measureRoutes, judgeRoutes, routesText, measureHome, judgeHome, homeText, measurePlaces, judgePlaces, placesText, measureSixes, judgeSixes, sixesText, atRest, measureRaid, judgeRaid, raidText } from '../src/run/marks.mjs';
+import { RUN_CONFIG, BENCH_CONFIG } from '../src/run/config.mjs';
+import { measure, judge, tableText, measureWorld, judgeWorld, worldText, measureTrust, judgeTrust, trustText, measureGoods, judgeGoods, goodsText, measureRoutes, judgeRoutes, routesText, measureHome, judgeHome, homeText, measurePlaces, judgePlaces, placesText, measureSixes, judgeSixes, sixesText, atRest, measureRaid, judgeRaid, raidText, measurePot, judgePot, potText, measureBench, judgeBench, benchText } from '../src/run/marks.mjs';
 
 const argv = process.argv.slice(2);
 const opt = name => {
@@ -42,6 +44,24 @@ if (argv.includes('--raid')) {
 ${rdMarks.filter(m => m.pass).length} of ${rdMarks.length} marks pass (${((Date.now() - started) / 1000).toFixed(0)} s)`);
   process.exit(0);
 }
+// (bench-1) the bench's marks, on the rules with the bench in (the page's config has none of it until its screens exist)
+if (argv.includes('--bench')) {
+  const bn = measureBench(BENCH_CONFIG, { seeds });
+  const bnMarks = judgeBench(bn);
+  if (argv.includes('--json')) console.log(JSON.stringify({ bench: bn, marks: bnMarks }, null, 1));
+  else console.log(`${benchText(bnMarks)}\n\n${bnMarks.filter(m => m.pass).length} of ${bnMarks.length} marks pass (${((Date.now() - started) / 1000).toFixed(0)} s)`);
+  process.exit(0);
+}
+// (pot-1) the pot's marks; with --all, then every other mark as the full run prints it (below)
+let potMarks = [];
+if (argv.includes('--pot')) {
+  const pt = measurePot(RUN_CONFIG, { seeds });
+  potMarks = judgePot(pt);
+  if (argv.includes('--json')) console.log(JSON.stringify({ pot: pt, marks: potMarks }, null, 1));
+  else console.log(`${potText(potMarks)}\n\n${potMarks.filter(m => m.pass).length} of ${potMarks.length} marks pass (${((Date.now() - started) / 1000).toFixed(0)} s)`);
+  if (!argv.includes('--all')) process.exit(0);
+  console.log('');
+}
 if (argv.includes('--places')) {
   // (second pass: P1 to P5 compare a place with a place: the Sixes, who tax only the market, at rest)
   const places = measurePlaces(atRest(RUN_CONFIG), { seeds });
@@ -68,7 +88,10 @@ const sixes = measureSixes(RUN_CONFIG, { seeds });
 const sixesMarks = judgeSixes(sixes);
 const raid = measureRaid(RUN_CONFIG, { seeds });
 const raidMarks = judgeRaid(raid);
-if (argv.includes('--json')) console.log(JSON.stringify({ ...result, world, trust, goods, routes, home, places, sixes, raid, marks: [...marks, ...routeMarks, ...homeMarks, ...placeMarks, ...sixesMarks, ...raidMarks] }, null, 1));
+// (pot-1: the pot's, unless --pot measured them above)
+const pot = argv.includes('--pot') ? null : measurePot(RUN_CONFIG, { seeds });
+if (pot) potMarks = judgePot(pot);
+if (argv.includes('--json')) console.log(JSON.stringify({ ...result, world, trust, goods, routes, home, places, sixes, raid, ...(pot ? { pot } : {}), marks: [...marks, ...routeMarks, ...homeMarks, ...placeMarks, ...sixesMarks, ...raidMarks, ...potMarks] }, null, 1));
 else {
   console.log(tableText(result, marks.filter(m => m.n <= 7)));
   console.log('');
@@ -87,6 +110,7 @@ else {
   console.log(sixesText(sixesMarks));
   console.log('');
   console.log(raidText(raidMarks));
-  const all = [...marks, ...routeMarks, ...homeMarks, ...placeMarks, ...sixesMarks, ...raidMarks];
+  if (pot) { console.log(''); console.log(potText(potMarks)); }
+  const all = [...marks, ...routeMarks, ...homeMarks, ...placeMarks, ...sixesMarks, ...raidMarks, ...potMarks];
   console.log(`\n${all.filter(m => m.pass).length} of ${all.length} marks pass (${((Date.now() - started) / 1000).toFixed(0)} s)`);
 }

@@ -46,7 +46,7 @@ import { YOU, stageGame, lineOf as lineAt, endOf, stopSpots } from './scenes.js'
 import { scenesOf, binsOf, STEP, FAR_IN, FRONT, YARD, VISIT, POST, WAIT, WAIT_EAST, GUARD, homeWho, SENT, SIXES_TWO, CREW_FRIEND } from './acted.js';
 import { characterStats, characterWearing, characterPeople, characterFight, movesBody, stuffBody, lineNote, stopFlag, stopBody, stopOf, STOP_NAME, hookedShort, hookedText, trustMark, trustTitle, tellEl, signedT, goodWord as goodWordOf, goodsWords as goodsWordsOf, packWord as packWordOf, thingWord, WEAR_LOOK, shortName as personShort } from './panels.js';
 // (the door's answer as the rules will have it: refusing from with you is sore, not a grudge. Read only, as panels.js does)
-import { trustAfter, trustBand, fightAdvice } from '../../src/run/rules.mjs';
+import { trustAfter, trustBand, fightAdvice, goodLabel, shownAs } from '../../src/run/rules.mjs';
 import { createRunMap } from './map.js';
 import { createArrangeMode } from './arrange.js';
 import { dressOf as dressWorn, thingOf, tryOn as tryOnOf } from '../../src/run/library.mjs';
@@ -67,6 +67,8 @@ import { createTrip } from './trip.js';
 import { createDuel } from './duel.js';
 // (tree-1: WHAT'S AHEAD, the trees of every way to fight, piece of gear, piece for the home and place, ahead.js)
 import { createAhead } from './ahead.js';
+// (pot-2: the pot's screen, Cook on the dock or P; the bags and what you cook with as a row where your stuff lives)
+import { createPot, madeRows, chipsEl } from './pot.js';
 // (smooth-1: THE FIGHT ODDS IN THE BACKGROUND, odds.js: the rules' samples of fights played in workers, never on the
 // page's thread; a figure not worked out yet says "…" and a choice resting on one waits for it)
 import { createOdds, pendingIn, watchPending } from './odds.js';
@@ -110,6 +112,8 @@ const SHEETS = [
   { id: 'moves', key: 'G', label: 'Guide', short: 'Guide', title: 'Guide: every move there is', icon: 'journal' },
   { id: 'stuff', key: 'O', label: 'Stuff', short: 'Stuff', title: 'Stuff: everything to buy, everywhere', icon: 'goods' },
   { id: 'map', key: 'M', label: 'Map', short: 'Map', title: 'The map', icon: 'map' },
+  // (pot-2: THE POT'S SCREEN, opened by Cook on the dock (P): not on the rail, the dock's seventh verb is its button)
+  { id: 'pot', key: 'P', label: 'Cook', short: 'Cook', title: 'The pot', icon: 'pot', rail: false },
 ];
 /** The player's figure as the stage rolls it (stage/index.js: an agent's look is seeded `agent:<name>`, the agents' pool). */
 const handleOf = name => `agent:${name}`;
@@ -163,11 +167,26 @@ export function mountRun(host, opts = {}) {
     }
   }
   // GOODS ON THE PAGE (goods-1): short words for what you carry, in the page's own type (panels.js)
-  const goodWord = (g, n) => goodWordOf(cfg, g, n);
-  const goodsWords = goods => goodsWordsOf(cfg, goods);
+  // (pot-2: a made thing by the name it goes by, the player's own when he named it; what you cook with by its label. A
+  // dirty batch not yet found out is called what it shows as: goodLabel)
+  const isPot = g => !!(cfg.goods?.[g]?.made || cfg.goods?.[g]?.making);
+  const goodWord = (g, n) => (isPot(g) ? goodLabel(cfg, S.state, g) : goodWordOf(cfg, g, n));
+  // (pot-2: goods as they SHOW: a dirty batch not yet found out is counted in its product, so no line can tell it apart)
+  const shownOf = goods => Object.entries(goods ?? {}).reduce((a, [g, n]) => {
+    const k = cfg.goods?.[g]?.made ? shownAs(cfg, S.state, g) : g;
+    return { ...a, [k]: (a[k] ?? 0) + n };
+  }, {});
+  const goodsWords = (goods, sep = ' · ') => Object.entries(shownOf(goods)).filter(([, n]) => n > 0).map(([g, n]) => `${n} ${goodWord(g, n)}`).join(sep);
+  /** (pot-2) Goods in a few words for a small line: the bags you made counted together ("16 bags"), the rest as they are. */
+  const goodsShort = goods => {
+    const all = shownOf(goods);
+    const bags = Object.entries(all).filter(([g]) => cfg.goods?.[g]?.made).reduce((a, [, n]) => a + n, 0);
+    const rest = Object.fromEntries(Object.entries(all).filter(([g]) => !cfg.goods?.[g]?.made));
+    return [bags ? `${bags} bag${bags === 1 ? '' : 's'}` : null, hasGoods(rest) ? goodsWords(rest) : null].filter(Boolean).join(' · ');
+  };
   const packWord = g => packWordOf(cfg, g);
   // (ui-3: the words the result card and the journal use for goods, places and a stop's cards: news.js)
-  const newsWords = { good: (g, n) => goodWordOf(cfg, g, n), goods: g => goodsWordsOf(cfg, g, ' and '), pack: g => packWordOf(cfg, g), card: id => cardName(id), place: id => labelOf(id) };
+  const newsWords = { good: (g, n) => goodWord(g, n), goods: g => goodsWords(g, ' and '), pack: g => packWordOf(cfg, g), card: id => cardName(id), place: id => labelOf(id) };
   const hasGoods = goods => Object.values(goods ?? {}).some(n => n > 0);
   // what happened, acted out (demo/run/acted.js). `scenes: false` (?scenes=0) is the stage of step A: the player is
   // only put in the right place
@@ -467,8 +486,8 @@ export function mountRun(host, opts = {}) {
   // (ARRANGE MODE at the crib, demo/run/arrange.js: V, between choices; no hour passes while it is up)
   const arrange = createArrangeMode({ stage, root, pad: `pad:${YOU}`, seed: () => S.state.seed, can: () => S.phase === 'choose' && S.v?.place === 'crib' && !S.v.door && !S.dead, tile: (piece, o) => tiles.el(piece, o) });
   // (every hour the stage plays knows the people as the view has them after the step: who has left for the day, who
-  // stands apart and watches. scenes.js presence)
-  const lineOf = (o, door = null, at = []) => peopleOn(lineAt({ ...o, people: S.v?.people ?? [] }), door, at);
+  // stands apart and watches. scenes.js presence. pot-3: and who is under what, the view's `under`: stage/looks/under.js)
+  const lineOf = (o, door = null, at = []) => peopleOn(lineAt({ ...o, people: S.v?.people ?? [], under: S.v?.under ?? [] }), door, at);
   // THE BINS ARE REAL ONES: the place table's trashcans and dumpsters become spots of the stage's blocks (acted.js)
   binsOf(stage.map);
   // (routes-1: the stop's own spots on DEAD AIR's block, the place table's standing places: scenes.js)
@@ -813,8 +832,9 @@ export function mountRun(host, opts = {}) {
   }
 
   /** The choices whose outcome waits for their scene (the reveal), the ones played as work, and the door's events. */
-  const HOLDS = new Set(['job', 'subway', 'inside', 'out', 'rob', 'bins', 'shop', 'pack', 'get', 'rough', 'give', 'refuse', 'walk', 'skate', 'onward', 'card', 'guard', 'tax']);
-  const WORKS = new Set(['job', 'rob', 'bins', 'card']);
+  const HOLDS = new Set(['job', 'subway', 'inside', 'out', 'rob', 'bins', 'shop', 'pack', 'get', 'rough', 'give', 'refuse', 'walk', 'skate', 'onward', 'card', 'guard', 'tax', 'making', 'cook', 'lift']);
+  // (pot-2: what you cook with bought, the cook, a sleeper's wallet: each waits for its scene, as a purchase or a job does)
+  const WORKS = new Set(['job', 'rob', 'bins', 'card', 'lift', 'cook']);
   // (routes-1: the moves along a way: setting out on foot or on the board, and going on from a stop. wayOn)
   const WAYS = new Set(['walk', 'skate', 'onward']);
   // (sore, trust-1: one who was with you, refused, goes off sore with no grudge: played at the door as the others)
@@ -841,6 +861,8 @@ export function mountRun(host, opts = {}) {
     if (!checkRunBooks(state).ok) throw new Error('the run\'s books do not balance');
     S.state = state;
     S.v = view(cfg, state);
+    // (pot-2: a name typed is done with; the pot keeps what is still at home)
+    pot.stepped();
     S.steps += 1;
     S.result = resultOf(events, before);
     // (ui-3: WHAT JUST HAPPENED, AS A CARD, and its line in the day's journal. A step that ended the day has none: the
@@ -880,6 +902,7 @@ export function mountRun(host, opts = {}) {
     // just happened is said; and a call to the police somewhere you are not, kept as the notice under the top line)
     const was = Object.fromEntries((view(cfg, before).places ?? []).map(p => [p.place, p.heat]));
     S.rose = Object.fromEntries((S.v.places ?? []).filter(p => p.heat > (was[p.place] ?? 0)).map(p => [p.place, p.heat - (was[p.place] ?? 0)]));
+    const noticeWas = S.notice;
     const told = events.find(e => e.notice);
     if (told) S.notice = { ...told.notice, day: state.day, who: told.who?.name ?? null };
     // (goods-1: a stop took your goods and turned their connect against you: that is tomorrow's, and elsewhere, so a
@@ -922,6 +945,12 @@ export function mountRun(host, opts = {}) {
       // (second pass: what she says in the hour is seen first, then the notice: told before the scene, it gave it away)
       if (opts.scenes !== false && six.some(e => e.what === 'word' || e.what === 'refused')) S.noticeAfter = n;
       else S.notice = n;
+    }
+    // (pot-2: THE POT'S NEWS, when nothing else this step had the slip: somebody you sold to went under, a dirty batch
+    // showed itself on its first buyer, somebody under it came round while you were somewhere else)
+    if (S.notice === noticeWas) {
+      const pn = potNotice(before, state, events, news.v0, S.v);
+      if (pn) S.notice = pn;
     }
     // (raid-1: THE WORD, the morning before: the Sixes are coming for your crib. The notice; the card of the one
     // decision (what you meet them with, who stands with you, home or out) a press away)
@@ -1458,6 +1487,19 @@ export function mountRun(host, opts = {}) {
       return `${c?.label ?? 'Playing a card'}…`;
     }
     if (choice.do === 'rob') return 'Robbing somebody passing…';
+    // (pot-2)
+    if (choice.do === 'cook') {
+      const o = (v0.pot?.options ?? []).find(x => [...x.with].sort().join('+') === [...choice.with].sort().join('+'));
+      return `Cooking ${o?.name ?? 'it'}…`;
+    }
+    if (choice.do === 'making') {
+      const m = v0.moves.find(x => x.choice.do === 'making' && x.choice.item === choice.item);
+      return `Buying ${m?.making ?? 'it'}${m?.keeper ? ` from ${cap(m.keeper.name)}` : ''}…`;
+    }
+    if (choice.do === 'lift') {
+      const m = v0.moves.find(x => x.choice.do === 'lift' && x.choice.who === choice.who);
+      return `Lifting ${m?.who?.name ?? 'their'}'s wallet…`;
+    }
     if (choice.do === 'bins') return 'Digging through the bins…';
     if (choice.do === 'shop') {
       const it = (v0.errands ?? []).find(x => x.here && x.item === choice.item);
@@ -1491,6 +1533,30 @@ export function mountRun(host, opts = {}) {
       };
       if (auto !== null) setTimeout(() => S.onPress?.(), auto);
     });
+  }
+
+  /**
+   * (pot-2) THE POT'S NOTICE for a step, or null: a bag taken (who went under, until when, in the effect's own words); a
+   * dirty batch found out on its first buyer (what rode along, and that the rest of that batch is the same); and anyone
+   * who came round from what you sold them at a place you are not at (a sleeper woke: his wallet is no longer there).
+   */
+  function potNotice(before, state, events, v0, v1) {
+    const sale = events.find(e => e.dose);
+    if (sale) {
+      const d = sale.dose;
+      const who = cap(d.who?.name ?? 'Somebody');
+      if (d.dirty) return { head: 'A dirty batch', day: state.day, who: null, pot: 'dirty', text: `${who} took the ${d.name} and threw up green. ${cap(d.dirty.says)}: from now on it shows as "${goodWord(d.good, 1)}".` };
+      const rows = d.rows.filter(r => r.effect);
+      return { head: 'Under it', day: state.day, who: null, pot: 'dose', text: `${who} took the ${d.name}: ${rows.map((r, i) => `${i ? 'then ' : ''}${r.label} until ${r.untilClock}`).join(', ')}.` };
+    }
+    const where = state.place === 'crib' ? Object.keys(cfg.places).find(k => cfg.places[k].inside === 'crib' || cfg.places[k].home === 'crib') ?? 'park' : state.place;
+    const street = (v1.places ?? []).find(p => p.here)?.place ?? where;
+    const after = new Set((v1.under ?? []).flatMap(u => u.now.map(r => `${u.who.id}|${r.effect}`)));
+    const woke = (v0.under ?? []).flatMap(u => u.now.filter(r => !after.has(`${u.who.id}|${r.effect}`) && r.place !== street && r.place !== state.place).map(r => ({ who: u.who, r })));
+    if (!woke.length) return null;
+    const CAME = { asleep: 'woke up', dancing: 'stopped dancing' };
+    const head = woke.some(x => x.r.effect === 'asleep') ? 'Woke up' : 'Wore off';
+    return { head, day: state.day, who: null, pot: 'woke', text: woke.map(x => `${cap(x.who.name)} ${CAME[x.r.effect] ?? `is over ${x.r.label}`} ${cfg.places[x.r.place]?.where ?? `at ${labelOf(x.r.place)}`}${x.r.effect === 'asleep' && !x.r.lifted ? ': too late for the wallet' : ''}.`).join(' ') };
   }
 
   // ── what just happened ──────────────────────────────────────────────────────────────────────────────────────────
@@ -1636,6 +1702,8 @@ export function mountRun(host, opts = {}) {
     const v = S.hold?.v ?? S.v;
     // (a try-on lasts while the Library, the shop's list or the You panel it came from is open, and only between moves)
     if (S.tried && (!(S.sheet === 'library' || S.sheet === 'character' || S.list === 'shop') || S.phase !== 'choose' || S.hold || arrange.active)) takeOff(null, false);
+    // (pot-2: the pot's screen open and nothing picked, after a cook too: the main button names the cook of what is in it)
+    if (S.sheet === 'pot' && S.phase === 'choose' && !S.hold && !S.sel && S.v?.pot) S.sel = pot.keyNow(S.v);
     // (what just happened, shown with the choice after the hour: it goes by itself after eight seconds)
     if (S.phase === 'choose' && S.result && !S.resultGone && !S.resultT) {
       S.resultT = setTimeout(() => {
@@ -1989,6 +2057,9 @@ export function mountRun(host, opts = {}) {
     // (a link from Ahead keeps its way back only while its panel stays the one open)
     if (S.back && S.sheet !== 'library' && S.sheet !== 'map') S.back = null;
     if (S.sheet === 'character') showFace(true);
+    if (S.sheet === 'pot' && was !== 'pot') pot.open();
+    // (the pot's pick, the cook on the main button, goes with its screen)
+    if (was === 'pot' && S.sheet !== 'pot' && choiceOf(S.sel)?.choice.do === 'cook') S.sel = null;
     paint();
     if (S.sheet && S.sheet !== was && S.sheet !== 'library' && S.sheet !== 'ahead') sheetBits.scroll.scrollTop = 0;
     if (S.sheet === 'ahead' && was !== 'ahead') sheetBits.scroll.scrollTop = S.aheadTop ?? 0;
@@ -2144,6 +2215,29 @@ export function mountRun(host, opts = {}) {
     // (smooth-1: its fight tables played in the odds workers, as the cards' are)
     bg: odds,
   });
+  // THE POT'S SCREEN (pot-2; pot.js): its parts stay while it is open; what is in the pot is picked on the dock (the main
+  // button names the cook, Enter does it); cooking, the belt and a name are the rules' own choices
+  const pot = createPot({
+    cfg,
+    now: () => ({ v: S.hold?.v ?? S.v, choosing: S.phase === 'choose' && !S.hold && !duel.active }),
+    act: {
+      pick: key => {
+        if (S.phase !== 'choose') return;
+        S.sel = key;
+        S.list = null;
+        if (key) picked();
+        paint();
+      },
+      go: key => fromPanel(key, true),
+      send: choice => {
+        if (S.phase !== 'choose' || S.hold || !S.resolve) return false;
+        send(choice);
+        return true;
+      },
+      toast: text => toast(text),
+      keyFor: key => keyFor(key),
+    },
+  });
   /** From the Ahead panel to the Library (a piece's card) or the Map (a place's card); Esc or Back comes back to Ahead. */
   function linkTo(id, what) {
     openSheet(id);
@@ -2263,6 +2357,13 @@ export function mountRun(host, opts = {}) {
       if (sheetBits.lead.firstChild !== ahead.lead) fill(sheetBits.lead, ahead.lead);
       if (sheetBits.scroll.firstChild !== ahead.body) fill(sheetBits.scroll, ahead.body);
       if (ahead.card.parentNode !== el.sheet) el.sheet.insertBefore(ahead.card, sheetBits.foot);
+      return;
+    } else if (def.id === 'pot') {
+      // (pot-2: its parts stay while it is open, drawn again only when what they show changed: pot.js)
+      pot.paint();
+      if (sheetBits.slot.firstChild !== pot.head) fill(sheetBits.slot, pot.head);
+      if (sheetBits.lead.firstChild !== pot.lead) fill(sheetBits.lead, pot.lead);
+      if (sheetBits.scroll.firstChild !== pot.body) fill(sheetBits.scroll, pot.body);
       return;
     } else if (def.id === 'map') {
       // (the map is one piece that stays while the panel is open: the run's data is handed to it, nothing redrawn here)
@@ -2396,6 +2497,17 @@ export function mountRun(host, opts = {}) {
           : upill('gain', 'check', v.place === 'crib' ? 'safe at home' : 'safe: nobody jumps you', { title: here?.text ?? '' }));
     return { label, kind, here, safety };
   }
+  /**
+   * (pot-2) WHO IS UNDER WHAT HERE, in words and chips (the rules' own: "asleep 2 · dancing 3"); each person and until
+   * when in its tooltip. Nothing when nobody is. How it looks on a body is the effects' builder's, not this.
+   */
+  function underEl(v, here) {
+    const chips = here?.under ?? [];
+    if (!chips.length) return null;
+    const who = (v.under ?? []).filter(u => u.place === here.place && u.now.length);
+    return h('div', { class: 'u-where-under', 'data-under': chips.map(c => `${c.effect}:${c.n}`).join(','), title: who.map(u => u.text).join('. ') },
+      icon(chips.some(c => c.effect === 'asleep') ? 'zzz' : 'crowd'), h('span', null, chips.map(c => c.text).join(' · ')));
+  }
   /** THE DOCK'S HEADER SLOT (WHERE_IN_DOCK): the place, the hour and, `pill`, how safe it is, on one line. */
   function dockWhere(v, pill = true) {
     if (!WHERE_IN_DOCK) return null;
@@ -2420,6 +2532,7 @@ export function mountRun(host, opts = {}) {
       h('div', { class: 'u-cap' }, `${kind} · day ${v.day}`),
       h('b', { class: `u-where-name${String(label).length > 17 ? ' is-long' : ''}`, title: here?.text ?? label }, label),
       h('div', { class: 'u-where-when' }, icon('clock'), h('b', null, v.clock), safety),
+      underEl(v, here),
       h('div', { class: 'u-where-foot' },
         h('button', { type: 'button', class: `u-btn is-quiet${S.sheet === 'map' ? ' is-on' : ''}`, title: 'The map (M)', 'aria-expanded': String(S.sheet === 'map'), onclick: () => openSheet('map') }, icon('map'), 'Map', ukey('M')),
         saved,
@@ -2451,9 +2564,9 @@ export function mountRun(host, opts = {}) {
     const stat = (cls, ic, capText, val, sub, extra = {}) => h('div', { class: `u-stat ${cls}`, ...extra }, h('span', { class: 'u-cap' }, showHome && !folded ? null : icon(ic), short ? SHORT_CAP[capText] ?? capText : capText), h('b', { class: 'u-stat-v' }, val), sub);
     const stats = h('div', { class: `u-stats u-panel${folded ? ' is-folded' : ''}` },
       stat(`is-carried${atRisk ? ' is-risk' : ''}`, 'cash', 'On you', money(v.carried),
-        h('span', { class: 'u-stat-sub' }, [hasGoods(onYou) ? `+ ${goodsWords(onYou)}` : null, atRisk ? 'at risk here' : null].filter(Boolean).join(' · ') || (out ? 'nobody acts on you here' : 'step out to use it')),
+        h('span', { class: 'u-stat-sub' }, [hasGoods(onYou) ? `+ ${goodsShort(onYou)}` : null, atRisk ? 'at risk here' : null].filter(Boolean).join(' · ') || (out ? 'nobody acts on you here' : 'step out to use it')),
         { title: atRisk ? `On you: ${money(v.carried)}${hasGoods(onYou) ? ` and ${goodsWords(onYou)}` : ''}. Here it can be taken: a jump takes it, a police stop takes it all.` : 'What you carry. Cash at home cannot be taken.' }),
-      stat('is-banked', 'bank', 'Banked', money(v.banked), h('span', { class: 'u-stat-sub' }, hasGoods(home) ? `safe · + ${goodsWords(home)}` : 'safe at home'), { title: 'Banked at your crib: nobody on the street can take it. The three things are bought from it.' }),
+      stat('is-banked', 'bank', 'Banked', money(v.banked), h('span', { class: 'u-stat-sub' }, hasGoods(home) ? `safe · + ${goodsShort(home)}` : 'safe at home'), { title: 'Banked at your crib: nobody on the street can take it. The three things are bought from it.' }),
       stat('is-energy', 'energy', 'Energy', [String(v.energy), h('small', null, `/${v.energyMax}`)],
         v.tired ? h('span', { class: 'u-stat-sub u-bad' }, 'tired: odds −15') : upips(v.energy, Math.max(v.energyMax, v.energy)),
         { title: `Every hour out costs ${cfg.energy.perHour} energy, the subway included. At 2 or less you are tired: your odds drop.` }),
@@ -2627,7 +2740,7 @@ export function mountRun(host, opts = {}) {
 
   /** The panel keys: a row under the dock (a column on the rail). Each says its key; the open one is lit. */
   // (ui-3, leg 3, part E: the rail in the dock's style: each key an icon, its word and its letter on the corner)
-  const sheetKeys = v => h('div', { class: 'rn-keys', role: 'toolbar', 'aria-label': 'Panels' }, SHEETS.map(s => h('button', {
+  const sheetKeys = v => h('div', { class: 'rn-keys', role: 'toolbar', 'aria-label': 'Panels' }, SHEETS.filter(s => s.rail !== false).map(s => h('button', {
     type: 'button', class: `rn-key u-rail-key${S.sheet === s.id ? ' is-on' : ''}`, 'data-sheet': s.id, 'aria-pressed': String(S.sheet === s.id),
     title: `${s.title} (${s.key})`, 'aria-label': s.label, onclick: () => openSheet(s.id),
   }, icon(s.icon), h('span', { class: 'is-long' }, s.label), h('span', { class: 'is-short' }, s.short), ukey(s.key))), arrangeKey(v));
@@ -3010,9 +3123,11 @@ export function mountRun(host, opts = {}) {
     const many = (o.goodsHere?.length ?? 0) > 1;
     // (short, and never cut: the good only when it is picked, since the card's name says what it sells)
     const words = many ? `${goodWord(u.good, 2)} · ${u.left} left` : `uses 1 · ${u.left} left`;
-    const title = `A sale uses one, win or lose: ${u.carried} ${goodWord(u.good, u.carried)} on you, ${u.left} after${many ? `. It takes ${o.goodsHere.map(g => `${goodWord(g.good, 2)} (${range(g.pay)})`).join(' or ')}: a click or U picks` : ''}`;
+    // (pot-2: the key that changes which bag is Shift ↑ ↓, or ↑ ↓ alone when there is nobody else to sell to; U is Ahead's)
+    const bagKey = (o.targets?.length ?? 0) > 1 ? '⇧↕' : '↕';
+    const title = `A sale uses one, win or lose: ${u.carried} ${goodWord(u.good, u.carried)} on you, ${u.left} after${many ? `. It takes ${o.goodsHere.map(g => `${goodWord(g.good, 2)} (${range(g.pay)})`).join(' or ')}: a click or ${bagKey === '↕' ? '↑ ↓' : 'Shift ↑ ↓'} picks` : ''}`;
     return many
-      ? h('span', { class: 'rn-uses is-pick', role: 'button', tabindex: '-1', title, onclick: ev => { ev.stopPropagation(); cycleGood(o); } }, h('i', null, '‹'), words, h('i', null, '›'), h('b', { class: 'rn-uses-key' }, 'U'))
+      ? h('span', { class: 'rn-uses is-pick', role: 'button', tabindex: '-1', title, onclick: ev => { ev.stopPropagation(); cycleGood(o); } }, h('i', null, '‹'), words, h('i', null, '›'), h('b', { class: 'rn-uses-key' }, bagKey))
       : h('span', { class: 'rn-uses', title }, words);
   }
   /** The good an option sells as picked (its dealt one unless another is), with what is on you of it. */
@@ -3028,6 +3143,27 @@ export function mountRun(host, opts = {}) {
     if (list.length < 2) return null;
     const dealt = Math.max(0, list.findIndex(g => g.good === o.uses?.good));
     return list[(S.goodPick?.[o.id] ?? dealt) % list.length];
+  }
+  /** (pot-2) The made thing the option sells as picked (its `made`: name, what it will do), or null for any other good. */
+  function madeOfPick(o) {
+    const g = goodOfPick(o);
+    return (g && g.good !== o.uses?.good ? g.made : o.uses?.made) ?? null;
+  }
+  /** (pot-2) A bag on a selling card: its colours and what it will do to them; with more than one bag on you, a picker. */
+  function madeEl(o, made) {
+    const u = usesOf(o);
+    const many = (o.goodsHere?.length ?? 0) > 1;
+    const key = (o.targets?.length ?? 0) > 1 ? 'Shift ↑ ↓' : '↑ ↓';
+    const title = `${made.text}. ${made.lines.map((l, i) => `${i + 1}. ${l}`).join(' ')}. A sale uses one bag, win or lose: ${u?.left ?? 0} left on you after${many ? `. Which bag: a click or ${key}` : ''}`;
+    const body = [chipsEl(made.families.map(f => cfg.make.families?.[f] ?? null), made.families), made.text.replace(/^[^:]*:\s*/, '')];
+    return many
+      ? h('span', { class: `u-pill rn-made-pill is-pick${made.dirty ? ' is-loss' : ''}`, role: 'button', tabindex: '-1', 'data-made': made.product, title, onclick: ev => { ev.stopPropagation(); cycleGood(o); } }, h('i', null, '‹'), ...body, h('i', null, '›'))
+      : h('span', { class: `u-pill rn-made-pill${made.dirty ? ' is-loss' : ''}`, 'data-made': made.product, title }, ...body);
+  }
+  /** (pot-2) A selling job's name with a bag in it, the rules' own words less the person: "Sell Zonked at the bus stop". */
+  function madeJobName(o, what) {
+    const J = cfg.jobs[S.v.place]?.[o.id];
+    return J?.madeNamed ? J.madeNamed.replace('{what}', what).replace(' to {who}', '') : `Sell ${what}`;
   }
   function cycleGood(o) {
     if (S.phase !== 'choose' || (o.goodsHere?.length ?? 0) < 2) return;
@@ -3201,6 +3337,13 @@ export function mountRun(host, opts = {}) {
       return m.on ? [`Keep ${who} ${m.days} more days`, money(m.price), why] : [`Hire ${who}`, `${m.days} days · ${money(m.price)}`, why];
     }
     if (c.do === 'wear' || c.do === 'unwear') return [cap(thingWord(thingOf(cfg, c.item)?.label)), c.do === 'wear' ? 'put on' : 'take off'];
+    // (pot-2: what you cook with, a sleeper's wallet, the cook, the belt, a name: the rules' words, short on the row)
+    if (c.do === 'making') return [`${cap(m.making)} ${money(m.price)}`, `${cap(m.keeper?.name ?? '')} · ${m.does}`, `${m.label}; no hour`];
+    if (c.do === 'lift') return [`${cap(personShort(m.who?.name ?? 'their'))}'s wallet`, `sure ${range(m.pay)}`, `${m.label}. Asleep until ${m.untilClock}; ${m.who?.name} ${m.markText}`];
+    if (c.do === 'cook') return [`Cook ${m.name}`, `${m.bags} bags · an hour`, m.label];
+    if (c.do === 'belt') return [`${goodWord(c.good, 1)} on your belt`, 'free', m.label];
+    if (c.do === 'unbelt') return [`${goodWord(m.good, 1)} off your belt`, 'free', m.label];
+    if (c.do === 'name') return [`Name ${m.name}`, 'free', m.label];
     // (memory-1: somebody come for another go: paid off, or fought)
     if (c.do === 'tax') return c.pay ? [`Pay Dutch ${money(m.amount)}`, `the Sixes ${m.sixes?.from}→${m.sixes?.to}`] : ['Refuse Dutch', `the Sixes ${m.sixes?.from}→${m.sixes?.to}`];
     if (c.do === 'earlWay') return [`Tell Earl: ${m.name}`, m.says];
@@ -3271,6 +3414,11 @@ export function mountRun(host, opts = {}) {
     if (S.phase !== 'choose') return;
     const verb = dockNow().verbs.find(x => x.id === id);
     if (!verb) return;
+    // (pot-2: Cook opens the pot's screen, again closes it: the choosing is on it)
+    if (verb.sheet) {
+      S.list = null;
+      return openSheet(verb.sheet);
+    }
     if (verb.list && S.list === id) {
       S.list = null;
       S.sel = null;
@@ -3288,7 +3436,7 @@ export function mountRun(host, opts = {}) {
     for (let n = 0; n < slots.length; n++) {
       i = i < 0 ? (dir > 0 ? 0 : slots.length - 1) : (i + dir + slots.length) % slots.length;
       const s = slots[i];
-      if (!s.keys.length) continue;
+      if (!s.keys.length || s.verb?.sheet) continue;
       if (s.verb) return pickKey(s.verb.list && s.keys.includes(S.sel) ? S.sel : s.keys[0], s.verb.list ? s.verb.id : null);
       return pickKey(s.keys.includes(S.sel) ? S.sel : s.keys[0]);
     }
@@ -3333,7 +3481,8 @@ export function mountRun(host, opts = {}) {
     if (x.do === 'job') {
       const o = S.v.options.find(q => q.key === c.key);
       const who = o ? targetOf(o) : null;
-      return `${cfg.jobs[S.v.place]?.[o?.id]?.label ?? c.label}${who ? ` · ${cap(personShort(who.name))}` : ''}`;
+      const made = o ? madeOfPick(o) : null;
+      return `${made ? madeJobName(o, made.name) : cfg.jobs[S.v.place]?.[o?.id]?.label ?? c.label}${who ? ` · ${cap(personShort(who.name))}` : ''}`;
     }
     if (x.do === 'card') return cardName(x.id ?? c.card?.id);
     if (x.do === 'out') {
@@ -3361,7 +3510,10 @@ export function mountRun(host, opts = {}) {
     if (x.do === 'earlWay') return `Tell Earl: ${m.name}`;
     if (x.do === 'ammo') return `Buy ${String(thingOf(cfg, x.item)?.ammo?.label ?? 'rounds').replace(/^an? /, 'a ')} · ${money(m.price)}`;
     if (x.do === 'holdWith') return `At your door: ${m.label}`;
-    if (x.do === 'shop' || x.do === 'pack' || x.do === 'get') return `Buy ${moveWords(m)[0].replace(/ \$\d+$/, '')} · ${money(m.price)}`;
+    if (x.do === 'shop' || x.do === 'pack' || x.do === 'get' || x.do === 'making') return `Buy ${moveWords(m)[0].replace(/ \$\d+$/, '')} · ${money(m.price)}`;
+    if (x.do === 'lift') return `Lift ${personShort(m.who?.name ?? 'their')}'s wallet · sure`;
+    if (x.do === 'cook') return `Cook ${m.name} · an hour`;
+    if (x.do === 'belt' || x.do === 'unbelt' || x.do === 'name') return moveWords(m)[0];
     return cap(c.label);
   }
 
@@ -3403,6 +3555,10 @@ export function mountRun(host, opts = {}) {
     if (x.do === 'job') {
       const o = S.v.options.find(q => q.key === key);
       name = cfg.jobs[S.v.place]?.[o.id]?.label ?? o.label;
+      // (pot-2: A BAG SOLD says what it is and what it will do, in a few words: "Sell Zonked at the bus stop" and
+      // "he'll sleep 3 h"; Shift ↑ ↓ or a click on the bag changes which bag)
+      const made = madeOfPick(o);
+      if (made) name = madeJobName(o, made.name);
       pay = range(payOfPick(o));
       const who = targetOf(o);
       const many = (o.targets?.length ?? 0) > 1;
@@ -3415,6 +3571,9 @@ export function mountRun(host, opts = {}) {
       const whoName = who ? `${cap(nick(personShort(who.name)))}${mood ? ` · ${cfg.moods[mood]}` : ''}` : null;
       sub = [
         who ? (many ? picker(whoName, `Who: ${o.targets.map(t => t.name).join(' · ')} (↑ ↓ or a click: the next)`, () => { S.sel = key; adjust(1); }) : h('span', { class: 'u-who', title: tw ? trustTitle({ ...tw, name: who.name }) : null }, whoName)) : null,
+        // (pot-2: a bag: what it will do, "he'll sleep 3 h", second on the card, so it is never the one cut; a click (or
+        // ⇧ ↑ ↓) changes which bag)
+        made ? madeEl(o, made) : null,
         oddsEl(o.odds, o.sure),
         ...(o.sure ? [] : (who?.fight ?? o.fight) ? fightPill(o, who) : [h('span', { class: 'u-pill is-risk', title: `If it fails: ${o.ifFail}` }, `fail: ${o.ifFail}`)]),
         // (memory-1: done to somebody who fears you, the card says so: "fears you: pays up", or just "fears you")
@@ -3428,7 +3587,7 @@ export function mountRun(host, opts = {}) {
         reg ? h('span', { class: `rn-hooked${reg.hooked ? ' is-hooked' : ''}`, title: hookedText(cfg, reg) }, hookedShort(cfg, reg)) : null,
         tellEl(o.tellRisk, { short: true }),
         cutTag(S.v),
-        usesEl(o),
+        made ? null : usesEl(o),
         o.oddsWhy?.filter(w => !/^fears you/.test(w)).length ? h('span', { class: 'u-dim' }, o.oddsWhy.filter(w => !/^fears you/.test(w)).join(', ')) : null,
       ];
       title = `${name}${who ? ` · ${who.name}` : ''}${o.tellRisk?.text ? `. ${cap(o.tellRisk.text)}` : ''}`;
@@ -3451,7 +3610,8 @@ export function mountRun(host, opts = {}) {
       const max = c.takeOut?.max ?? 0;
       S.take = Math.min(S.take ?? takeFirst(S.v).take, max);
       const bump = (dn, ev) => { ev?.stopPropagation(); S.sel = key; S.take = Math.max(0, Math.min(max, S.take + dn)); picked(); paint(); };
-      const tg = c.takeGoods ?? {};
+      // (pot-2: what you cook with stays at home unless asked for, the rules' default, and is not on the card: the bags are)
+      const tg = Object.fromEntries(Object.entries(c.takeGoods ?? {}).filter(([, r]) => !r.making));
       S.goodsTake = Object.fromEntries(Object.entries(tg).map(([g, r]) => [g, Math.max(r.min, Math.min(r.max, S.goodsTake?.[g] ?? r.default))]));
       const bumpG = (g, dn, ev) => { ev.stopPropagation(); S.sel = key; S.goodsTake = { ...S.goodsTake, [g]: Math.max(0, Math.min(tg[g].max, S.goodsTake[g] + dn)) }; picked(); paint(); };
       const btn = (t, fn, off, tip) => h('button', { type: 'button', class: 'u-step', disabled: off, title: tip, onclick: fn }, t);
@@ -3460,7 +3620,7 @@ export function mountRun(host, opts = {}) {
           btn('−', ev => bump(-1, ev), !S.take, 'A dollar less (↓)'), h('b', { class: 'u-sign' }, money(S.take)), btn('+', ev => bump(1, ev), S.take >= max, 'A dollar more (↑)'),
           h('span', { class: 'u-dim' }, `of ${money(max)}`)) : null,
         ...Object.entries(tg).map(([g, r]) => h('span', { class: 'u-take', title: 'Goods from home you take: the rest stay safe at the crib' },
-          btn('−', ev => bumpG(g, -1, ev), !S.goodsTake[g], 'One less'), h('b', null, `${S.goodsTake[g]}/${r.max} ${goodWord(g, 2)}`), btn('+', ev => bumpG(g, 1, ev), S.goodsTake[g] >= r.max, 'One more'))),
+          btn('−', ev => bumpG(g, -1, ev), !S.goodsTake[g], 'One less'), h('b', { title: `${S.goodsTake[g]} of the ${r.max} ${goodWord(g, 2)} at home` }, r.made ? `${S.goodsTake[g]} ${goodWord(g, 2)}` : `${S.goodsTake[g]}/${r.max} ${goodWord(g, 2)}`), btn('+', ev => bumpG(g, 1, ev), S.goodsTake[g] >= r.max, 'One more'))),
       ] : [h('span', { class: 'u-dim' }, 'nothing banked to take')];
       title = 'Step out into the trailer park with the cash and goods you choose: what you carry can be taken; banked cash cannot';
     } else if (x.do === 'buy') {
@@ -3601,20 +3761,27 @@ export function mountRun(host, opts = {}) {
     }
     if (verb.id === 'home') return one.choice.do === 'inside' ? (S.v.carried ? `bank ${money(S.v.carried)}` : 'go inside') : one.choice.do === 'subway' ? (one.choice.hop ? 'hop it' : `subway ${money(one.fare ?? cfg.subway.fare)}`) : one.choice.do === 'onward' ? 'go on home' : `${one.choice.do} home`;
     if (verb.id === 'sleep') return one.choice.do === 'rough' ? `${one.robbedPct}% robbed` : 'the day ends';
+    // (pot-2: how many sets the pot could take; else the belt or a name)
+    if (verb.id === 'cook') {
+      const n = cs.filter(c => c.choice.do === 'cook').length;
+      return n ? `${n} to cook` : cs.some(c => c.choice.do === 'belt' || c.choice.do === 'unbelt') ? 'your belt' : 'name a mix';
+    }
+    // (pot-2: a sleeper's wallet, first under Rob while there is one)
+    if (verb.id === 'rob' && one.choice.do === 'lift') return `wallet · sure`;
     if (verb.id === 'bins') return String(moveWords(one)[1] ?? '').split(' · ')[0];
     return moveWords(one)[1] ?? '';
   }
   /** A why for a verb's small line, shorter: "short: $20 banked" is "only $20 banked" (the whole why in its tooltip). */
   const verbWhy = w => String(w ?? '').replace(/^short: /, 'only ').replace(/^needs (a |the )?box cutter$/, 'no box cutter')
     .replace(/^go inside to sleep \(H\)$/, 'go in first: H').replace(/^needs (a|the) /, 'needs ');
-  const VERB_ICON = { shop: 'shop', rob: 'rob', bins: 'bins', travel: 'train', home: 'home', sleep: 'moon' };
+  const VERB_ICON = { shop: 'shop', rob: 'rob', bins: 'bins', travel: 'train', home: 'home', sleep: 'moon', cook: 'pot' };
   function verbBtn(verb, compact) {
-    const on = (verb.list && S.list === verb.id) || (!verb.list && verb.keys.includes(S.sel));
+    const on = verb.sheet ? S.sheet === verb.sheet : (verb.list && S.list === verb.id) || (!verb.list && verb.keys.includes(S.sel));
     const off = !!verb.why;
     const sub = verbSub(verb);
     return h('button', {
       type: 'button', class: `u-verb${on ? ' is-on' : ''}${off ? ' is-off' : ''}${verb.list ? ' has-list' : ''}`, 'data-verb': verb.id, 'aria-expanded': verb.list ? String(S.list === verb.id) : null,
-      title: `${verb.label} (${verb.key})${sub ? `: ${sub}` : ''}`, onclick: () => (verb.list || !verb.keys.includes(S.sel) ? pickVerb(verb.id) : confirm()),
+      title: `${verb.label} (${verb.key})${sub ? `: ${sub}` : ''}`, onclick: () => (verb.sheet || verb.list || !verb.keys.includes(S.sel) ? pickVerb(verb.id) : confirm()),
     }, icon(VERB_ICON[verb.id]), h('span', { class: 'u-verb-t' }, h('b', null, verb.label), compact ? null : h('small', null, sub)), dkey(verb.key));
   }
   /** Shop's or Travel's list, over its verb: each thing with its price or fare, what it does or risks, why not. */
@@ -3658,6 +3825,10 @@ export function mountRun(host, opts = {}) {
         const t = thingOf(cfg, x.item) ?? {};
         name = String(t.ammo?.label ?? 'rounds').replace(/^an? /, '');
         small = `for ${String(t.label).replace(/^an? /, 'your ')} · ${c.rounds} rounds now · ${cap(c.keeperName ?? '')}`;
+      } else if (x.do === 'making') {
+        // (pot-2: what you cook with: what it does to whoever takes what it makes, and who sells it)
+        name = cap(c.making);
+        small = `${c.does} · ${cap(c.keeper?.name ?? '')}${c.home || c.on ? ` · ${c.on + c.home} yours` : ''}`;
       } else if (x.do === 'pack') {
         name = `${cap(packWord(x.good))} of ${goodWord(x.good, 2)}`;
         small = `${c.sales} sales · ${cap(c.who?.name ?? '')}${c.left !== null && c.left !== undefined ? ` · ${c.left} left today` : ''}${c.off ? ` · ${money(c.off)} off: with you` : ''}`;
@@ -3682,7 +3853,8 @@ export function mountRun(host, opts = {}) {
     };
     const box = h('div', { class: 'u-list u-panel', role: 'listbox', 'aria-label': verb.label, 'data-list': verb.id });
     // (leg 3: the things on a shelf here as tiles, after the rest: their picture, rarity and price; to wear, Try on)
-    const gets = verb.id === 'shop' ? verb.keys.filter(k => choiceOf(k)?.choice.do === 'get') : [];
+    // (pot-2: the hot plate first on the shelf, what you cook on: the rest in the rules' order)
+    const gets = verb.id === 'shop' ? verb.keys.filter(k => choiceOf(k)?.choice.do === 'get').sort((a, b) => Number(!!thingOf(cfg, choiceOf(b).choice.item)?.station) - Number(!!thingOf(cfg, choiceOf(a).choice.item)?.station)) : [];
     box.classList.toggle('has-shelf', gets.length > 0);
     const rest = verb.keys.filter(k => !gets.includes(k));
     return fill(box,
@@ -3854,6 +4026,8 @@ export function mountRun(host, opts = {}) {
       return;
     }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
+    // (pot-2: a key typed into a box, a name for a mix, is the box's: none of the run's letters)
+    if (e.target?.matches?.('input, textarea, [contenteditable="true"]')) return;
     // ESC IS THE RUN'S, never the browser's: Chrome's own Esc stops a page that is still loading, and with the city's
     // live connections open that stopped every frame, the picture frozen and the next hour never played (found in leg 3
     // in headless Chrome, the same on 536dbb3 before it; the page's frames ran on once the default was cancelled)
@@ -4012,6 +4186,11 @@ export function mountRun(host, opts = {}) {
     if (owner === 'ahead') {
       e.preventDefault();
       return ahead.arrow(k);
+    }
+    // (pot-2: ↑ ↓ walk what the pot could take; ← → stay the dock's)
+    if (owner === 'pot' && (k === 'ArrowUp' || k === 'ArrowDown')) {
+      e.preventDefault();
+      return pot.arrow(k);
     }
     if (owner === 'library') {
       // (join-1: the grid keeps them whenever the Library is open and the game is choosing: with the focus in it, its
@@ -4252,6 +4431,14 @@ export function mountRun(host, opts = {}) {
     /** For the tools (tree-1): the Ahead panel (ahead.js: data, selected, oddsLeft, select). */
     get ahead() {
       return ahead;
+    },
+    /** For the tools (pot-2): the pot's screen (pot.js: with, editing). */
+    get pot() {
+      return pot;
+    },
+    /** For the tools (pot-2): the panel open now ('pot', 'ahead', …), or null. */
+    get sheet() {
+      return S.sheet ?? null;
     },
     /** For the tools (ui-3, leg 3): the Library (library.js: filter, set, shown, onCard, pin, focus). */
     get library() {

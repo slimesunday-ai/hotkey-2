@@ -1331,6 +1331,32 @@ export function stageHands({ people, things = {}, cam = null, t0 = 0 }) {
       now += 0.4;
       return api;
     },
+    /**
+     * (pot-3) A SLEEPER'S WALLET: down on his heels beside somebody lying asleep (the knees bent, the back over, the head
+     * down to it), the hand the camera sees into the pocket of the hip that is up (`at`, a point of the world), a moment
+     * there, and up again with `thing` (in that pocket till then, unseen), held out beside the head and looked at.
+     */
+    stoopDip(id, at, thing, { s = 0.62, look = 0.4 } = {}) {
+      const P = who[id];
+      const h = camOf(P);
+      body(id, 'drop', now, now + s, 0.28, E.s);
+      body(id, 'tx', now + 0.06, now + s, 0.55, E.s);
+      body(id, 'hx', now + 0.1, now + s, 0.22, E.s);
+      go(id, h, now + 0.18, now + s + 0.12, { w: at }, E.s, 0.3);
+      const t1 = now + s + 0.12;
+      // up: the back and the hand together, out beside the head (offer), then the knees. (In his hand once it is out
+      // from under his own bowed head, as at the bins: drawn sooner, it went up through it)
+      body(id, 'tx', t1 + 0.3, t1 + 0.74, 0.05, E.s);
+      body(id, 'hx', t1 + 0.3, t1 + 0.74, 0.12, E.s);
+      go(id, h, t1 + 0.3, t1 + 0.74, { c: 'offer' }, E.s, 1.2);
+      hold(thing, t1 + 0.7, id, h);
+      body(id, 'drop', t1 + 0.5, t1 + 1.0, 0, E.s);
+      body(id, 'tx', t1 + 0.8, t1 + 1.0, 0, E.s);
+      body(id, 'hx', t1 + 0.8, t1 + 1.0, 0, E.s);
+      lookAt(id, t1 + 0.8, t1 + 1.0 + look, () => api.thingAt(thing), GLANCE);
+      now = t1 + 1.0 + look;
+      return api;
+    },
     /** Looked at, on him: a hand run over a hat (preen), the head down at a top or the feet and up again, a turn of the shoulders. */
     admire(id, slot = 'top') {
       if (slot === 'hat' || slot === 'eyewear') return api.preen(id);

@@ -2525,6 +2525,521 @@ proposed, nothing built.
   false wall) stay where they are: a second set for the second home. WORTH is each home's own: the Sixes raid the richer.
 
 
+## The pot (pot-1)
+
+Added 2026-11-19: build step 1 of crafting, the plan the owner approved ("thats great ok approved", "ok approved on
+fables decisions"; the plan and its addition: `docs/design/crafting-plan.md`, `crafting-plan-addendum.md` in the
+hotkey-2-craft copy, slice 1 "The pot"). You cook stuff that does things to people, sell it, watch what it does, cook
+again. **Rules only**: nothing on screen yet. The pot's screen, the cooking scene and the looks on people are the next
+builders'; this section is what they build on. The code: `src/run/make.mjs` (the rules of making), `src/run/effects.mjs`
+(who is under what, until when), new blocks at the end of `step.mjs` and `view.mjs`, `config.mjs` `make` (and the made
+goods it brings: `madeGoods`), the marks' block at the end of `marks.mjs` (`--pot`).
+
+### What it is, in the player's words
+
+- **Buy what goes in, on your own street.** Mrs. Alvarez sells **night tea** ($8 a tin, from her yard); Mr. Pruitt sells
+  **rave sticks** ($10 a box, at the swap meet). From what you carry, no hour, as a pack from a connect is; not while the
+  seller is against you; buying is dealing with them (trust +1). What you buy is on you until you go inside.
+- **The hot plate and pot**, $30 from Mr. Pruitt at the swap meet (`things.hotplate`, `kit:hot-plate`, on the trailer's
+  counter). Owned, the **Cook** move at your crib: **an hour**, **up to two** different things in the pot (each from what
+  is at home), **six bags** come out, at home. A raid can smash it (half the times they get in, a day), never take it.
+- **Three things to cook** (the art's ids, the owner's names):
+
+  | In the pot | It makes | What it does to whoever takes it | The place, while it lasts |
+  |---|---|---|---|
+  | night tea | **Zonked** (`zonk`) | asleep where they stand, 3 hours | their wallet is a sure lift (and they know who sold it) |
+  | rave sticks | **Disco Rash** (`disco-rash`) | rainbow skin, cannot stop dancing, 2 hours | while anyone dances there: nobody there tells on you, you are jumped a quarter less often (half as often until bench-1), the place is one hotter |
+  | both | **Disco Coma** (`disco-coma`) by default; the player names it | dances 2 hours, then asleep 3 (both want the legs: they take turns, the downer last) | both, in turn |
+
+- **How a batch comes out**, shown before you cook: **clean** 84 in 100; **dirty** 12 (26 if you cook tired: energy 2
+  or less before the hour); **something else got in** 4 (one more thing, free, from anything ever on your shelf that is
+  not in the pot; with nothing that could get in it is 0 and clean is 88). Dirty: one bad thing rides along, **the
+  Pukes**. Nobody can tell a dirty batch from a clean one until the first person takes a bag of it: they throw up green,
+  they are sour with you (trust −2 after the sale's +1), the place is one hotter; from then that batch shows as dirty
+  ("Zonked, dirty"). Something else got in: night tea alone with rave sticks once on your shelf comes out Disco Coma, and
+  your book has it.
+- **Selling.** A bag is a good: carried out, sold through the selling jobs that exist, **the crowd at the market**
+  ($68–100 a bag, the plan's common price) and **Shaky Dee at the bus stop** ($17–25), the player choosing which bag
+  (`{ do: 'job', id, good }`, as for cigarettes), at risk on you like any good (a jump takes them, a police stop takes
+  them all), safe at home. The card says what and what it will do: "Sell Zonked to Shaky Dee at the bus stop" and
+  "Zonked: he'll sleep 3 h". A sale that goes through, the buyer takes it: from the end of that hour they are under its
+  effect, until an hour. A sale that goes wrong loses the bag, as ever, and doses nobody.
+- **A sleeper's wallet.** Somebody asleep on what you sold them, where you stand: "Lift the wallet off Shaky Dee while
+  he sleeps": an hour, sure, it pays what the place's wallet pays (the park $18–30, the market $60–100). Once a dose. He
+  knows who sold it: a mark for the week (`lifted`: no sales to him), his trust −2, the pressure at home +1 if it is your
+  street. The one exception to "each person once a day".
+- **The smell.** Cooking smells, a **level, not a pile**: on any day you cooked and the day after, HOME +1 (+2 for two
+  cooks in a day, never more); the **box fan** in the window ($7 since bench-1, $10 before; Mr. Pruitt, the thing that was a look only) takes one
+  off. It is one more reason on HOME's slip ("The smell of your cooking hangs over the trailer park"). It lifts everything
+  else you do at home a step; alone it never reaches the warning (3).
+- **Your belt.** One bag can be on you without being for sale: put on and taken off at the crib, free; no selling job
+  offers it; a police stop takes it, and so does a bad jump. (Taking a bag yourself is the next step's; the belt is here
+  so a bottle can go on it then.)
+- **Names.** A product of two or more things is named by the player, free, any time (letters, numbers, spaces and
+  ' & ! . , ? -, up to 24); every card and line says it back ("Sell Swamp Bedtime to Lola in the crowd").
+- **What your home is worth** counts what you make: bags at the crib at what they sell for (the best selling job's middle:
+  $84 a bag), what you cook with at cost. A stockpile brings a bigger crew.
+
+### For the screens: what the rules expose
+
+Everything below is in `view(cfg, state)`; nothing needs a rule of its own on the page. Every odd the pot shows is
+worked out in closed form (the batch's odds, a sure lift, the dance's "a quarter less often" on the jumping chance): **the pot
+adds no sampled odds**. Getting jumped's fight is still sampled, by the background path (`src/run/odds.mjs`), untouched:
+a dancer changes only the chance of being jumped, which is not sampled. So no card of the pot can freeze the page.
+
+**`v.pot`: the pot's screen** (one maker at a time; the switch is `makers`):
+
+| Field | What it is |
+|---|---|
+| `maker`, `label`, `makers[]` | the workshop shown ('kitchen', "the kitchen"); every workshop, `shown`, `open` (its station works): the switch at the top (KITCHEN · BENCH in step 2) |
+| `station` | `{ item: 'hotplate', label, owned, out (smashed: its last day out), works, price, at, keeper }` |
+| `open` | the Cook move can be made now (at the crib, the station works) |
+| `carrier` | `{ id: 'pot', label: 'the pot', takes: ['ingredient'], slots: 2, gives: 'bag', n: 6, hours: 1, seconds: 3.5 }` (`seconds`: the cook scene's length the rules ask for: control back inside 4 s) |
+| `shelf` | `shelfOf`: `makings[]` (each: `item`, `label`, `pack`, `family`, `colour` (the chip: downer blue, trip violet), `effect`, `price`, `on`, `home`, `keeper`, `at`, `spot`, `piece`, `text`) and `made[]` (each product you hold, as it shows: `good`, `product`, `name`, `families`, `colours`, `lines`, `short`, `dirty` (null, or `{ is: 'pukes', label }` once found out), `on`, `home`, `piece` (`prop:bag-<product>`), `sellsFor`); `belt`; `kinds` and `most` (6) |
+| `missing[]` | the makings you have none of at home, greyed, each with who sells it, where and the price (`text`) |
+| `options[]` | every set the pot could take now from what is at home. Each: `with` (makings), `product`, `name`, `lines` (the label's numbered lines, the effect's own words: "Rainbow skin, cannot stop dancing: 2 hours", "then asleep where they stand: 3 hours"), `short`, `rarity`, `families`, `bags`, `cost`, `tried` (the day, or null: never cooked together), `found`, `turns` (they take turns), `reacts` (always false in step 1), `odds` (`clean`, `dirty`, `extra`, `tired`, `could`, `why`, `text`: "Comes out: clean 84 · dirty 12 · something else 4"), `smell` (`level` after, `until`), `choice`, `key`, `available`, `why` |
+| `odds` | the batch's odds as they stand, before anything is chosen |
+| `smell`, `smellAfter` | the smell now (`level`, `raw`, `off` (the fan's), `until` (the last day it holds), `text`) and after one more cook |
+| `energy` | `{ now, after }`; `hours` 1 |
+| `reason` | the strongest reason to cook today, one line: `why` 'station' (what to buy and where), 'empty' (who sells what), 'blank' ("A blank in your book: you have never put rave sticks and night tea together."), 'low' (bags left), 'stocked'; `text` |
+| `book` | `{ tried, of, found }` (the counts; the pages are `v.make`) |
+
+**`v.make`: every workshop** (the book's pages, the Make tree's groups): `makers[]`, each `{ id, label, station, open,
+carriers[], shelf, book }`; `book` is `bookOf`: `tried` / `of` (3 sets in step 1), `sets[]` (each set and the day it
+was tried), `found[]` (each product found: `product`, `name`, `named`, `canName`, `makings`, `lines`, `short`, `turns`,
+`day`), `names`; and `smell`, `belt` (`{ good, name, n, choice }` or null), `effects` (each effect's `label`, `words`,
+`hours`, `bad`, `look`, `place`, `person`: what the page draws for it).
+
+**`v.under`: who is under what, until when.** Every named person with something on now or still to come today:
+`{ who, place, now[], next[], text }` ("Shaky Dee: asleep until 17:00"); each row `{ effect, label, words, from, until,
+untilDay, untilHour, untilClock, started, hoursLeft, place, product, name, maker, carrier, bad, look, lifted }`. Disco
+Coma's sleep is in `next` while they dance. The row's `look` is the effect's channels for the page (asleep: `legs:
+'asleep'`, `overhead: 'zzz'`; dancing: `skin: 'rainbow'`, `legs: 'dance'`, `crowd: true` (strangers near catch the look);
+the Pukes: `trail: 'puke'`, `overhead: 'sick'`). **`v.places[].under`**: each place's chips, `[{ effect, label, n, text }]`
+("asleep 2 · dancing 3"). The rules dose only the place's named people; the crowd that catches the look is the page's.
+
+**On the selling cards.** A selling option carrying a bag: `label` "Sell Zonked to Shaky Dee at the bus stop" (the job's
+`madeNamed`), `uses: { good, label, carried, left, home, made: { product, name, rarity, families, lines, short, dirty,
+text: "Zonked: he'll sleep 3 h" } }`, and `goodsHere[]` each with its `made` and its `choice` ("one key changes which
+bag"). A dirty batch not yet found out is counted in its product's bags and named as it: nothing on the page can tell.
+
+**The moves** (all listed after every older move, so no older key moves):
+
+| Choice | Where, cost | Extra fields on the choice |
+|---|---|---|
+| `{ do: 'get', item: 'hotplate' }` | the swap meet, $30 from what you carry, no hour | `station`, `does`, `oneJob`, `keeperName`, `spot` |
+| `{ do: 'making', item: 'tea' \| 'sticks' }` | the trailer park, from what you carry, no hour | `making`, `pack`, `family`, `colour`, `effect`, `does`, `price`, `keeper`, `spot`, `on`, `home`, `piece` |
+| `{ do: 'cook', maker: 'kitchen', carrier: 'pot', with: [...] }` | the crib, an hour, an energy | as an option of `v.pot.options` (`what: 'cook'`) |
+| `{ do: 'lift', who }` | where the sleeper is, an hour, sure | `who`, `pay`, `until`, `untilClock`, `mark`, `markText`, `trust`, `pressure` |
+| `{ do: 'belt', good }`, `{ do: 'unbelt' }` | the crib, free | `good`, `home` |
+| `{ do: 'name', product, name }` | anywhere, free (kind 'set') | `name`, `default`, `named`, `max` |
+
+Stepping out (`{ do: 'out' }`) leaves what you cook with at home unless asked for: its `takeGoods` lists the makings
+with `default: 0` (and `making: true`, `label`), the bags as they show (`made: true`, `label`).
+
+**The events.** `making` (who, item, price, on you, at home, trust); `cook` (`with`, `extra` (the making that got in, or
+null), `product`, `name`, `good`, `n`, `lines`, `families`, `outcome` 'clean' or 'extra' (a dirty batch says 'clean':
+nobody knows yet), `chance` (the odds it was cooked at), `tired`, `firstTry`, `found` (new in the book), `smell`, and
+`scene: { action: 'cook', spot: 'counter', product, good, seconds: 3.5, piece }`); a sale that doses carries `dose: { who,
+place, product, name, good, rows[], lines, dirty? }` (`dirty`: `{ is: 'pukes', effect, label, heat, placeHeat, trust,
+says }`: the bad reaction to animate on that body, the owner's rule) and its `mood` ('sour' when dirty); `lift` (who,
+pay, `mark`, `trust`, `pressure`, `scene: { action: 'hand_off', later: 'pickpocket_dip' }`); `belt`; `name` (`name`,
+`was`).
+
+**HOME's slip** has the smell as a reason (`kind: 'smell'`, `n`); **WORTH** has two more rows, `made` and `makings`.
+
+### The six things locked in for step 2 (the addition's G3), in the rules' own shape
+
+1. **A carrier takes kinds of thing.** `config.make.makers.kitchen.carriers.pot = { takes: ['ingredient'], slots: 2,
+   gives: 'bag', n: 6, hours: 1 }`; a making has a `kind`; `make.mjs productOf` is the mixing rule for any set of makings
+   (same part of the body: turns, the downer last; `make.reactions` for pairs that become something new, empty in step 1).
+   The bench is one more maker, its fillings one more kind, its bottle one more `kinds` entry.
+2. **An effect does not care where it came from.** A person under something is a row of `state.under[id]`: `{ effect,
+   from, until, place, by: { maker, carrier, product, good } }` (`effects.mjs`). What an effect does is
+   `config.make.effects[e].person` and `.place`; the rules read the rows (the place's heat, who tells, the jumping chance,
+   a sleeper's wallet), never the bag.
+3. **A made thing can be on you without being for sale.** `state.belt` (`config.make.belt.takes: ['bag', 'bottle']`).
+4. **The making screen has a switch, the book has pages, the Make tree groups by maker.** `v.pot.makers`, `v.make.makers`
+   (the screens: the next builders').
+5. **The save keeps the shelf and the book by maker.** `state.make[maker] = { seen, book: { tried, found, names }, known,
+   cooked }`. The shelf's counts are goods (`state.goods` on you, `state.stash` at home), each made good keyed by its own
+   id with its maker in the config (`cfg.goods[g].maker`), so a bench's fillings and bottles are more goods, no new field.
+6. **Every made thing is a row in what your home is worth.** `config.worth.entries`: `made` (`raid.mjs HOLDINGS.made`)
+   and `makings`; the `stock` row is the goods bought from a connect.
+
+### Saves
+
+State version **13** adds `make` (by maker), `under` and `belt`. `loadRun` reads a version-12 save (and 11 down to 8
+through it) as nothing made, nothing on any maker's shelf, nobody under anything, the belt empty;
+`test/fixtures/run-save-v12.json` is one, made by the code of dccd549 mid-season (day 4, the park, cartons at home, a
+Doorman and its shells), and `test/run-pot.test.mjs` loads it and plays on.
+
+### The scripted cooks (`policies.mjs` `cook`)
+
+The dealer's shape (both places, home at $X, sells first, `carry` 5 bags out), but what it sells it cooks: no carton
+from Earl. Each morning it is short of bags (under 4 on it and at home) it buys the makings on its own street and cooks
+once (the hot plate a kit). `recipe`: `['tea']`, `['sticks']`, `['tea', 'sticks']`, `'fewer'` (whichever single it holds
+fewer of), `'alternate'`; `cook.sale: 'cover'` sells Disco Rash where nobody dances yet, else Zonked; `cook.last`: what
+it cooks on the season's last day; `lift`: `'always'`, `'last'` (`lastDay`), `'never'`; `homeQuiet` (nothing at home but
+the odd job; `'sell'`: and a bag to Dee) or `parkFirst` (the trailer park's crimes and Dee first). The marks' cooks
+(`marks.mjs POT_COOKS`): zonked, rash, coma, fewer, and the leaver (Disco Rash every day, Zonked on the last day,
+lifting every sleeper then).
+
+### Where the plan was silent, and what was chosen
+
+- The ingredients' sellers' spots: Mrs. Alvarez sells from her yard (`spot: 'yard'`); a place word for the page.
+- Ingredients are goods: bought onto you, home when you go in, at risk on you like any good.
+- A dirty batch is its own good (`zonk~pukes`) that shows as its product until found out; a sale of a product you hold
+  both kinds of takes one of them as their counts weigh (`make.mjs pickBag`), and taking some out of the crib takes from
+  both the same way (`goodsBehind`). A second dirty batch of a product already found out joins the known one (it is known
+  at once: rare, said here).
+- The dose starts at the end of the sale's hour (the plan: "the effect starts as you get control"). Nobody is dosed by a
+  sale that goes wrong.
+- The Pukes: the sale still pays and its effect still lands; trust −2 on top of the sale's +1; the place +1 heat, once.
+- Disco Rash's "the place is one hotter" is a level while anyone dances (`placeHeat` = what was done there + 1), like its
+  other two rules; it drops when the dance ends.
+- The lift: it pays the place's own wallet job's pay (`make.lift.like: 'wallet'`); the mark is a new kind, `lifted`
+  (no sales from him for the week; no fear, he does not come due); trust −2; no heat (he was asleep: nobody saw).
+- The smell's "+2 for two cooks": two cooks in one day; the level is the most cooks on any day of today and yesterday,
+  never more than 2.
+- The belt: a police stop and a bad jump take it; nothing else.
+- Names: up to 24 of letters, numbers, spaces and ' & ! . , ? -; a name equal to the default clears it.
+- A product's cost (for the marks' books) is its makings' price over the bags: exact, not rounded (`perSale`).
+- The cook event's `outcome` says 'clean' for a dirty batch and carries no roll: the page must not know before the buyer.
+- Plates for the pier: **dropped** this round (the plan's "last in, first out": the one part that does not test the pot).
+- The Make tree in Ahead (`ahead.mjs`) is not built: made goods and makings are left out of its goods; the screens' job.
+- The pot's moves are not on the dock (`test/run-dock.test.mjs` OFF_DOCK): the pot's screen is the next build.
+
+### Marks of the pot (pot-1)
+
+`node scripts/run-marks.mjs --pot` (ten-day seasons; the cigarette seller is the dealer, `policies.mjs dealer`, the
+best of home at $90 / $160 / $220 and carrying 2 or 4; the cook is the same player cooking what it sells, the best of the
+same amounts and five recipes, `marks.mjs POT_COOKS`; the hot plate a kit, its $30 shown spread over the season). The
+bars are the plan's words (`POT_MARK`); where the plan names no number: C2 "uses" a product at 10% of its cooks or more,
+C5 holds in 75% of day-ones or more, C6 "most" is over half.
+
+| Mark | 500 seasons (2,727 s) | Pass |
+|---|---|---|
+| C1 a cook banks within 5% of the best cigarette seller on the mattress, 5 to 15% more on the bed | mattress: the best cook $99.9 (Disco Rash, home at $220) against $86.7 (cartons, home at $90, carry 4): **+15.3%** (+11.8% with the hot plate's price); bed: $152.6 against $136.9: +11.5% | **no** (the mattress) |
+| C2 the best scripted cook uses at least two of the three products | the best is Disco Rash alone, both kits; the leaver (Disco Rash, Zonked on the last day) is $0.1 to $0.4 behind it, inside the noise | **no** |
+| C3 robbing your sleepers every day banks less than selling to them; never robbing less than robbing on the day you leave | mattress (the Zonked cook, home at $90): every day **$100.3**, never $91.6, the last day $94.0; bed: $141.9, $142.0, $145.4 | **no** (the mattress; the bed passes by $0.1) |
+| C4 a daily cook alone never reaches the warning; the fan pays back inside eight days for a cook who also sells at home, never for one who does not | the quiet cook: 0 warnings in ten days, both kits, the fan $0.0 (never); the cook who sells at home (Dee and the park's crimes first): mattress +$1.2 a day, **8.0 days**, bed +$2.2, 4.6 days; beside, the cook whose only selling at home is Dee: 0 warnings, the fan never pays | **no** (8.0 is not inside 8) |
+| C5 with $20 and a hot plate, a buyer asleep on screen by 14:00 on day 1 | 84.8% of day-ones (the cook who sells at home: Dee at 13:00; his sale is 85%) | yes |
+| C6 a dosed person on screen in most of a cook's market hours; control back inside four seconds | mattress 70% of 26.9 market hours, bed 54% of 38.8; the cook scene asked for 3.5 s | yes |
+
+**What the readings say, and the options (slime's: no target was moved).**
+
+- **C1 and C2 are the same fact: Disco Rash's cover.** While anyone dances at the market you are jumped half as often;
+  a cook who sells Disco Rash keeps someone dancing all the time he sells there. At 150 seasons the Zonked cook (no
+  cover) was +7% on the mattress and Disco Rash +20%: the cover is worth about as much as the bag's better price. So the
+  rash is always the best recipe (C2 fails) and the cook outearns cartons on the mattress (C1 fails). The plan's own
+  numbers (`trials/cook-econ.mjs`) left jumps out. Measured option for C1, the bag at the market $56–84 (base [28, 42],
+  150 seasons): mattress +7.2%, bed +3.8%: both just outside, the other way on the bed; price alone cannot put the
+  mattress under the bed, because on 6 energy the cover protects a larger share of the day's takings. Options: (a) the
+  cover a quarter, not a half (`effects.dancing.place.jumpPct` 75): smaller edge, still the best single; (b) restate C1 as
+  "the cook 5 to 15% over the cigarette seller on both" (the plan's price meets it on the bed now, not on the mattress);
+  (c) C2 waits for the book's step (buyers who tire of what they had: the plan's B3 shows that is what makes mixing pay),
+  slice 1 having only one product a seller wants.
+- **C3 on the mattress**: on 6 energy the cook sells fewer bags than there are buyers, so a burned buyer costs little and a
+  sure $60–100 lift every day wins (+$8.7 a day). On the bed, where buyers run out first, it holds (narrowly). Tried: the
+  lift heating the place (he wakes and calls it in: `make.lift.heat`, left unset): heat 1, mattress every day $99.6 against
+  never $90.5; heat 2, $94.1 against $90.5: it does not mend it, and at 2 it breaks the bed (the last day no better than
+  never). Options: (a) judge C3 on the bed, where the plan's reasoning (buyers are the scarce thing) holds; (b) a lift that
+  turns his place against you too (each person of the place −1), a cost that grows with every buyer burned. A cheaper
+  lift alone does not do it: the last day's lift costs an hour's sale on the mattress, so it would fail the other half.
+- **C4's home seller**: in the game the morning's fade comes before the morning's warning, so a cook who sells only to Dee
+  is at HOME 1 every morning (the smell) and never warned, fan or not (the plan's trial piled a cook and a sale with no
+  fade between: warned on day 2). The fan pays only for the cook who also works his street (the park's crimes), and there
+  8.0 days on the mattress, 4.6 on the bed. Options: (a) the bar "within 8 days" (the plan's "inside eight" missed by a
+  hair at 500: the 3,000 reading decides it); (b) count the day's home selling into the smell's level.
+
+**The existing marks.** The pot moves no player that does not cook: every sampled figure, step and advice of every
+scripted player is the raid-page recording's (the odds fixture, compared before it was re-recorded), and every rule the pot
+touches (a place's heat, who tells, the jumping chance, WORTH) reads only rows that only a cook makes.
+The full set at 500 on the pot's rules (`node scripts/run-marks.mjs --seeds 500`, 8,022 s, run before `--pot` was folded
+into the full run): **43 of 45 pass**, the same two failing as after the raid's fix to the H4 tally (12, both places with
+the box cutter +9%, passing at 3,000; 15, as before); D1 to D6 read to the cent what the raid's 500 column above reads
+(refuser 1.36 raids, $53.4; the Doorman $80.8; D6 $83.7 / $80.8 / $73.8 / $88.3, 16.5%). The 3,000 reading of C1 to C6
+is the orchestrator's to collect (`--pot --seeds 3000`, about five hours).
+
+## The bench and the bottle (bench-1)
+
+Added 2026-11-20: build step 2 of crafting, the plan the owner approved ("thats great ok approved", "ok approved on
+fables decisions"; the addition: `docs/design/crafting-plan-addendum.md` in the hotkey-2-craft copy, B3, Part C, Part E,
+slice 2 "The bench and the bottle"). The first thing you make that is not a drug: a bottle you throw first when several
+of them come at you. **Rules only**: nothing on screen yet, and **off on the page** (below). The code: the bench is one
+more maker in `config.mjs` (`BENCH`, brought in by `withRunConfig({ bench: true })`, exported as `BENCH_CONFIG`), the
+bottle's rules in `make.mjs` (`bottleOn`, `bottleFight`, `floorOf`) and `rules.mjs` (the throw in `jumpOf` and `crewOf`;
+the blue man: `bluesAt`, `blueChance`, `blueOut`), the moves at the end of `step.mjs` and `view.mjs`, two opt-in fields
+in the fight (`src/fight/sim.mjs`, `duel.mjs`), the scripted bottle player (`policies.mjs` `bottler`), the marks' block at
+the end of `marks.mjs` (`--bench`).
+
+### Off on the page until its screens exist
+
+The page plays `RUN_CONFIG`, which has `bench: false` and **none** of the bench in it: no workbench in the Shop, no dog
+spray or paint, no bottle, no dye pack's job, no `v.making`, no `v.blue`. With the pot, the hot plate showed in the Shop
+before anything could use it, and that kept the pot off the play link; this time nothing shows. The rules' tests, the
+marks and the odds fixture play `BENCH_CONFIG`. **The screens' builder turns it on** by setting `bench: true` in
+`RAW` (config.mjs): then everything below is in the game the page plays. Nothing in `demo/` was changed but the dock
+test's off-dock list (`floor`, `takeBack`: the screens' builder's to place).
+
+### What it is, in the player's words
+
+- **The workbench**, $60 from Mr. Pruitt at his yard sale in the trailer park (`things.workbench`, `kit:tool-bench`, the
+  home kit's bench drawn for crafting). It stands on the trailer's **floor spot**. Owned, the **Pack** move at your crib:
+  **an hour**, **three bottles**. A raid can smash it (half the times they get in, a day), never take it, as the hot plate.
+- **The floor spot** (approved decision 8): one piece stands on it; you can own two, one stands, **changing them over is
+  an hour** at your crib. The plan's two floor pieces are the bench and the stove; the stove is a later step, so today the
+  bench stands there alone and the change-over is never offered. **The hot plate is a counter piece and never leaves**
+  (the addition's Part E: "so no player is ever locked out of cooking"), so cooking and packing never compete for it.
+- **What goes in, from your own street**: a **can of dog spray** from Cousin Earl's truck ($8) and a **tin of blue paint**
+  from Mr. Pruitt ($5). Bought from what you carry, no hour, as the pot's makings are.
+- **What you can pack**: dog spray (**Dog Spray**), paint (**Blue Paint**), both in one bottle (**Dog Spray and Blue
+  Paint** by default: yours to name, as a mix of the pot's is), or **a bag from the kitchen** (one bag, three bottles:
+  "Zonked in a bottle", named after the bag, so a Disco Coma you named Swamp Bedtime is "Swamp Bedtime in a bottle").
+  Packing comes out as packed: no batch odds, no dirty bottle, and it does not smell. The book gets a page: 3 sets of
+  fillings, and each bag bottle found.
+- **Your belt**: one thing on it, a bag or a bottle (the belt exists since the pot). Put on at the crib, free. A bottle
+  never goes in your pockets: bottles at home stay home when you step out unless asked for.
+- **The throw.** In any **fight of several**, the bottle on your belt is thrown in the first second and reaches all of
+  them: **two who jump you**, **a crew at your door**, **the Sixes' two on the kerb**. **Never a one-on-one** (the owner's
+  "Guns in a 1 on 1 we can drop", kept in spirit): a job gone wrong to somebody's face leaves the bottle on your belt. It is
+  used up. Where the police are about, a cloud that changes the fight is news: **the place one hotter** (dog spray, a bag;
+  a splash of paint alone is not news; the market, the docks and the plaza are patrolled:
+  every throw there heats it).
+  - **Dog spray**: all of them **blind 3 seconds**: no blow, half speed (the raid's `blind` field, the pepper fogger's).
+  - **Paint**: does nothing for today's fight; all of them **blue for a week**.
+  - **A bag**, lightly, at **half** the plan's fixed sizes (the orchestrator's call, so a kitchen bag is never the best
+    weapon on the street): Zonked, the first of them **asleep 3 seconds** (no step, no blow); Disco Rash, all of them
+    **dancing 4 seconds** at half speed; Disco Coma shares its one bag between its turns: **dancing 2 seconds, then the
+    first of them asleep 1.5 seconds**.
+- **What the bottle does to the odds is shown before the fight** like every other odd: the jump's card says "you see them
+  off about 7 in 10 (…; a bottle of Dog Spray thrown first: all of them blind 3 seconds…)", and carries the share with the
+  bottle and without it; the crew's door card the same.
+- **Tagged: the blue man.** A blue man is **at his usual place all week** (the place they jumped you; for a crew at your
+  door, where the one you know lives, or your own street; for the Sixes, their market). **If they took something from
+  you**, the one who has it is a card there: **"Take it back off the blue man"**: an hour, **a fight you start** (a
+  one-on-one, him as he fought you), **for all of what he took** (the cash and each good; never more, so being jumped can never pay). Won,
+  it is yours; lost, he keeps it and the fight costs you as a job's does. Either way the place is one hotter (a fight in
+  the street) and it is tried once. He stays blue all week.
+- **The dye pack** (the home kit's, drawn and jobless before): $30 from the stallholder at stall 6 of the market, where
+  the floor safe is sold. **In your floor safe** (it needs one), whoever gets into the safe comes out blue: a crew that
+  gets in, at your door or while you are out, and the Sixes when they get in. It goes off once and is spent. No bench
+  needed. A sneak takes only what is outside the safe (the safe's own job), so he never meets it.
+- **Nobody dies** in this step: a bottle kills nobody.
+
+### For the screens: what the rules expose
+
+Every figure a bottle changes is **sampled**, and every sample goes through the background path (`src/run/odds.mjs`
+`tallied`, the workers the page already runs): the bottle is three fields on the fight's inputs (`blind`, `asleep`,
+`slow`), so a count with a bottle is a count of its own, asked for and kept like a jump's. No card of the bench plays a
+fight on the page's thread (`test/run-bench.test.mjs`: with the page's switch on, a bottle's figure is NaN and its count
+is asked for; `test/odds-background.test.mjs` plays the bottle player's whole season through workers).
+
+**`v.making`**: every workshop's screen, one each (the switch at the top: KITCHEN · BENCH): `v.making.kitchen` is what
+`v.pot` is today; `v.making.bench` has the same fields (`maker`, `label`, `verb` 'Pack', `unit` 'bottle', `makers[]`,
+`station`, `open`, `carrier` (`{ id: 'bottle', takes: ['filling', 'bag'], slots: 2, gives: 'bottle', n: 3, hours: 1,
+seconds: 3.5 }`), `shelf`, `missing`, `options`, `odds` ("Comes out as packed"), `smell` null, `energy`, `reason`,
+`book`), and two of its own: `floor` (`pieces[]` each `{ item, label, standing, key, available, choice }`, `standing`,
+`text`) and `belt`. Each option: `with` (fillings, or one bag as it shows), `product`, `name`, `lines` (what it does in a
+fight: "All of them blind 3 seconds: no blow, half speed", "All of them blue for a week", "The first of them asleep 3
+seconds", "then the first of them asleep 1.5 seconds"), `short` ("blind 3 s", "blue a week", "one asleep 3 s"), `fight`
+(`{ fight: { blind?, asleep?, slow? }, tags, seconds }`), `bag` (for a bag), `cost`, `tried`, `found`, `choice`, `key`.
+`reason.why`: 'station', 'empty', 'blank', 'belt' ("Nothing on your belt: a bottle on it is thrown first when two jump
+you…"), 'low', 'stocked'. `v.pot` is unchanged in kind (the first workshop you can use), with `verb` and `unit` added.
+
+**`v.make`**: `makers[]` has the bench (with `verb`); `belt` gains `bottle` when a bottle is on it: `{ product, lines,
+fight, tags, cloud (its colour: 'orange' for dog spray, 'blue' for paint), colours, fights: ['jumped', 'crew', 'sixes'] }`.
+`effects` has `blind` (`look: { overhead: 'stars', legs: 'stumble' }`) and `tagged` (`look: { skin: 'blue' }`).
+
+**`v.blue`**: everyone blue now: `{ id, who: { id, name, role }, says ("the heavy who jumped you"), place, placeLabel,
+until, untilDay, untilClock, by ({ maker, carrier, product, good } for a bottle, { thing: 'dyepack' }), took ({ cash,
+goods } or null), back (what taking it back gets: `{ cash, goods, pct }`), tried (`{ day, result }` once you went for
+him), here, key, available, why, fight (the card's: `pct`, `in10`, `n`, `byArm`, `you`, `them`, `costs`, `text`),
+choice, look, text }`. **`v.places[].under`** counts them ("blue 2"); **`v.under`** lists them as any row (effect
+'tagged').
+
+**On the danger card**: `v.danger.thisHour.jump.fight.bottle` = `{ good, product, name, lines, cloud, fight, tags,
+inFight, seeOff (with it), without (the same fight with no bottle) }`; the fight's `text` and the jump's `why` say it.
+**On the crew's door card** (`v.home.crew.odds`, `v.earl`'s odds): `bottle` = the same, with `win` and `without`.
+
+**The moves** (all listed after every older move, so no older key moves):
+
+| Choice | Where, cost | Extra fields |
+|---|---|---|
+| `{ do: 'get', item: 'workbench' \| 'dyepack' }` | where sold, from what you carry, no hour | `station`, `floor`, `needs`, `does`, `oneJob`, `keeperName`, `spot` |
+| `{ do: 'making', item: 'spraycan' \| 'painttin' }` | the trailer park, no hour | as the pot's, `does` "In a bottle: all of them blind 3 seconds" |
+| `{ do: 'cook', maker: 'bench', carrier: 'bottle', with: [...] }` | the crib, an hour, an energy; label "Pack …" | as the pot's, `bag`, `fight`, `unit`, `verb` |
+| `{ do: 'belt', good }` | the crib, free (a bottle: `bottle.lines`) | as the pot's |
+| `{ do: 'floor', item }` | the crib, an hour (only with two floor pieces owned) | `standing` |
+| `{ do: 'takeBack', who }` | where the blue man is, an hour, a fight | `who`, `took`, `back`, `fight`, `heat`, `until`, `untilClock` |
+| `{ do: 'name', product: 'spray-paint', name }` | anywhere, free | as the pot's |
+
+**The events and their scene hints.** `cook` from the bench: `kind: 'bottle'`, `n` 3, `bag` and `usedGood` for a bag,
+`smell` null, `scene: { action: 'bench_clamp' (the city's unused clip), spot: 'floor-spot', seconds: 3.5, piece
+('prop:bottle-spray', 'prop:bottle-zonk'…), colours }`: **you at the bench 3.5 s**. A fight with a bottle (`jumped`, a
+crew's `raid`, the Sixes' `jumped`) carries `bottle` (`{ good, product, name, lines, fight, tags, cloud, colours, at:
+'jumped' | 'crew' | 'sixes', place, heat, placeHeat }`) and `scene.bottle`: `{ action: 'throw', at: 0 (the first second),
+cloud (**the cloud in the filling's colour**), colours, blind: 3 (**a blind stumble**, the seconds), asleep: { n, s, at },
+dance: { s, by, at }, blue: true (**a blue man**) }`; its `duel.inputs` has the same fields, so the page's own replay of
+the fight plays the stumble where the sim has it. Paint, or the dye pack, adds `blue`: `{ rows: [{ id, who, place,
+until, untilDay, untilClock, took, back, row }], by, until, text, item? }`. `takeBack`: `who`, `place`, `duel` (with
+`blue: true`), `result`, `took`, `back`, `energyLost`, `heat`, `placeHeat`, `scene: { kind: 'fight:…', blue: true }`.
+`floor`: `item`, `was`.
+
+**What the screens' builder must not assume.** The bench's moves are not on the dock yet (`floor`, `takeBack` are in the
+dock test's off-dock list; `cook` with `maker: 'bench'` would land under Cook, the pot's screen, which today draws only
+`v.pot`). `v.pot` may show the bench when the bench is owned and the hot plate is not: draw `v.making[maker]` for each
+tab. A blue man of a jump has no person in the cast: his id is `blue:<day>:<hour>:j1` and his name is "the blue man"
+(the run casts its own extras; the city's crowd walkers cannot be taken over). The `scene` words are hints in the
+pot's shape, not clips that exist: `throw` is new (half a hand-over scene, the addition's G2).
+
+### Saves
+
+State version **14** adds `floor` (the piece standing on the floor spot; null: the first you own that stands there). A
+blue man is a row of `under` (effect 'tagged', with `who`, `foe`, `took`, `back`); the bench's shelf and book are
+`make.bench`; its fillings and bottles are goods. `loadRun` reads a version-13 save (and 12 down through it) as nothing
+chosen on the floor spot; `test/fixtures/run-save-v13.json` is one, made by the code of 488f13f (this step's parent)
+mid-season (day 4, at the market, a cook's Disco Coma on the belt and bags at home, a buyer under it), and
+`test/run-bench.test.mjs` loads it on the page's config and on the bench's and plays on 40 choices.
+
+### The scripted bottle player (`policies.mjs` `bottler`)
+
+The dealer's shape (both places, home at $X, sells first, `carry`), the workbench a kit. Each morning at the crib with
+nothing on its belt it puts a bottle of its fill on; with none at home it buys what goes in on its own street and packs
+once (an hour). `fill`: dog spray, paint, or both; unset, it never packs (the same player without). It goes for a blue man
+who took something from it when the card says it wins at least half the time, with the energy for the fight and the
+way home. `base: 'homeAt'`: the market's own player (the market every day) instead of the dealer.
+
+### Where the plan was silent, and what was chosen
+
+- **The floor spot.** The brief said the bench stands "on the floor spot the hot plate uses"; the approved addition says
+  the floor spot is "the stove or the bench" and "the hot plate is a counter piece and never leaves". The approved text
+  was followed: the hot plate stays on the counter. The rule is general (`things[k].floor`): putting the hot plate on the
+  floor spot is one line (`hotplate: { floor: true }`), and `test/run-bench.test.mjs` plays the change-over that way.
+- The fillings' names are plain words (Dog Spray, Blue Paint); the pair's default "Dog Spray and Blue Paint", the
+  player's to rename. A bag bottle is named after the bag and is not renamed itself.
+- One bag fills three bottles (an hour packs three, one of each thing in it, as the pot takes one of each).
+- A dirty bag packs into the same bottle: the Pukes has no size in a fight, so nobody finds out from a bottle.
+- A bag in a bottle does its fight size only: nobody is dosed for hours by a bottle (no row, no wallet to lift).
+- Disco Coma in a bottle (after the orchestrator's call: half sizes, one bag shared between its turns): dancing 2 s,
+  then the first of them asleep 1.5 s. Measured: in turn at the full half sizes (dancing 4 s, then asleep 3 s) it was
+  11.7 points over the cutter's lift and the strongest bottle; shared, inside it (−0.7 at most).
+- Blue for a week: until noon of the seventh day after (the memory marks' week).
+- The blue man fights as he fought you (the jump's heavy, the crew's heavy, the Sixes' fist-fighter); the one who has
+  what they took is the first of them. A blue man of a Sixes raid is never a shooter (a one-on-one has no gun).
+- Taking it back: an hour, the fight's cost as a job's, the place +1 heat either way (`make.bottle.blue.heat`), no
+  memory mark, no change to the Sixes' meter; tried once. Won, all the cash and every good he took come back onto you.
+- The dye pack: $30, at the market's stall 6 (the floor safe's seller); spent when it goes off; it goes off for whoever
+  gets into the safe (a crew, the Sixes), not for a sneak (who takes only what is outside it).
+- The raid on your home by the Sixes is not one of the bottle's fights (the brief named three; the fogger is that raid's).
+- A bottle's cloud heats a place only where the police are about (`policeAbout`), +1 (`make.bottle.heat`), once a throw,
+  and only when it changes the fight (`inFight`: dog spray, a bag; not paint alone: the orchestrator's call).
+- Bottles at home count in WORTH at what they cost (no selling job takes one).
+
+### Small things mended, and left
+
+- Mended: the cook event's `home` now counts what is at home of it as it shows (a dirty batch beside clean ones counted
+  with them, as the shelf counts); the box fan has a `does` ("The smell of your cooking is one lower").
+- Left: `state.belt` keeps a dirty bag's own id: so does `state.stash`; the view (`v.make.belt`) shows it as its product,
+  and a raw read of state tells either way. `v.goods` leaves made things out (they are `v.make`'s and `v.making`'s;
+  adding them would change the existing goods panel). The Library has no makings (a screens job).
+
+### Marks of the bench (bench-1)
+
+`node scripts/run-marks.mjs --bench` (on `BENCH_CONFIG`; fourteen-day seasons, B2's "over 14 days"). The player is the
+dealer (both places, sells first; the best of home at $90 / $160 / $220 and carrying 2 or 4 without bottles), the
+workbench a kit (its $60 is B4), with a bottle of one fill always on its belt (`policies.mjs bottler`), going for a blue
+man when the card says it wins at least 5 in 10. "The same player without": the same at the same go-home amount, never
+packing. The bars are the addition's words (G2, slice 2's Balance row, `BENCH_MARK`); where they name no number: B1 is
+judged for every bottle, bare hands and the cutter, fresh and tired, at each place with jumpers; B2's "player with
+bottles" is its best fill; B3's "a day you carry a lot" is the dealer who goes home at $220 carrying 4, "a week at one
+market" the market's own player (the market every day, home at $120); B4 is judged on the bed, where B2 asks the bottle
+to earn more, the mattress beside.
+
+**The orchestrator's three calls** (under the owner's "I trust your judgment so make it better"; shown to him as the
+orchestrator's, his to overrule), made after the first reading (d318713) and measured again (32ba876):
+1. **A bag in a bottle at half size**: asleep 3 s, dancing 4 s; a mix shares its one bag between its turns (Disco Coma:
+   dancing 2 s, then asleep 1.5 s: in turn at the half sizes it was 11.7 over the cutter's lift and the strongest bottle).
+   **Dog spray stays at blind 3 s**, the approved plan's number: a few points over the cutter, paid for with the place's
+   heat every time. B1 is then read as "about the cutter's lift, none above 90".
+2. **Paint's splash is no news**: only a cloud that changes the fight (dog spray, a bag) heats a patrolled place.
+3. **Taking it back off the blue man gets all of what he took** (the cash and each good), still once, still a fight you
+   start; never more, so being jumped can never pay.
+Beside them, one mend in the scripted player (not the rules): it no longer carries its spare bottles and fillings in its
+pockets on a trip (they were at risk in every jump and sold nowhere); that alone moved dog spray's reading up a little.
+
+| Mark | First reading (500, d318713) | After the calls (500, 32ba876, 1,413 s) | Pass |
+|---|---|---|---|
+| B1 a bottle lifts a jump by no more than the box cutter does (read: about the cutter's lift), never above 90 seen off | dog spray +7.0 over the cutter's lift at most; Zonked +14.0; Disco Coma +18.3; highest seen off 85.7; 28 of 36 cells over | each bottle's furthest over the cutter's lift: **Dog Spray +7.0** (e.g. the market fresh: +20.8 on bare hands against the cutter's +17.8; the docks tired, with the cutter: +23.6 against +16.6), the pair +7.0; **Zonked +0.0, Disco Rash +0.0, Disco Coma −0.7** (inside it: e.g. the market fresh, bare hands +12.8 / +13.6 / +10.6); paint −16.6 (nothing in the fight); highest seen off **83.2**; 12 of 36 cells over, every one of them dog spray or the pair | **no** as the addition words it; **yes as read** (the bags inside the cutter's lift, dog spray 7 over at most, none above 90) |
+| B2 within 10% of the same player without on the mattress, more on the bed | mattress Dog Spray +10.4%, Blue Paint −7.7%, both +4.5%; bed Dog Spray +9.9% | mattress: without $82.4; **Dog Spray $92.1, +11.8%**; Blue Paint $84.8, +2.8% (2.7 taken back for $250 in 14 days, the place never hotter for it); both $91.6, +11.1%. bed: without $132.9; Dog Spray $147.3, +10.8%; Blue Paint $138.4, +4.1% ($429 taken back); **both $147.7, +11.1%** | **no** (the mattress, by 1.8) |
+| B3 dog spray better on a day you carry a lot; paint over a week at one market | big carrier: spray $88.5, paint $68.4, none $73.2; the market every day: spray $69.7, paint $57.8, none $65.2 | big carrier (home at $220, carry 4): **spray $91.1, paint $85.4**, none $73.2; the market every day (home at $120): **spray $71.6, paint $68.5**, none $65.2 (3.4 blue men with something of yours in 14 days, 2.9 taken back, $271) | **no** (dog spray wins every day) |
+| B4 the bench pays back inside 16 days | bed 4.6 days, mattress 7.0 | bed (both in one bottle) +$14.8 a day: **4.1 days**; mattress (dog spray) +$9.7: 6.2 | yes |
+
+**What the readings say, and the options (slime's: no target was moved; the three calls above are the orchestrator's).**
+
+- **B1, as read: passes.** No bag in a bottle lifts a jump past the box cutter now (Zonked and Disco Rash level with
+  it at worst, Disco Coma 0.7 under): the first thing at the bench that is not a drug is not a drug again. Dog spray is up
+  to 7 points over the cutter's lift (at its worst on the docks, tired, with the cutter in hand), and every throw where
+  the police are about heats the place. Nothing passes 90 (83.2 at most). If slime wants B1 as the addition words it:
+  blind 1.5 s (measured: +11.6 on bare hands, +10.5 with the cutter) passes it, and halves what dog spray is for.
+- **B2: the bottle earns a little more than the bar allows on the mattress** (+11.8% against "within 10%"), and more
+  on the bed (+10.8% to +11.1%), as asked. Paint +2.8% / +4.1%. The mattress's excess is dog spray's 3 seconds and the
+  scripted player no longer losing spare bottles in its pockets. Options: (a) take it: the bed half holds and the
+  mattress is 1.8 over at 500 seasons (the 3,000 reading decides it); (b) dog spray at 2 s blind (measured +17.7 on bare
+  hands, about the cutter's own lift), which would bring B2 near the bar and B1 inside as worded; not measured on B2.
+- **B3: dog spray still wins every day, and it will in this step.** Spray stops the loss; paint gets it back a day
+  later, with a fight, only when the jump was lost. With the two calls paint is no longer a trap: **ahead of carrying
+  nothing** (+$3.3 a day for the market's own player, +$12.2 for the big carrier) **and behind dog spray** ($3.1 and $5.7
+  a day). **Paint's place, in plain words:** the bottle for the player who wants his money back and the blue man to see,
+  and, in one bottle with the spray, the best thing to carry on the bed (both $147.7 against spray alone $147.3: the
+  spray wins the fight, and when it does not the paint gets it all back). Its bigger job comes with the door and the hit,
+  where a blue man is a man you can find at his door.
+- **B4 passes.**
+- **What the bottle costs, seen in the marks**: a cloud that changes the fight is news at every patrolled place
+  (market, docks, plaza): the dealer's market is one hotter about six times in 14 days on the mattress, ten on the bed.
+  Paint alone: never.
+- **What cannot have moved**: `--pot` and every older mark. No cook and no older player owns a workbench, and the
+  calls touch only a bottle on a belt, a blue man's row, and the bottle player's own trips; the odds fixture's proof again
+  (every figure, step, piece of advice and Ahead table of the 114 runs without a bench the same, on the page's config
+  and on the bench's) says so, so they were not run again.
+
+### The pot after bench-1's two changes (C1 to C6 again)
+
+The owner approved two of the orchestrator's calls on the pot ("Go with your calls"), made here because this is the next
+job in the rules: **Disco Rash's cover** from "jumped half as often" to **"a quarter less often"**
+(`effects.dancing.place.jumpPct` 75; the danger's why says it; RUN.md's table above), and **the box fan $7**, not $10:
+measured after the cover's change, the cook who also works his own street (Disco Rash, home at $90, the trailer park's
+crimes and Dee first) gains $1.09 a day with the fan at 500 seasons and $0.86 over 2,000 more (seeds 501 to 2,500): $0.90
+over 2,500, so $7 pays back in 7.8 days and $8 would take 8.9 ($7 is what the 3,000-season proportion said too).
+`node scripts/run-marks.mjs --pot --seeds 500` on 8ce32cb (2,021 s; the same numbers to the cent as the run on 4f01185, the
+cover's change alone, but C4's days):
+
+| Mark | pot-1 (500) | pot-1 (3,000) | bench-1 (500) | Pass |
+|---|---|---|---|---|
+| C1 a cook within 5% of the best cigarette seller on the mattress, 5 to 15% more on the bed | +15.3% / +11.5% | +13.9% / +12.8% | **mattress +6.2%** ($92.0, Disco Rash at $90, against $86.7; +2.7% with the hot plate's $30); **bed +5.5%** ($144.5 against $136.9) | **no** (the mattress, by 1.2) |
+| C2 the best cook uses two products | Disco Rash alone | Disco Rash alone (mattress) | Disco Rash alone, both kits; but now the top four on the mattress are within $0.4 (rash $92.0, fewer $91.9, leaver $91.8, Zonked $91.6) | **no** (waits for the book, the orchestrator's call) |
+| C3 robbing sleepers every day less than never; never less than the last day | $100.3 / $91.6 / $94.0; bed $141.9 / $142.0 / $145.4 | +7% mattress, +2% bed | unchanged to the cent (the Zonked cook dances nobody) | **no** (judged on the bed: kept as it is, the owner's decision) |
+| C4 a daily cook alone never warned; the fan pays back inside 8 days | 8.0 days at $10 | 10.1 days at $10 | quiet cook 0 warnings; the fan **6.4 days** on the mattress (+$1.1 a day), 3.9 on the bed; never for the quiet cook or Dee's | yes |
+| C5 a buyer asleep by 14:00 on day 1 | 84.8% | 85.0% | 84.8% | yes |
+| C6 a dosed person on screen most market hours | 70% / 54% | 70% / 54% | 69% of 20.3 hours / 53% of 38.0 | yes |
+
+What moved: the trimmed cover took the mattress's edge from +15.3% to **+6.2%** and the bed's from +11.5% to **+5.5%**
+(inside its 5 to 15%); Disco Rash is still the best single but now by $0.1 to $0.4, inside the noise, where it was the
+clear best. The mattress is 1.2 points outside its 5% at 500 seasons: the 3,000 reading (the orchestrator's) decides it.
+What did not: C3 (no dancer in it), C5, C6. C4 passes at $7.
+
+### The existing marks (bench-1)
+
+`node scripts/run-marks.mjs --seeds 500` on d318713 (the page's config, which has no bench; 8,395 s): **45 of 51 pass**.
+The existing 45: **43 pass**, the same two failing as at pot-1 and before it (12, both places with the box cutter +9%, the
+weaker at 73%; 15, the dealer +17% to +24% over the best player who never buys); every other reading as at pot-1 (D1 to
+D6 to the cent: refuser 1.36 raids, $53.4; the Doorman $80.8; D6 $83.7 / $80.8 / $73.8 / $88.3, 16.5%). The pot's six in
+that run are the cover's change alone (C4 at the fan's old $10: 9.2 days); at $7 (the `--pot` run above, 8ce32cb) C4
+passes and the set reads **46 of 51**. The bench moves no player that has no bench: the odds fixture's proof above (every
+sampled figure, step, piece of advice and Ahead table of every scripted player the same, on the page's config and on the
+bench's), and the bench's rules act only on a bottle on your belt, a blue man's row, or the dye pack.
+
 ## Adding a place
 
 A place is one entry under `places` in `src/run/config.mjs`; no rule names a place (`test/run-places.test.mjs` adds the

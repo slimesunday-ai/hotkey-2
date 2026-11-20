@@ -28,6 +28,7 @@ import { LIVED } from './lived.js';
 import { HUSTLE } from './hustle.js';
 import { TRAPS } from './traps.js';
 import { ARMS } from './arms.js';
+import { CRAFT } from './craft.js';
 import { GAME } from './game.js';
 import { KITS, RETAG } from './kits.js';
 export { KITS };
@@ -35,14 +36,14 @@ export { volFor, FINE, SMALL, SHAPED };
 
 export const CATS = ['seating', 'beds', 'tables', 'storage', 'electronics', 'gaming', 'music', 'decor', 'wall', 'rugs', 'lights', 'plants', 'kitchen', 'bath', 'collectibles', 'security', 'stash', 'clutter', 'trophies'];   // trophies: catalogue v2 (a FORMAT proposal)
 export const TIERS = ['trailer', 'apartment', 'house', 'penthouse'];
-export const OBJECTS = [...LIVING, ...MEDIA, ...WALLS, ...COLLECT, ...SECURITY, ...CLUTTER, ...EXTRAS, ...CRIME, ...COLLECT2, ...WALL2, ...GEAR, ...BASE2, ...TROPHIES, ...DRESS, ...LIVED, ...HUSTLE, ...TRAPS, ...ARMS]
+export const OBJECTS = [...LIVING, ...MEDIA, ...WALLS, ...COLLECT, ...SECURITY, ...CLUTTER, ...EXTRAS, ...CRIME, ...COLLECT2, ...WALL2, ...GEAR, ...BASE2, ...TROPHIES, ...DRESS, ...LIVED, ...HUSTLE, ...TRAPS, ...ARMS, ...CRAFT]
   .sort((a, b) => CATS.indexOf(a.cat) - CATS.indexOf(b.cat));
 for (const o of OBJECTS) { if (!o.game && GAME[o.id]) o.game = { ...GAME[o.id] };   // catalogue v2: the wave-1 objects' game blocks (game.js)
   for (const t of RETAG[o.id] ?? []) if (!o.tiers.includes(t)) o.tiers = [...o.tiers, t]; }
 for (const o of OBJECTS) if (o.far === true) o.far = farOf(o);
 export const byId = new Map(OBJECTS.map(o => [o.id, o]));
 // catalogue v2: which sheet each new piece belongs to (preview.html ?view=v2&k=…)
-export const V2 = new Map([[BASE2, 'base'], [GEAR, 'gear'], [CRIME, 'crime'], [COLLECT2, 'collector'], [WALL2, 'wallfloor'], [TROPHIES, 'trophy'], [HUSTLE, 'hustle'], [TRAPS, 'traps'], [ARMS, 'arms']].flatMap(([L, k]) => L.map(o => [o.id, k])));
+export const V2 = new Map([[BASE2, 'base'], [GEAR, 'gear'], [CRIME, 'crime'], [COLLECT2, 'collector'], [WALL2, 'wallfloor'], [TROPHIES, 'trophy'], [HUSTLE, 'hustle'], [TRAPS, 'traps'], [ARMS, 'arms'], [CRAFT, 'craft']].flatMap(([L, k]) => L.map(o => [o.id, k])));
 
 // sanity at load: unique ids, known categories, placements and tiers (a bad entry throws here, not in the builder)
 { const seen = new Set();

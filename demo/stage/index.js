@@ -37,6 +37,8 @@ import { createFallaway } from './fallaway.js';
 import * as CITYMAP from './citymap.js';
 import { createAlong } from './props/along.js';
 import { createWorkbenches } from './set/workbench.js';
+import { createLooks } from './looks/index.js';
+import { createUnder } from './looks/under.js';
 
 /**
  * What each kind of person wears, so a viewer can tell them apart at a glance. `pool` is the cast's: agents are the
@@ -252,10 +254,17 @@ export async function createStage({ city, CITY, map = CITYMAP, loader: given = n
   function performStep({ step, actor, target, block, alive }, how = 'perform') {
     const { deal, roles = {}, ...told } = step.perform;
     const who = Object.fromEntries(Object.entries(roles).map(([role, v]) => [role, v === 'actor' ? actor : v === 'target' ? target : v]).filter(([, id]) => id));
+    // (pot-3: a sleeper's wallet: the pocket of the hip that is up, where he lies now: the look has his body)
+    if (deal === 'liftSleeper') told.pocket = () => looks?.pocketOf(who.mark) ?? null;
     return hands[how]({ deal, roles: who, told, block, alive });
   }
   // (anim-1: a fight is given room by everybody not in it: the city's crowd, and ours standing or walking; room.js)
   const room = createRoom({ city, actors, director });
+  // (walk-1: the player is off the street, for the crowd's thinning round him (actors.js THIN) and the audit's `crowd`:
+  // in a place's inside view, or in a fight's room (a deal's quiet ring is on the street))
+  actors.offStreet = P => !!inside.up || (P.id === you && (s => s.on && !s.quiet && s.keep.includes(P.id))(room.state));
+  // (pot-3: and not thinned while a dance near the player is gathering its strangers, or has them: looks/index.js)
+  actors.thinHold = (x, z) => !!looks?.crowdNear?.(x, z, 45);
   // (the city's see-through hole, for the camera to soften: camera.js)
   const hole = await import(`${CITY}gpu.js`).then(m => m.HOLE ?? null, () => null);
   let firstSeat = null;
@@ -425,6 +434,32 @@ export async function createStage({ city, CITY, map = CITYMAP, loader: given = n
     console.warn('[stage] the blood did not load:', err);
     return null;
   });
+  // (looks-1) THE DRUG LOOKS (looks/index.js): a look on a person and off again, display only; built here, when the page
+  // loads (the clip, the tint, the squares and the pictures over heads), so the first look never builds anything. With
+  // nobody under a look it does nothing. `?looks=0` leaves it out.
+  let looks = null;
+  if (QS.get('looks') !== '0') {
+    try {
+      looks = createLooks({ city, actors });
+    } catch (err) {
+      console.warn('[stage] the looks did not load:', err);
+    }
+  }
+  // (pot-3) THE POT'S PEOPLE WEAR IT (looks/under.js): whoever the rules say is under something (the hour's line:
+  // `line.under`, scenes.js) is given its look on stage, and it is taken off when the rules say. The zone seated afresh
+  // under a cut's black: whoever is wanted and on stage is found under it there (seat)
+  const under = looks ? createUnder({ looks, actors, director }) : null;
+  if (under) {
+    const setZone0 = director.setZone;
+    director.setZone = (...a) => {
+      setZone0(...a);
+      try {
+        under.seat();
+      } catch (err) {
+        console.warn('[stage] the looks could not be seated:', err);
+      }
+    };
+  }
   director.on((what, shot) => {
     if (what === 'shot' && shot.hit) gore?.hit(shot.at, shot.by);
     // (a fist that lands, on a step that asks for blood: director.js 'blow', at the clip's contact moment)
@@ -689,6 +724,8 @@ export async function createStage({ city, CITY, map = CITYMAP, loader: given = n
     // are taken away). Scenes at a place that is not loaded are not staged at all.
     const id = leadId();
     director.setLead(id);
+    // (pot-3: who the rules say is under what this hour: looks/under.js)
+    under?.hour(line, { instant });
     director.brief(plan);
     const L = id ? director.people.get(id) : null;
     const end = L ? plan.ends[id] : null;
@@ -728,6 +765,8 @@ export async function createStage({ city, CITY, map = CITYMAP, loader: given = n
     const t1 = actors.clock;
     await director.playHour(plan, { instant });
     note.scenes = +(actors.clock - t1).toFixed(1);
+    // (pot-3: the hour's scenes done, the sale's buyer is given what the bag does, as it ends)
+    under?.after({ instant });
     if (after && !instant) {
       const t2 = actors.clock;
       director.abort();
@@ -984,6 +1023,10 @@ export async function createStage({ city, CITY, map = CITYMAP, loader: given = n
     camera,
     seeThrough,
     gore,
+    /** (looks-1) The drug looks: looks.on(who, look) · looks.off(who) · looks.crowd(who, look, { n }) (looks/index.js). */
+    looks,
+    /** (pot-3) The pot's people wearing it: under.state() → { want, on, log } (looks/under.js). */
+    under,
     figures,
     stands,
     doorway,

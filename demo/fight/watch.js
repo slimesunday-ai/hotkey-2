@@ -6,10 +6,14 @@
 // line from the camera to its head and to its chest both blocked: the city's own collision world, the one its
 // camera keeps out of walls with) or under the street (in the subway's stairwell). Not counted at all: a frame the
 // whole picture is cut (the stage's fade to black, or the camera put somewhere else at once).
+// (streak-1) Also a fault, in any frame: a body posed by hand drawn with a part of it further from its hips than a body
+// reaches (`stretched`, demo/fight/puppet/reach.js: every pose handed to the walkers' shader is measured as it is drawn).
 import { viewOf, createFrameCheck, bodyIn, inView, BODY_BALL } from './frame.js';
+import { stretchSince } from './puppet/reach.js';
 
 export function createWatch({ city, actors, fade = null, near = null, street = 0, arena = null }) {
   const check = createFrameCheck();
+  let stretchSeen = stretchSince(0).n;
   const world = city.cam?.world ?? null;
   let lastCam = null;
   let cutUntil = -1;
@@ -95,10 +99,21 @@ export function createWatch({ city, actors, fade = null, near = null, street = 0
         if (cars) through.carFrames += 1;
         if (walkers) through.walkerFrames += 1;
       }
-      return check.step(bodies(), view(), { cut: frame <= cutUntil, hidden: hiddenAt, t });
+      const out = check.step(bodies(), view(), { cut: frame <= cutUntil, hidden: hiddenAt, t });
+      // (a body drawn stretched: counted whatever the picture, a cut does not hide it)
+      const st = stretchSince(stretchSeen);
+      stretchSeen = st.n;
+      if (st.count > 0) {
+        const who = row => [...actors.all()].find(A => A.clipName === `fight_body_${'abcdefghijkl'[row]}`)?.id ?? `row ${row}`;
+        const f = { id: who(st.list[0]?.row ?? -1), what: 'stretched', part: st.list[0]?.at, d: st.list[0] ? +Math.min(st.list[0].far, 1e6).toFixed(2) : null, n: st.count, t };
+        check.faults.push(f);
+        out.push(f);
+      }
+      return out;
     },
     set on(v) {
       on = !!v;
+      stretchSeen = stretchSince(0).n;
       if (!on) check.reset();
     },
     /** What the check has found: faults (each { id, what, at, t }), what it let by as hidden, and how much it watched. */

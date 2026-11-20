@@ -21,6 +21,8 @@ import { THINGS as TRAILER } from '../stage/set/starter.js';
 // (ui-3, leg 3: the wardrobe's tiles and words: the run's icons, the catalog's names, slots, rarity and buttons)
 import { icon } from './icons.js';
 import { SLOTS, nameOf as pieceName, tierWord, wearOf } from './catalog.js';
+// (pot-2: the bags and what you cook with, one short row where your stuff lives)
+import { madeRows, chipsEl } from './pot.js';
 
 // ── GOODS AND THINGS, IN WORDS (goods-1) ───────────────────────────────────────────────────────────────────────────
 /** A good's short word, one or many (the view's labels are long: "loose cigarettes", "bootleg films on disc"). */
@@ -286,6 +288,13 @@ function boughtEl({ cfg, v, choosing, go }) {
  * you are in comes first, with who is about there this hour (only someone about can see what you do) and the view's
  * own sentence of who would tell.
  */
+/** (pot-2) Under something you sold them, under their row: what, until when, and what comes after it. */
+export function underLine(u) {
+  const now = u.now.map(r => `${r.label} until ${r.untilClock}`);
+  const next = u.next.map(r => `then ${r.label} until ${r.untilClock}`);
+  return h('p', { class: `rn-under-line${u.now.some(r => r.bad) ? ' is-bad' : ''}`, 'data-under': u.who.id, title: u.text },
+    h('b', null, [...now, ...next].join(', ') || 'nothing yet'), u.now[0]?.name ? h('em', null, ` · ${u.now[0].name}`) : null);
+}
 /** (memory-1) One person's mark under their row: what they remember and for how long, in the run's own words. */
 function markLine(m) {
   const tone = m.fear ? 'is-fear' : m.holds ? 'is-holds' : 'is-hates';
@@ -302,6 +311,8 @@ export function characterPeople({ cfg, v }) {
   // (memory-1: what each person remembers of you this week, and who is coming to your door: the view's `marks`, `coming`)
   const marks = new Map((v.marks ?? []).map(m => [m.who.id, m]));
   const coming = v.coming ?? [];
+  // (pot-2: who is under what you sold them, and until when: the rules' own words, "Shaky Dee: asleep until 17:00")
+  const under = new Map((v.under ?? []).map(u => [u.who.id, u]));
   return [
     coming.length ? h('p', { class: 'rn-note rn-coming' }, h('b', null, 'Coming to your door: '), coming.map(c => c.text).join('; '), '.') : null,
     ...order.map(place => {
@@ -331,7 +342,8 @@ export function characterPeople({ cfg, v }) {
             // (a regular: how hooked, in words, under the row)
             p.regular ? h('p', { class: `rn-hooked-line${p.regular.hooked ? ' is-hooked' : ''}` }, hookedText(cfg, p.regular)) : null,
             // (memory-1: what they remember of you, for how long: "you beat him on day 2 · gives way for 5 more days")
-            marks.has(p.id) ? markLine(marks.get(p.id)) : null);
+            marks.has(p.id) ? markLine(marks.get(p.id)) : null,
+            under.has(p.id) ? underLine(under.get(p.id)) : null);
         })),
         h('p', { class: 'rn-note' }, `${plural(left, 'person', 'people')} left to work today of ${all.length}. Whoever you work (not the safe job) is out for the rest of the day; everyone is calm again in the morning.`));
     }),
@@ -708,6 +720,15 @@ function hereEl(ctx) {
         e.owned ? h('span', { class: 'hk-tag is-yours' }, 'owned') : buy(e.key, e.price, food ? 'E' : null, e.available, e.why))));
   }
   const mine = (v.goods ?? []).filter(g => g.carried || g.home);
+  // (pot-2: WHAT YOU MAKE, one short row each, and what you cook with: who sells it, where, and Buy where you stand)
+  const made = madeRows(cfg, v, { choosing: ctx.choosing, go: ctx.go });
+  const P = v.pot;
+  const makingsEl = P ? h('ul', { class: 'rn-stuff' }, P.shelf.makings.map(m => {
+    const c = (v.moves ?? []).find(x => x.choice.do === 'making' && x.choice.item === m.item);
+    return h('li', { class: `rn-thing${c ? ' is-here' : ' is-away'}`, 'data-making': m.item },
+      h('div', { class: 'rn-job-head' }, h('b', null, chipsEl([m.colour], [m.family]), ` ${cap(m.pack.replace(/^an? /, ''))} · ${cap(m.keeper?.name ?? '')}`), h('span', { class: 'rn-pay' }, money(m.price))),
+      h('div', { class: 'rn-job-odds' }, c ? buy(c.key, m.price, null, c.available, c.why) : h('span', { class: 'hk-tag' }, `${cfg.places[m.at]?.where ?? `at ${m.atLabel}`}`)));
+  })) : null;
   return h('section', { class: 'rn-sec rn-here' },
     rows.length ? [h('h3', { class: 'rn-sec-h' }, `Sold here, ${cfg.places[v.place]?.where ?? v.placeLabel}`), h('ul', { class: 'rn-stuff' }, rows), h('p', { class: 'rn-note' }, 'Paid from what you carry, no hour: you walk over to them.')] : null,
     h('h3', { class: 'rn-sec-h' }, 'Your goods'),
@@ -715,6 +736,8 @@ function hereEl(ctx) {
       h('div', { class: 'rn-job-head' }, h('b', null, cap(g.label)), h('span', { class: 'rn-pay' }, `${g.carried} on you · ${g.home} at home`)),
       h('p', { class: 'rn-thing-does' }, `A sale uses one, win or lose. Sells to ${g.sellsAt.map(x => `${cfg.places[x.place].label} (${range(x.pay)})`).join(', ')}. Bought from ${g.connect?.name ?? 'nobody'} ${cfg.places[g.at]?.where ?? ''}.`))))
       : h('p', { class: 'rn-note' }, 'None. A sale needs goods: buy a pack from a connect.'),
+    made ? [h('h3', { class: 'rn-sec-h' }, 'What you make'), made] : null,
+    makingsEl ? [h('h3', { class: 'rn-sec-h' }, 'What you cook with'), makingsEl, h('p', { class: 'rn-note' }, `Cooked at your crib on ${P.station?.label ?? 'a hot plate'}${P.station?.owned ? '' : ` (${money(P.station?.price ?? 0)}, ${cfg.places[P.station?.at]?.label ?? ''})`}: Cook, P.`)] : null,
     away.length ? [h('h3', { class: 'rn-sec-h' }, 'Sold elsewhere'), h('ul', { class: 'rn-stuff' }, away.map(({ c, e }) => h('li', { class: 'rn-thing is-away' },
       h('div', { class: 'rn-job-head' }, h('b', null, c ? `${cap(packWord(cfg, c.good))} of ${goodWord(cfg, c.good)} · ${cap(c.who.name)}` : `${cap(thingWord(e.label))}${e.keeper ? ` · ${cap(e.keeper.name)}` : ''}`), h('span', { class: 'rn-pay' }, money(c ? c.price : e.price))),
       h('div', { class: 'rn-job-odds' }, h('span', { class: 'hk-tag' }, `at ${(c ? c.placeLabel : cfg.places[e.place].label)}`), c ? trustMark({ ...c, name: c.who.name }, { short: true }) : null,

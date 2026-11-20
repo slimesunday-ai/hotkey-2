@@ -54,6 +54,10 @@ const FIELDS = {
   earlWay: x => x === null || typeof x === 'string',
   ammo: x => isObj(x) && Object.values(x).every(n => isInt(n) && n >= 0),
   holdWith: x => x === null || typeof x === 'string',
+  make: x => isObj(x) && Object.values(x).every(m => isObj(m) && isObj(m.book ?? {})),
+  under: x => isObj(x) && Object.values(x).every(rows => Array.isArray(rows) && rows.every(r => isObj(r) && typeof r.effect === 'string' && isInt(r.from) && isInt(r.until))),
+  belt: x => x === null || (isObj(x) && typeof x.good === 'string'),
+  floor: x => x === null || typeof x === 'string',
   route: x => x === null || (isObj(x) && Array.isArray(x.stops) && Array.isArray(x.hand)),
   home: x => isObj(x) && Array.isArray(x.marks) && Array.isArray(x.raids) && (x.raid === null || isObj(x.raid)) && (x.guard === null || isObj(x.guard)),
   books: x => isObj(x) && Object.values(x).every(n => isInt(n)),
@@ -107,9 +111,19 @@ export function loadRun(text, cfg = RUN_CONFIG) {
     // (raid-1: a version-11 save is read: no rounds, nothing chosen to hold, the Sixes' push and raids not begun)
     if (found === 11 && data.v === 11) {
       const sx = data.state.sixes ?? {};
-      data.state = { ...data.state, v: RUN_STATE_VERSION, ammo: {}, holdWith: null,
+      data.state = { ...data.state, v: 12, ammo: {}, holdWith: null,
         sixes: { ...sx, streak: 0, streakDay: null, raid: null, raids: [], truce: null, raidLast: null },
         books: { ammo: 0, ...(data.state.books ?? {}) } };
+      data.v = found = 12;
+    }
+    // (pot-1: a version-12 save is read: nothing made, nothing on the shelf of a maker, nobody under anything, the belt empty)
+    if (found === 12 && data.v === 12) {
+      data.state = { ...data.state, v: 13, make: {}, under: {}, belt: null };
+      data.v = found = 13;
+    }
+    // (bench-1: a version-13 save is read: nothing chosen to stand on the floor spot; the rest of its shape is this one's)
+    if (found === 13 && data.v === 13) {
+      data.state = { ...data.state, v: RUN_STATE_VERSION, floor: null };
       data.v = found = RUN_STATE_VERSION;
     }
     if (found !== RUN_STATE_VERSION || data.v !== found) {

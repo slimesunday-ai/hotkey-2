@@ -27,7 +27,16 @@ import { fullSupply } from './rules.mjs';
 // raids so far (`raids`), the truce after one held (`truce`, its last day) and the night of the last (`raidLast`), and
 // the rounds in the books (`books.ammo`), and in `home` the pieces a raid knocked out (`home.out`: piece → its last day
 // out, made when needed); a version-11 state reads as none of it (save.mjs loadRun)
-export const RUN_STATE_VERSION = 12;
+// 13: pot-1, making things (RUN.md "The pot (pot-1)"): each maker's own state (`make`: maker → { seen: the makings ever on
+// its shelf, book: { tried, found, names }, known: the dirty batches found out, cooked: day → cooks, for the smell }), who
+// is under what until when (`under`: person → rows, effects.mjs), and what is on your belt (`belt`: a made thing on you,
+// never for sale); the makings and the bags themselves are goods (`goods`, `stash`); a version-12 state reads as none of
+// it (save.mjs loadRun)
+// 14: bench-1, the bench and the bottle (RUN.md "The bench and the bottle (bench-1)"): what stands on the trailer's floor
+// spot (`floor`: null, the first piece you own that stands there); the bench's shelf and book are `make.bench`, its
+// fillings and bottles goods, a blue man a row of `under` (effect 'tagged', with what he took and whether you went for
+// it); a version-13 state reads as nothing on the floor spot chosen (save.mjs loadRun)
+export const RUN_STATE_VERSION = 14;
 
 export function newRun({ seed = 1, cfg = RUN_CONFIG } = {}) {
   return {
@@ -75,6 +84,12 @@ export function newRun({ seed = 1, cfg = RUN_CONFIG } = {}) {
     // (raid-1) the rounds you own for each gun, and what you hold at your door when the Sixes come (null: rules raid.mjs holdOf)
     ammo: {},
     holdWith: null,
+    // (pot-1) each maker's shelf facts and book (the bags and makings are goods), who is under what, the belt
+    make: {},
+    under: {},
+    belt: null,
+    // (bench-1) the piece standing on the floor spot (null: the first you own that stands there)
+    floor: null,
     // on a route between two places (RUN.md, "Routes"): { id, from, to, way, stops, at, hand }, `place` then the stop
     // you are at, `at` its index in `stops` and `hand` the cards it dealt you still to play; null at a place
     route: null,
@@ -124,6 +139,11 @@ export function copyRun(state) {
   out.home = { marks: (h.marks ?? []).map(m => ({ ...m })), raid: h.raid ? { ...h.raid, started: h.raid.started ? { ...h.raid.started } : null } : null,
     last: h.last ?? null, guard: h.guard ? { ...h.guard } : null, raids: (h.raids ?? []).map(r => ({ ...r })), ...(h.dog ? { dog: { ...h.dog } } : {}), ...(h.out ? { out: { ...h.out } } : {}) };
   out.route = state.route ? { ...state.route, stops: [...state.route.stops], hand: [...state.route.hand] } : null;
+  out.make = Object.fromEntries(Object.entries(state.make ?? {}).map(([k, m]) => [k, { seen: { ...(m.seen ?? {}) }, book: { tried: { ...(m.book?.tried ?? {}) }, found: { ...(m.book?.found ?? {}) }, names: { ...(m.book?.names ?? {}) } },
+    known: { ...(m.known ?? {}) }, cooked: { ...(m.cooked ?? {}) } }]));
+  out.under = Object.fromEntries(Object.entries(state.under ?? {}).map(([k, rows]) => [k, rows.map(r => ({ ...r, by: { ...(r.by ?? {}) } }))]));
+  out.belt = state.belt ? { ...state.belt } : null;
+  out.floor = state.floor ?? null;
   if (state.rig) out.rig = { rolls: [...(state.rig.rolls ?? [])], chances: [...(state.rig.chances ?? [])] };
   return out;
 }

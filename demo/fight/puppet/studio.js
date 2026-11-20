@@ -1,6 +1,7 @@
 // THE FIGHT'S STUDIO (anim-1): two or three of the stage's own people stood on open ground and posed from a fight's
 // score at any moment asked for, for the picture tools (demo/tools/fight-sheet.mjs) and for looking at a move while it
-// is being made. Not part of the game: a page loads it only when a tool asks (import('/demo/fight/puppet/studio.js')).
+// is being made. Not part of the game: a page loads it only when a tool asks (by its address under the page's own folder,
+// demo/fight/puppet/studio.js, never from the server's root: the page may be served from a sub-folder).
 //
 //   const S = await createStudio({ stage, city })
 //   S.cast(n)                  n of the stage's people (the player first) taken in hand, on a mark of open ground

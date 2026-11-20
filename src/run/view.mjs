@@ -17,7 +17,11 @@ import {
   armOf, armsOf, armLabel, knows, taughtAt, sentFor,
   defVal, defBy, dogOf, raidKind, earlWayOf, earlWayWords, crewOdds, sixesOf, sixesStateOf, sixesGround, sixesJob, taxOf,
   taxPctOf, personOf,
+  isBought, isMade, isMaking, shownAs, shownGoods, goodLabel, offDays, hates,
 } from './rules.mjs';
+import { makersOf, stationOf, carrierOf, cookOptions, cookOdds, smellOf, shelfOf, bookOf, liftsAt, madeWords, underView, placeChips, productById, productName, makeState, effectLines, bottleOn, floorOf } from './make.mjs';
+import { bluesAt, blueChance, blueOf, blueWho, backOf } from './rules.mjs';
+import { clockOf, clockAt, rowOn } from './effects.mjs';
 import { gunsOf, gunThings, gunWords, holdsOf, holdOf, holdLabel, roundsOf, stakeOf, crewFoes, raidChance, homeWorth, raidAtOf, thingsAtRisk, hiddenOf } from './raid.mjs';
 import { libraryOf, thingOf, shelvesHere, shelvesOn, libraryView } from './library.mjs';
 import { aheadOf } from './ahead.mjs';
@@ -103,8 +107,10 @@ function jobEntry(cfg, state, job, tell = riskOfTelling(cfg, state)) {
     withPay: friend,
     // a selling job: the good it would use (one sale's worth, win or lose), what a sale of it cost you, and what is left
     // on you after; and every good you carry that it takes, with its pay here (name one as { do: 'job', id, good })
-    uses: job.good ? { good: job.good, label: cfg.goods[job.good].label, n: 1, cost: perSale(cfg, job.good), carried: goodsOn(state, job.good), left: goodsOn(state, job.good) - 1, home: goodsHome(state, job.good) } : null,
-    goodsHere: (job.goodsHere ?? []).map(x => ({ good: x.good, label: x.label, pay: x.pay, cost: x.cost, carried: x.carried, choice: { do: 'job', id: job.id, good: x.good } })),
+    // (pot-1: a made good as it shows, with what it will do to them: `made`, "Zonked: she'll sleep 3 h")
+    uses: job.good ? { good: job.good, label: goodLabel(cfg, state, job.good), n: 1, cost: perSale(cfg, job.good), carried: shownGoods(cfg, state, state.goods)[job.good] ?? 0, left: (shownGoods(cfg, state, state.goods)[job.good] ?? 0) - 1, home: shownGoods(cfg, state, state.stash)[job.good] ?? 0,
+      ...(isMade(cfg, job.good) ? { made: madeWords(cfg, state, job.good, job.who) } : {}) } : null,
+    goodsHere: (job.goodsHere ?? []).map(x => ({ good: x.good, label: x.label, pay: x.pay, cost: x.cost, carried: x.carried, choice: { do: 'job', id: job.id, good: x.good }, ...(x.made ? { made: madeWords(cfg, state, x.good, job.who) } : {}) })),
     // the chance someone here against you calls it in, if it heats the place (null: it cannot be told on)
     tellRisk: canHeat(job) ? tell : null,
     // on the street your crib opens onto: how it would move the pressure at home, win and fail (null elsewhere, or none)
@@ -181,9 +187,9 @@ function wayRisk(cfg, state, way, legs) {
   const goods = someGoods(state.goods);
   const worth = goodsWorth(cfg, goods);
   const ground = [...new Set(d.legs.filter(l => l.rolls).map(l => l.ground))];
-  const on = `$${state.carried}${worth ? ` and ${goodsText(cfg, goods)} (worth $${worth})` : ''}`;
+  const on = `$${state.carried}${worth ? ` and ${goodsText(cfg, goods, state)} (worth $${worth})` : ''}`;
   const text = !d.jump.chance && !d.stop.chance ? `Nothing acts on you on the way (on you: ${on}).`
-    : [`On the way, carrying ${on}:`, d.jump.chance ? `${d.jump.chance}% jumped (${d.jump.bad}% a bad one: $${d.jump.takes.bad}${Object.keys(d.jump.takesGoods.bad).length ? ` and ${goodsText(cfg, d.jump.takesGoods.bad)}` : ''}, and the clinic; ${d.jump.scuffle}% a scuffle: $${d.jump.takes.scuffle})` : null,
+    : [`On the way, carrying ${on}:`, d.jump.chance ? `${d.jump.chance}% jumped (${d.jump.bad}% a bad one: $${d.jump.takes.bad}${Object.keys(d.jump.takesGoods.bad).length ? ` and ${goodsText(cfg, d.jump.takesGoods.bad, state)}` : ''}, and the clinic; ${d.jump.scuffle}% a scuffle: $${d.jump.takes.scuffle})` : null,
       d.stop.chance ? `${d.stop.chance}% stopped by the police (all of it)` : null].filter(Boolean).join(' ') + `${ground.length ? `, crossing ${ground.map(g => placeOf(cfg, g).label).join(' and ')}` : ''}.`;
   return { ...d, atStake: { cash: state.carried, goods, worth }, text };
 }
@@ -330,7 +336,8 @@ function streetMoves(cfg, state, add, tell = riskOfTelling(cfg, state)) {
       { kind: 'move', what: 'pack', good: c.good, who: c.who, spot: c.spot, price: c.price, basePrice: c.basePrice, off: c.off, sales: c.sales, left: c.left, hours: 0 });
   }
   // (the things that defend your home are listed after every older move: homeMoves)
-  for (const t of thingsAt(cfg, place).filter(x => !x.defends)) {
+  // (pot-1: a `late` thing with no `defends`, the hot plate, is listed after every older move: potMoves)
+  for (const t of thingsAt(cfg, place).filter(x => !x.defends && !x.late)) {
     add(`Buy ${t.label} ($${t.price})`, { do: 'get', item: t.item },
       state.things?.[t.item] ? 'owned' : state.carried < t.price ? `you carry $${state.carried}${p.door ? '; step inside for cash' : ''}` : null,
       { kind: 'move', what: 'get', item: t.item, thing: t.kind, slot: t.slot ?? null, price: t.price, keeper: t.keeper ?? null, spot: t.spot ?? null, hours: 0 });
@@ -367,7 +374,9 @@ export function listChoices(cfg, state) {
     // goods at home come out with you unless the choice says how many (`goods: { good: n }`)
     add('Step out', { do: 'out', take: 0 }, state.energy < hour ? 'no energy left: sleep' : null,
       { kind: 'move', takeOut: { min: 0, max: state.banked, default: 0 },
-        takeGoods: Object.fromEntries(Object.entries(someGoods(state.stash)).map(([g, n]) => [g, { min: 0, max: n, default: n }])) });
+        // (pot-1: as they show; what you cook with stays home unless asked for: its default is 0)
+        takeGoods: Object.fromEntries(Object.entries(shownGoods(cfg, state, state.stash)).map(([g, n]) => [g, { min: 0, max: n, default: isMaking(cfg, g) ? 0 : n,
+          ...(isMaking(cfg, g) ? { making: true, label: goodLabel(cfg, state, g) } : {}), ...(isMade(cfg, g) ? { made: true, label: goodLabel(cfg, state, g) } : {}) }])) });
     add('Sleep', { do: 'sleep' }, null, { kind: 'move' });
     // what you own to wear: put on or take off, for nothing
     for (const [item, t] of Object.entries(cfg.things ?? {})) {
@@ -415,6 +424,12 @@ export function listChoices(cfg, state) {
   sliceMoves(cfg, state, add);
   // (raid-1, after everything older: the guns, their rounds and the raid's pieces sold where you stand; what you hold)
   raidMoves(cfg, state, add);
+  // (pot-1, after everything older: the hot plate and the makings sold where you stand, the Cook move at your crib, a
+  // sleeper's wallet where you stand, the belt, and the names you give)
+  potMoves(cfg, state, add);
+  // (bench-1, after everything older: the workbench and the dye pack sold where you stand, what stands on the floor spot,
+  // and the blue man's card where he is)
+  benchMoves(cfg, state, add);
   // (sixes-1: Dutch waiting by the steps: pay her or refuse; nothing else until then)
   if (sixesStateOf(state).tax) {
     const why = `${personName(cfg, cfg.sixes.dutch)} is waiting on the kerb: pay her or refuse first`;
@@ -563,7 +578,8 @@ function placesView(cfg, state) {
         : police ? `${name} is quiet; the police patrol it.` : `${name} is quiet.`;
     // the chance of a stop there for you, an hour from now, as things stand
     const stop = stopChance(cfg, state, id);
-    return { place: id, label: p.label, block: p.block ?? null, tier: p.tier, heat, hot, police, stopPct: stop, here: streetOf(cfg, state.place) === id, supply, text };
+    // (pot-1) who there is under what now, as chips ("asleep 2 · dancing 3")
+    return { place: id, label: p.label, block: p.block ?? null, tier: p.tier, heat, hot, police, stopPct: stop, here: streetOf(cfg, state.place) === id, supply, text, under: cfg.make ? placeChips(cfg, state, id) : [] };
   });
 }
 
@@ -702,6 +718,16 @@ export function view(cfg, state) {
     // (raid-1) WORTH: what your home is worth to whoever comes for it, every kind of holding a row (raid.mjs homeWorth):
     // the meter beside HOME and SIXES, with the size of crew it brings and the next step
     worth: cfg.worth ? worthView(cfg, state) : null,
+    // (pot-1, RUN.md "The pot (pot-1)") MAKING THINGS: every maker (a workshop: its station, its shelf, its book, its
+    // carriers), the pot's screen (what is on the shelf, what each choice would make, the odds, the smell, the strongest
+    // reason to cook), and who is under what until when
+    make: cfg.make ? makeView(cfg, state, choices) : null,
+    pot: cfg.make ? potView(cfg, state, choices) : null,
+    under: cfg.make ? underView(cfg, state) : [],
+    // (bench-1, RUN.md "The bench and the bottle (bench-1)") EVERY WORKSHOP'S SCREEN, one each (the switch at the top:
+    // KITCHEN · BENCH), and the blue men: who is blue, where, until when, and the card to take it back where he is.
+    // (only with the bench in the rules: RUN_CONFIG, the page's, has none of it until its screens exist)
+    ...(cfg.make?.makers?.bench ? { making: Object.fromEntries(makersOf(cfg).map(m => [m, potView(cfg, state, choices, m)])), blue: blueView(cfg, state, choices) } : {}),
     // (tree-1) WHAT'S AHEAD: every way to fight, every piece of gear, every piece for the home and every place, as a tree:
     // what each does in the game's numbers, what it opens, yours or not, and where and from whom it is had (ahead.mjs).
     // Without the fight numbers, which the page asks for one at a time (ahead.mjs aheadCell)
@@ -957,7 +983,8 @@ function dryNote(cfg, state, choices) {
 
 /** Each good of the city: on you, at home, what a sale cost, where it is bought and from whom. */
 function goodsView(cfg, state) {
-  return Object.entries(cfg.goods ?? {}).map(([g, d]) => {
+  // (pot-1: the goods bought from a connect; what you make and make it with is the view's `make`)
+  return Object.entries(cfg.goods ?? {}).filter(([g]) => isBought(cfg, g)).map(([g, d]) => {
     const c = connectFor(cfg, g);
     const on = goodsOn(state, g);
     const home = goodsHome(state, g);
@@ -986,9 +1013,15 @@ function sellingNote(cfg, state) {
   if (!p.jobs) return null;
   const able = new Set(jobPool(cfg, state).map(j => j.id));
   const jobs = Object.entries(p.jobs).filter(([, j]) => j.goods).map(([id, j]) => {
-    const takes = Object.keys(j.goods).map(g => ({ good: g, label: cfg.goods[g].label, pay: j.goodsPay[g], carried: goodsOn(state, g), home: goodsHome(state, g), at: connectFor(cfg, g).place, connect: connectFor(cfg, g).who }));
+    // (pot-1: the goods bought from a connect, and what you made that it takes, as it shows)
+    const shownOn = shownGoods(cfg, state, state.goods);
+    const shownHome = shownGoods(cfg, state, state.stash);
+    const takes = Object.keys(j.goods).filter(g => isBought(cfg, g) || (isMade(cfg, g) && shownAs(cfg, state, g) === g && (shownOn[g] || shownHome[g])))
+      .map(g => ({ good: g, label: goodLabel(cfg, state, g), pay: j.goodsPay[g], carried: shownOn[g] ?? 0, home: shownHome[g] ?? 0, ...(isMade(cfg, g) ? { made: true, at: null, connect: null } : { at: connectFor(cfg, g).place, connect: connectFor(cfg, g).who }) }));
     const has = able.has(id);
-    const buy = takes.map(t => `${t.connect?.name ?? 'nobody'} sells ${t.label} ${whereOf(cfg, t.at)}`).join('; ');
+    // (what you cook is said only to a player who cooks: the station owned, or something made on the shelf)
+    const cooks = !!j.made && (makersOf(cfg).some(m => stationOf(cfg, state, m)?.owned) || takes.some(t => t.made));
+    const buy = [...takes.filter(t => !t.made).map(t => `${t.connect?.name ?? 'nobody'} sells ${t.label} ${whereOf(cfg, t.at)}`), ...(cooks ? ['what you cook at your crib sells here too'] : [])].join('; ');
     const home = takes.filter(t => t.home);
     const text = has ? `${j.label}: you carry ${takes.filter(t => t.carried).map(t => `${t.carried} ${t.label}`).join(', ')}.`
       : `${j.label} is not dealt: you carry nothing it takes.${home.length ? ` You left ${home.map(t => `${t.home} ${t.label}`).join(', ')} at home.` : ''} ${buy}.`;
@@ -1002,10 +1035,10 @@ function atRiskView(cfg, state, d) {
   const goods = someGoods(state.goods);
   const worth = goodsWorth(cfg, goods);
   const base = { cash: state.carried, goods, worth };
-  if (!d.here) return { ...base, here: false, text: state.carried || worth ? `On you: $${state.carried}${worth ? ` and ${goodsText(cfg, goods)}` : ''}. Nothing acts on you here.` : 'Nothing on you.' };
+  if (!d.here) return { ...base, here: false, text: state.carried || worth ? `On you: $${state.carried}${worth ? ` and ${goodsText(cfg, goods, state)}` : ''}. Nothing acts on you here.` : 'Nothing on you.' };
   const j = d.jump;
-  const text = [`On you: $${state.carried}${worth ? ` and ${goodsText(cfg, goods)} (worth $${worth})` : ''}.`,
-    j.chance ? `Jumped (${j.chance}% this hour): a bad one takes $${j.takes.bad}${Object.keys(j.takesGoods.bad).length ? ` and ${goodsText(cfg, j.takesGoods.bad)}` : ''}, a scuffle $${j.takes.scuffle}${Object.keys(j.takesGoods.scuffle).length ? ` and ${goodsText(cfg, j.takesGoods.scuffle)}` : ''}.` : null,
+  const text = [`On you: $${state.carried}${worth ? ` and ${goodsText(cfg, goods, state)} (worth $${worth})` : ''}.`,
+    j.chance ? `Jumped (${j.chance}% this hour): a bad one takes $${j.takes.bad}${Object.keys(j.takesGoods.bad).length ? ` and ${goodsText(cfg, j.takesGoods.bad, state)}` : ''}, a scuffle $${j.takes.scuffle}${Object.keys(j.takesGoods.scuffle).length ? ` and ${goodsText(cfg, j.takesGoods.scuffle, state)}` : ''}.` : null,
     d.stop.chance ? `Stopped (${d.stop.chance}% this hour): all of it, and heat ${d.stop.heatAfter} after jail.` : null].filter(Boolean).join(' ');
   return { ...base, here: true, jump: { chance: j.chance, bad: { cash: j.takes.bad, goods: j.takesGoods.bad }, scuffle: { cash: j.takes.scuffle, goods: j.takesGoods.scuffle } }, stop: { chance: d.stop.chance, cash: d.stop.seizes, goods: d.stop.seizesGoods, heatAfter: d.stop.heatAfter }, text };
 }
@@ -1124,4 +1157,217 @@ function worthView(cfg, state) {
   return { ...w, max: w.steps.length ? w.steps[w.steps.length - 1] : null, crew: sizes[w.size] ?? null, raidAt: cfg.sixesRaid ? raidAtOf(cfg) : null,
     atRisk: thingsAtRisk(cfg, state).map(x => ({ ...x, hidden: h.things.includes(x.item) })), hidden: { ...h, things: [...h.things] },
     text: `${w.text} ${w.next != null ? `At $${w.next} the Sixes would send ${sizes[w.size + 1]}.` : 'The Sixes would send their biggest crew.'}` };
+}
+
+/**
+ * (pot-1) The moves of making things, after every older one: the hot plate sold where you stand (`late: 'pot'`), each
+ * making sold where you stand (from what you carry, no hour, from somebody not against you), a sleeper's wallet where
+ * you stand (sure, an hour), and at your crib the Cook move (one choice for every set of makings the carrier could take
+ * from what is at the crib: an hour), the belt (a made thing on you, never for sale: free), and a name for each product
+ * of two or more you have found (kind 'set', free, any time).
+ */
+function potMoves(cfg, state, add) {
+  const X = cfg.make;
+  if (!X) return;
+  const here = placeOf(cfg, state.place);
+  const hour = cfg.energy.perHour;
+  const short = price => (state.carried < price ? `you carry $${state.carried}${here.door ? '; step inside for cash' : ''}` : null);
+  if (here.tier && !here.locked && !state.route) {
+    for (const t of thingsAt(cfg, state.place).filter(x => x.late === 'pot')) {
+      const keeper = (here.people ?? []).find(p => p.id === t.keeper);
+      add(`Buy ${t.label} ($${t.price}): ${t.does.toLowerCase()}`, { do: 'get', item: t.item }, state.things?.[t.item] ? 'owned' : short(t.price),
+        { kind: 'move', what: 'get', item: t.item, thing: t.kind, station: t.station ?? null, does: t.does, oneJob: t.job ?? null, inTrailer: t.inTrailer ?? null, price: t.price, keeper: t.keeper ?? null, keeperName: keeper?.name ?? null, spot: t.spot ?? null, hours: 0 });
+    }
+    for (const [k, m] of Object.entries(X.makings)) {
+      if (m.at !== state.place) continue;
+      const keeper = personOf(cfg, m.keeper);
+      const off = keeper ? offDays(cfg, state, keeper.id) : 0;
+      const E = X.effects[m.effect];
+      // (bench-1: a filling says what it does in a bottle, its own `does`)
+      const does = m.does ?? `${cap(E.words)}, ${E.hours} hours`;
+      add(`Buy ${m.pack} from ${keeper?.name ?? 'the seller'} ($${m.price}): ${m.does ? `${m.does[0].toLowerCase()}${m.does.slice(1)}` : `${E.words}, ${E.hours} hours`}`, { do: 'making', item: k },
+        off ? `${cap(keeper.name)} won't sell to you: against you, ${off} day${off > 1 ? 's' : ''}` : short(m.price),
+        { kind: 'move', what: 'making', item: k, maker: m.maker, making: m.label, pack: m.pack, family: m.family, colour: X.families?.[m.family] ?? null, effect: m.effect, does,
+          price: m.price, keeper: keeper ? whoOf(keeper) : null, spot: m.spot ?? null, on: goodsOn(state, k), home: goodsHome(state, k), piece: m.piece ?? null, hours: 0 });
+    }
+    for (const L of liftsAt(cfg, state)) {
+      add(`${L.label} (sure: ${money(L.pay)}; ${L.who.name} will know who sold it)`, { do: 'lift', who: L.who.id }, state.energy < hour ? 'no energy left' : null,
+        { kind: 'move', what: 'lift', who: L.who, effect: L.effect, until: L.until, untilClock: L.untilClock, pay: L.pay, odds: 100, sure: true, hours: 1, energy: hour, mark: L.mark, trust: L.trust, product: L.product,
+          markText: `won't buy from you for ${cfg.memory?.days ?? 7} days`, pressure: pressureMove(cfg, state, { win: L.pressure }, true) });
+    }
+  }
+  if (here.home) {
+    for (const maker of makersOf(cfg)) {
+      const st = stationOf(cfg, state, maker);
+      if (!st?.owned) continue;
+      // (bench-1: the workshop's own verb, "Pack" at the bench; a station on the floor spot works only while it stands there)
+      const verb = X.makers[maker].verb ?? 'Cook';
+      const unit = X.kinds[carrierOf(cfg, maker)?.gives]?.unit ?? 'bag';
+      for (const o of cookOptions(cfg, state, maker)) {
+        const why = st.out ? `${cap(st.label)} is smashed: no use until day ${st.out + 1}` : !st.stands ? `${cap(st.label)} is not on the floor spot: set it up there first (an hour)` : state.energy < hour ? 'no energy left: sleep' : null;
+        add(`${verb} ${o.name} (${o.with.map(k => X.makings[k]?.label ?? `a bag of ${goodLabel(cfg, state, k)}`).join(' and ')}): ${o.bags} ${unit}s, an hour`, o.choice, why,
+          { kind: 'move', what: 'cook', maker, carrier: o.choice.carrier, with: [...o.with], product: o.product, name: o.name, lines: o.lines, short: o.short, rarity: o.rarity, families: o.families, bags: o.bags,
+            cost: o.cost, tried: o.tried, found: o.found, turns: o.turns, reacts: o.reacts, odds: o.odds, smell: o.smell, hours: 1, energy: hour,
+            ...(o.bag ? { bag: o.bag } : {}), ...(o.fight ? { fight: o.fight, unit, verb } : {}) });
+      }
+    }
+    // the belt: one made thing on you, never offered for sale (config make.belt)
+    const B = X.belt;
+    if (B) {
+      if (state.belt) add(`Take ${goodLabel(cfg, state, shownAs(cfg, state, state.belt.good))} off your belt (back on the shelf)`, { do: 'unbelt' }, null, { kind: 'move', what: 'belt', good: shownAs(cfg, state, state.belt.good), on: true, hours: 0 });
+      else for (const [g, n] of Object.entries(shownGoods(cfg, state, state.stash))) {
+        if (!isMade(cfg, g) || !B.takes.includes(cfg.goods[g].kind)) continue;
+        // (bench-1: a bottle on your belt is thrown first in a fight of several: its lines say what it does there)
+        const bottle = cfg.goods[g].kind !== 'bag' ? { lines: effectLines(cfg, productById(cfg, cfg.goods[g].product)) } : null;
+        add(`Put a ${cfg.goods[g].unit} of ${goodLabel(cfg, state, g)} on your belt: ${bottle ? 'thrown first when several of them come at you' : 'on you, never sold'}`, { do: 'belt', good: g }, null, { kind: 'move', what: 'belt', good: g, home: n, on: false, hours: 0, ...(bottle ? { bottle } : {}) });
+      }
+    }
+  }
+  // the names: a product of two or more you have found (no hour, anywhere)
+  for (const maker of makersOf(cfg)) {
+    for (const [id] of Object.entries(makeState(state, maker).book.found)) {
+      const p = productById(cfg, id);
+      if (!p?.names) continue;
+      add(`Name ${productName(cfg, state, id)}`, { do: 'name', product: id, name: productName(cfg, state, id) }, null,
+        { kind: 'set', what: 'name', product: id, maker, name: productName(cfg, state, id), named: !!makeState(state, maker).book.names[id], default: p.name, max: X.names?.max ?? 24, hours: 0 });
+    }
+  }
+}
+
+/** The belt for the page: what is on it (as it shows); (bench-1) a bottle: what it does in a fight, thrown first, its cloud's colour. */
+function beltView(cfg, state) {
+  if (!state.belt) return null;
+  const b = bottleOn(cfg, state);
+  return { good: shownAs(cfg, state, state.belt.good), name: goodLabel(cfg, state, shownAs(cfg, state, state.belt.good)), n: state.belt.n ?? 1, choice: { do: 'unbelt' },
+    ...(b ? { bottle: { product: b.product, lines: [...b.lines], fight: JSON.parse(JSON.stringify(b.fight)), tags: b.tags, cloud: b.cloud, colours: [...b.colours], fights: [...(cfg.make.bottle?.fights ?? [])] } } : {}) };
+}
+/** (pot-1) Every maker for the page (the making screen's switch, the book's pages, the Make tree's groups). */
+function makeView(cfg, state, choices) {
+  const makers = makersOf(cfg).map(m => {
+    const st = stationOf(cfg, state, m);
+    const carriers = Object.entries(cfg.make.makers[m].carriers).map(([id, c]) => ({ id, label: c.label, takes: [...c.takes], slots: c.slots, gives: c.gives, n: c.n, hours: c.hours }));
+    return { id: m, label: cfg.make.makers[m].label, verb: cfg.make.makers[m].verb ?? 'Cook', station: st, open: !!st?.works, carriers, shelf: shelfOf(cfg, state, m), book: bookOf(cfg, state, m) };
+  });
+  const belt = beltView(cfg, state);
+  return { makers, smell: smellOf(cfg, state), belt, effects: Object.fromEntries(Object.entries(cfg.make.effects).map(([k, e]) => [k, { label: e.label, words: e.words, hours: e.hours, bad: !!e.bad, look: { ...(e.look ?? {}) }, place: e.place ? { ...e.place } : null, person: e.person ? { ...e.person } : null }])) };
+}
+
+/**
+ * (pot-1) THE POT'S SCREEN: the maker shown (the switch: every maker, the one shown first that you can use), its station,
+ * the carrier, the shelf (what you have of each making, greyed with who sells it when you have none), every set the
+ * carrier could take now with its label (what it makes, in the effect's own words; the odds; the bags; the smell after;
+ * tried before or not), the odds of a batch as they stand, the smell now, the energy before and after, and the strongest
+ * reason to cook today in one line.
+ */
+function potView(cfg, state, choices, shownMaker = null) {
+  const X = cfg.make;
+  const all = makersOf(cfg);
+  // (bench-1: a workshop asked for (v.making, one screen each); else the first you can use, as before)
+  const maker = shownMaker ?? all.find(m => stationOf(cfg, state, m)?.owned) ?? all[0];
+  const bench = X.makers[maker].smells === false;
+  const unit = X.kinds[carrierOf(cfg, maker)?.gives]?.unit ?? 'bag';
+  const st = stationOf(cfg, state, maker);
+  const C = carrierOf(cfg, maker);
+  const shelf = shelfOf(cfg, state, maker);
+  const options = cookOptions(cfg, state, maker).map(o => {
+    const c = choices.find(x => x.choice.do === 'cook' && x.choice.maker === maker && x.choice.with.join('+') === o.with.join('+'));
+    return { ...o, key: c?.key ?? null, available: !!c?.available, why: c?.why ?? (state.place !== homeId(cfg) ? `${(X.makers[maker].verb ?? 'Cook').toLowerCase()} at your crib` : !st?.owned ? `you need ${st?.label ?? 'the station'}` : null) };
+  });
+  const missing = shelf.makings.filter(m => !m.home).map(m => ({ item: m.item, label: m.label, keeper: m.keeper, at: m.at, atLabel: m.atLabel, spot: m.spot, price: m.price, text: `${cap(m.label)}: ${m.keeper?.name ?? 'nobody'} ${placeOf(cfg, m.at).where ?? `at ${m.atLabel}`}, $${m.price}` }));
+  const book = bookOf(cfg, state, maker);
+  const blanks = book.sets.filter(x => !x.tried && x.makings.length > 1 && x.makings.every(k => goodsHome(state, k) > 0));
+  const bags = shelf.made.reduce((a, r) => a + r.home + r.on, 0);
+  // (bench-1: the bench's own reasons: an empty belt, the bottles left)
+  const beltEmpty = bench && !state.belt;
+  const reason = !st?.owned ? { why: 'station', text: `${cap(st?.label ?? 'a station')}: $${st?.price ?? '?'} from ${personOf(cfg, st?.keeper)?.name ?? 'somebody'} ${placeOf(cfg, st?.at).where ?? ''}.`.replace(' .', '.') }
+    : !options.length ? { why: 'empty', text: `Nothing to ${bench ? 'pack' : 'cook'} with at home. ${missing.map(m => m.text).join('; ')}.` }
+      : blanks.length ? { why: 'blank', text: `A blank in your book: you have never put ${blanks[0].makings.map(k => X.makings[k].label).join(' and ')} together.` }
+        : bench && beltEmpty && !bags ? { why: 'belt', text: 'Nothing on your belt: a bottle on it is thrown first when two jump you, when a crew comes to your door, on the kerb.' }
+          : bench ? (bags < 2 ? { why: 'low', text: `${bags ? 'One bottle' : 'No bottles'} left: one is thrown in every fight of several.` } : { why: 'stocked', text: `${bags} bottles on the shelf: one at a time on your belt.` })
+            : bags < 4 ? { why: 'low', text: `${bags ? `Only ${bags} bag${bags > 1 ? 's' : ''}` : 'No bags'} left: a buyer a day at the bus stop, four in the crowd.` }
+              : { why: 'stocked', text: `${bags} bags on the shelf already: what is at home counts in what your home is worth.` };
+  const odds = cookOdds(cfg, state, maker, []);
+  const smell = bench ? null : smellOf(cfg, state);
+  const after = bench ? null : smellOf(cfg, state, { cooking: 1 });
+  return {
+    maker, label: X.makers[maker].label, verb: X.makers[maker].verb ?? 'Cook', unit, makers: all.map(m => ({ id: m, label: X.makers[m].label, shown: m === maker, open: !!stationOf(cfg, state, m)?.works })),
+    station: st, open: state.place === homeId(cfg) && !!st?.works, carrier: C ? { id: C.id, label: C.label, takes: [...C.takes], slots: C.slots, gives: C.gives, n: C.n, hours: C.hours, seconds: C.scene?.seconds ?? null } : null,
+    shelf, missing, options, odds: { ...odds, could: [...odds.could] }, smell, smellAfter: after ? { level: after.level, until: after.until } : null,
+    energy: { now: state.energy, after: Math.max(0, state.energy - cfg.energy.perHour) }, hours: C?.hours ?? 1, reason, book: { tried: book.tried, of: book.of, found: book.found.length },
+    ...(bench ? { floor: floorView(cfg, state, choices), belt: beltView(cfg, state) } : {}),
+    text: `${cap(X.makers[maker].label)}: ${options.length ? `${options.length} thing${options.length > 1 ? 's' : ''} you could ${bench ? 'pack' : 'cook'}` : `nothing to ${bench ? 'pack' : 'cook'}`}. ${reason.text}`,
+  };
+}
+
+/**
+ * (bench-1) The moves of the bench, after every older one: the workbench and the dye pack sold where you stand (each with
+ * its one job), what stands on the floor spot (an hour at your crib: another piece you own that stands there), and the
+ * blue man's card where he is ("Take it back off the blue man": an hour, a fight you start).
+ */
+function benchMoves(cfg, state, add) {
+  if (!cfg.make?.makers?.bench) return;
+  const here = placeOf(cfg, state.place);
+  const hour = cfg.energy.perHour;
+  if (here.tier && !here.locked && !state.route) {
+    for (const t of thingsAt(cfg, state.place).filter(x => x.late === 'bench')) {
+      const keeper = (here.people ?? []).find(p => p.id === t.keeper);
+      const short = state.carried < t.price ? `you carry $${state.carried}${here.door ? '; step inside for cash' : ''}` : null;
+      add(`Buy ${t.label} ($${t.price}): ${t.does.toLowerCase()}`, { do: 'get', item: t.item }, state.things?.[t.item] ? 'owned' : short,
+        { kind: 'move', what: 'get', item: t.item, thing: t.kind, station: t.station ?? null, floor: !!t.floor, needs: t.needs ?? null, does: t.does, oneJob: t.job ?? null, inTrailer: t.inTrailer ?? null, price: t.price, keeper: t.keeper ?? null, keeperName: keeper?.name ?? null, spot: t.spot ?? null, hours: 0 });
+    }
+    for (const x of bluesAt(cfg, state)) {
+      const c = blueChance(cfg, state, x.row);
+      const d = blueOf(cfg, state, x.row);
+      const got = [x.back.cash ? `$${x.back.cash}` : null, Object.keys(x.back.goods).length ? goodsText(cfg, x.back.goods, state) : null].filter(Boolean).join(' and ') || 'nothing';
+      const label = cfg.make.bottle.blue.label.replace('{who}', x.who.name);
+      add(`${label} (${c.text}: ${got})`, { do: 'takeBack', who: x.id }, state.energy < hour + cfg.duel.cost.lose ? 'not enough energy for a fight' : null,
+        { kind: 'move', what: 'takeBack', who: x.who, place: state.place, took: { cash: x.took.cash, goods: { ...x.took.goods } }, back: { cash: x.back.cash, goods: { ...x.back.goods } },
+          fight: { pct: c.pct, in10: c.in10, n: c.n, byArm: { ...c.byArm }, you: d.you, them: d.them, costs: { ...cfg.duel.cost }, text: `a fight: ${c.text}` },
+          heat: cfg.make.bottle.blue.heat ?? 0, until: x.row.until, untilClock: clockAt(x.row.until).clock, untilDay: clockAt(x.row.until).day, hours: 1, energy: hour });
+    }
+  }
+  if (here.home) {
+    const f = floorOf(cfg, state);
+    if (f.pieces.length > 1) {
+      for (const item of f.pieces) {
+        if (item === f.standing) continue;
+        add(`Set up ${cfg.things[item].label} on the floor spot (an hour; ${cfg.things[f.standing].label.replace(/^an? /, 'the ')} goes aside)`, { do: 'floor', item }, state.energy < hour ? 'no energy left: sleep' : null,
+          { kind: 'move', what: 'floor', item, standing: f.standing, hours: 1, energy: hour });
+      }
+    }
+  }
+}
+
+/** (bench-1) The floor spot for the page: the pieces you own that stand on it, the one standing, and the move to change. */
+function floorView(cfg, state, choices) {
+  const f = floorOf(cfg, state);
+  return { pieces: f.pieces.map(item => {
+    const c = choices.find(x => x.choice.do === 'floor' && x.choice.item === item);
+    return { item, label: cfg.things[item].label, station: cfg.things[item].station ?? null, standing: item === f.standing, key: c?.key ?? null, available: !!c?.available, why: c?.why ?? null, choice: item === f.standing ? null : { do: 'floor', item } };
+  }), standing: f.standing, hours: 1,
+  text: f.standing ? `${cap(cfg.things[f.standing].label.replace(/^an? /, 'the '))} stands on the floor spot${f.pieces.length > 1 ? ': changing it over is an hour' : ''}.` : 'Nothing stands on the floor spot.' };
+}
+
+/**
+ * (bench-1) THE BLUE MEN: everyone blue now (a bottle of paint, or the dye pack), where, until when, what they took and
+ * what taking it back would get you, and the card where you stand (`key`). [{ id, who, place, placeLabel, until,
+ * untilDay, untilClock, by, took, back, tried, here, key, available, why, fight }]
+ */
+function blueView(cfg, state, choices) {
+  const t = clockOf(state);
+  const out = [];
+  for (const [id, rows] of Object.entries(state.under ?? {})) {
+    for (const r of rows) {
+      if (r.effect !== 'tagged' || !rowOn(r, t)) continue;
+      const c = choices.find(x => x.choice.do === 'takeBack' && x.choice.who === id);
+      const who = blueWho(cfg, id, r);
+      const u = clockAt(r.until);
+      out.push({ id, who, says: r.who?.says ?? null, place: r.place, placeLabel: placeOf(cfg, r.place).label, until: r.until, untilDay: u.day, untilClock: u.clock, by: { ...(r.by ?? {}) },
+        took: r.took ? { cash: r.took.cash, goods: { ...r.took.goods } } : null, back: r.took ? backOf(cfg, r.took) : null, tried: r.back ? { ...r.back } : null,
+        here: state.place === r.place, key: c?.key ?? null, available: !!c?.available, why: c?.why ?? null, fight: c?.fight ?? null, choice: r.took && !r.back ? { do: 'takeBack', who: id } : null,
+        look: { ...(cfg.make.effects.tagged?.look ?? {}) },
+        text: `${cap(who.name)}: blue ${placeOf(cfg, r.place).where ?? `at ${placeOf(cfg, r.place).label}`} until day ${u.day}${r.took && !r.back ? '. Take it back off him there' : r.back ? `. You went for him on day ${r.back.day}` : ''}.` });
+    }
+  }
+  return out;
 }

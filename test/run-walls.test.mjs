@@ -83,14 +83,17 @@ test('the library: the kit\'s wall pieces are things of the run (tiers, prices, 
   const lib = libraryOf(cfg);
   const wall = lib.pieces.filter(p => p.kind === 'home' && p.place === 'wall');
   const kitWall = HOME.filter(h => h[3] === 'wall');
-  assert.equal(kitWall.length, 45); // 38 before the asset pass: + stab vest, jacket lining, door bar, pepper fogger, dog sign, panic button, false wall
+  assert.equal(kitWall.length, 48); // 38 before the asset pass: + stab vest, jacket lining, door bar, pepper fogger, dog sign, panic button, false wall; + the crafting pieces' can over the door, Knock-Knock, porch lamp (trunk 9cfd6788)
   const out = ['door-front', 'window', 'ac-window', 'wall-panelling'];
   for (const id of out) assert.ok(lib.out.some(o => o.key === `kit:${id}` && /structure/.test(o.why)), id);
+  // (walk-1: the pieces drawn for crafting stay out until their rules are built)
+  const crafted = ['door-can', 'door-gun', 'porch-lamp'];
+  for (const id of crafted) assert.ok(lib.out.some(o => o.key === `kit:${id}` && /crafting/.test(o.why)), id);
   // in: every wall piece but the structure, the deadbolt's locks (the named deadbolt, on the door) and what fits nowhere
   // (sixes-1: and the slice's named wall pieces, the door bar, the camera and the dog sign, each a thing of its own)
   const named = Object.values(cfg.things).filter(t => t.piece?.startsWith('kit:') && byId(t.piece.slice(4))?.place === 'wall').length;
   assert.equal(named, 7); // (raid-1: and the pepper fogger, the stab vest, the false wall)
-  assert.equal(wall.length, kitWall.length - out.length - named - NOFIT.filter(([id]) => byId(id)?.place === 'wall').length);
+  assert.equal(wall.length, kitWall.length - out.length - crafted.length - named - NOFIT.filter(([id]) => byId(id)?.place === 'wall').length);
   assert.ok(wall.every(p => Number.isInteger(p.tier) && p.price > 0 && p.mount !== null));
   // the catalog lists them; the home shelves draw on them
   const v = view(cfg, { ...newRun({ seed: 1 }), place: 'park' });

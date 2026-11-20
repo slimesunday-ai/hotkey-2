@@ -9,6 +9,8 @@
 //          'quiet' a purchase, a step out, a ride
 //   chips  tone 'gain' · 'loss' · 'risk' · 'heat' · 'trust' · 'mute'; icon a name from the page's icon set
 
+import { shownAs, goodLabel } from '../../src/run/rules.mjs';
+
 const cap = s => (s ? s[0].toUpperCase() + s.slice(1) : s);
 const money = n => `$${Math.abs(n).toLocaleString('en-US')}`;
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -17,6 +19,8 @@ const hourWord = n => `${String(((n % 24) + 24) % 24).padStart(2, '0')}:00`;
 /** The words for goods, from the rules' labels (the page passes its own, panels.js, which are shorter). */
 export function plainWords(cfg) {
   const good = (g, n) => {
+    // (pot-2: a made thing, and what you cook with, by its own name: never made plural by a letter)
+    if (cfg.goods?.[g]?.made || cfg.goods?.[g]?.making) return cfg.goods[g].label;
     const label = cfg.goods?.[g]?.label ?? g;
     return n === 1 ? label.replace(/s$/, '') : label;
   };
@@ -30,7 +34,7 @@ export function plainWords(cfg) {
 }
 
 /** The order the events are read in for the headline: what took something from you first, then what you did. */
-const FIRST = ['stopped', 'robbed', 'raid', 'jumped', 'alarm', 'casing', 'job', 'rob', 'card', 'bins', 'calledOff', 'buy', 'thing', 'pack', 'shop', 'wear', 'unwear',
+const FIRST = ['stopped', 'robbed', 'raid', 'jumped', 'alarm', 'casing', 'job', 'lift', 'cook', 'rob', 'card', 'bins', 'calledOff', 'buy', 'thing', 'making', 'pack', 'shop', 'wear', 'unwear', 'belt', 'name',
   'guard', 'gave', 'refused', 'fight', 'grudge', 'sore', 'hop', 'bank', 'inside', 'out', 'arrive', 'stop', 'onward', 'walk', 'ride'];
 const rankOf = e => {
   // (a jump that took nothing, a door that held: below what you did that hour)
@@ -144,6 +148,18 @@ function headOf(e, { cfg, before, state, v0, v1, words }) {
     case 'wear':
     case 'unwear':
       return { tone: 'quiet', icon: 'person', kicker: e.type === 'wear' ? 'Put on' : 'Took off', head: cap(String(e.label).replace(/^an? /i, '')), body: '' };
+    // (pot-2, RUN.md "The pot (pot-1)"): what you cook with bought; a cook (what came out, never whether it is dirty: the
+    // rules' event says clean on purpose, and the page says nothing it does not); a sleeper's wallet; the belt; a name
+    case 'making':
+      return { tone: 'quiet', icon: 'shop', kicker: 'Bought', head: `${cap(String(e.pack ?? e.label).replace(/^an? /i, ''))} from ${cap(e.who?.name ?? '')}`, body: '' };
+    case 'cook':
+      return { tone: 'win', icon: 'pot', kicker: e.outcome === 'extra' ? 'Something else got in' : e.found ? 'New in your book' : 'Cooked', head: `${e.n} bags of ${e.name}`, body: after(e.text, `You cooked ${(e.with ?? []).map(k => cfg.make?.makings?.[k]?.label ?? k).join(' and ')}: ${e.n} ${e.kind ?? 'bag'}s of ${e.name}`) };
+    case 'lift':
+      return { tone: 'win', icon: 'cash', kicker: 'A sure thing', head: `${cap(e.who?.name ?? 'Their')}'s wallet: +${money(e.pay)}`, body: after(e.text, `You lifted ${e.who?.name}'s wallet`).replace(/^[^.]*slept: \+\$\d+\.\s*/, '') };
+    case 'belt':
+      return { tone: 'quiet', icon: 'goods', kicker: e.on ? 'On your belt' : 'Off your belt', head: cap(words.good(e.good, 1)), body: '' };
+    case 'name':
+      return { tone: 'quiet', icon: 'star', kicker: 'Named', head: `You call it ${e.name}`, body: e.was && e.was !== e.name ? `It was ${e.was}.` : '' };
     case 'guard':
       return { tone: 'news', icon: 'homerisk', kicker: 'Your step', head: cap(e.text.split(/(?<=\.)\s/)[0].replace(/\.$/, '')), body: e.text.split(/(?<=\.)\s/).slice(1).join(' ') };
     case 'gave':
@@ -196,15 +212,21 @@ export function chipsOf({ cfg, before, state, events, v0, v1, words = plainWords
     if (dc) out.push({ tone: dc > 0 ? 'gain' : 'loss', icon: 'cash', text: `${dc > 0 ? '+' : '−'}${money(dc)}` });
     if (db) out.push({ tone: db > 0 ? 'gain' : 'loss', icon: 'bank', text: `banked ${db > 0 ? '+' : '−'}${money(db)}` });
   }
-  const goods = new Set([...Object.keys(before.goods ?? {}), ...Object.keys(state.goods ?? {}), ...Object.keys(before.stash ?? {}), ...Object.keys(state.stash ?? {})]);
+  // (pot-2: goods counted as they show after the step: a dirty batch not yet found out is its product's, so no chip can
+  // tell it apart; one found out is its own, "Zonked, dirty")
+  const as = g => (cfg.goods?.[g]?.made ? shownAs(cfg, state, g) : g);
+  const sumAs = (o = {}) => Object.entries(o).reduce((a, [g, n]) => ({ ...a, [as(g)]: (a[as(g)] ?? 0) + n }), {});
+  const [g0, g1, s0, s1] = [sumAs(before.goods), sumAs(state.goods), sumAs(before.stash), sumAs(state.stash)];
+  const goods = new Set([...Object.keys(g0), ...Object.keys(g1), ...Object.keys(s0), ...Object.keys(s1)]);
+  const gw = (g, n) => (cfg.goods?.[g]?.made ? goodLabel(cfg, state, g) : words.good(g, n));
   for (const g of goods) {
-    const dg = (state.goods?.[g] ?? 0) - (before.goods?.[g] ?? 0);
-    const ds = (state.stash?.[g] ?? 0) - (before.stash?.[g] ?? 0);
-    if (dg > 0 && ds < 0 && dg === -ds) out.push({ tone: 'mute', icon: 'goods', text: `${plural(dg, words.good(g, 1), words.good(g, 2))} on you` });
-    else if (dg < 0 && ds > 0 && -dg === ds) out.push({ tone: 'mute', icon: 'goods', text: `${plural(ds, words.good(g, 1), words.good(g, 2))} left at home` });
+    const dg = (g1[g] ?? 0) - (g0[g] ?? 0);
+    const ds = (s1[g] ?? 0) - (s0[g] ?? 0);
+    if (dg > 0 && ds < 0 && dg === -ds) out.push({ tone: 'mute', icon: 'goods', text: `${plural(dg, gw(g, 1), gw(g, 2))} on you` });
+    else if (dg < 0 && ds > 0 && -dg === ds) out.push({ tone: 'mute', icon: 'goods', text: `${plural(ds, gw(g, 1), gw(g, 2))} left at home` });
     else {
-      if (dg) out.push({ tone: dg > 0 ? 'gain' : 'loss', icon: 'goods', text: `${dg > 0 ? '+' : '−'}${plural(Math.abs(dg), words.good(g, 1), words.good(g, 2))}` });
-      if (ds) out.push({ tone: ds > 0 ? 'gain' : 'loss', icon: 'goods', text: `${ds > 0 ? '+' : '−'}${plural(Math.abs(ds), words.good(g, 1), words.good(g, 2))} at home` });
+      if (dg) out.push({ tone: dg > 0 ? 'gain' : 'loss', icon: 'goods', text: `${dg > 0 ? '+' : '−'}${plural(Math.abs(dg), gw(g, 1), gw(g, 2))}` });
+      if (ds) out.push({ tone: ds > 0 ? 'gain' : 'loss', icon: 'goods', text: `${ds > 0 ? '+' : '−'}${plural(Math.abs(ds), gw(g, 1), gw(g, 2))} at home` });
     }
   }
   if (same) {

@@ -1,7 +1,7 @@
 // Preview for the home objects. Catalogue sheets: every object on the 0.25 m cell grid with its footprint outlined, a label, and
 // chars.js characters for scale (some sitting in the seats). Tier rooms: one small room per rung of the ladder, furnished only from
 // this set, dollhouse-cut (back and right walls). Light is the city's (STYLE §3).
-//   ?view=cat&sheet=1..4 | trailer | apartment | house | penthouse · ?tod=night · ?far=1 (the 0.1 far builds) · ?shot=1 · ?labels=0
+//   ?view=cat&sheet=1..4 | trailer | apartment | house | penthouse | craft · ?tod=night · &cam=game (the game's street camera) · ?far=1 (the 0.1 far builds) · ?shot=1 · ?labels=0
 // Catalogue v2: ?view=v2&k=base|gear|crime|collector|wallfloor|trophy (the new pieces by kind, rarity badges, buffs) ·
 //   ?view=asm&a=<tier>-<name> (a preset layout from assemblies/, dollhouse-cut; the owner's slots filled with a demo piece, outlined pink)
 import * as THREE from 'three';
@@ -106,7 +106,7 @@ function buffText(G) { if (!G) return ''; const b = G.buff ?? {}, pc = v => `${v
   const t = []; if (b.secure) t.push(`${b.secure}${b.burgleOdds ? ' ' + b.burgleOdds + '% burgle' : ''}${b.safeTake ? ' take ' + pc(b.safeTake) : ''}`); if (b.stashTake) t.push(`stash take ${pc(b.stashTake)}`);
   if (b.cook) t.push(`cook: ${b.cook}`); if (b.heatDecay) t.push(`heat decay ×${b.heatDecay}`); if (b.crib) t.push(`crib +${b.crib}`); return t.join(' · '); }
 function badge(o) { const G = o.game; if (!G) return ''; return `<i class="g"><b class="r ${G.rarity}">${G.rarity === '1of1' ? '1 of 1' : G.rarity}</b> ${G.kind}${G.stealable ? '' : ' · safe'} · ${buffText(G)}</i>`; }
-const V2T = { base: 'v2 · base kit additions (everyone gets these)', gear: 'v2 · gear: stash spots, security, cook gear, laying low', crime: 'v2 · collectibles: the crime shelf', collector: 'v2 · collectibles: collector culture', wallfloor: 'v2 · collectibles: wall, floor, ceiling', trophy: 'v2 · trophies: one per MARK (never stolen)', hustle: 'the hustle: the run\'s pieces that had no model' };
+const V2T = { base: 'v2 · base kit additions (everyone gets these)', gear: 'v2 · gear: stash spots, security, cook gear, laying low', crime: 'v2 · collectibles: the crime shelf', collector: 'v2 · collectibles: collector culture', wallfloor: 'v2 · collectibles: wall, floor, ceiling', trophy: 'v2 · trophies: one per MARK (never stolen)', hustle: 'the hustle: the run\'s pieces that had no model', craft: 'crafting: the bench, the can over the door loaded, the Knock-Knock, a porch lamp' };
 
 
 // ═════════ tier rooms (dollhouse cut: floor, back wall at z = 0, right wall at x = Wr)
@@ -121,6 +121,27 @@ function door(side, Wr, a0, c, knobLeft = false) {   // a 1.0 × 2.2 door slab o
 function ground() { }   // rooms float on the sky, like the sim-asset boards
 
 const ROOMS = {
+  // (2026-11-19) THE CRAFTING PIECES WHERE THEY WILL BE USED (craft.js): a trailer room with the bench on its floor spot against the back
+  // wall and somebody at it, the door in the right wall with the can over it (loaded) and the Knock-Knock inside beside it; and outside,
+  // a stretch of the trailer's front with its door and the porch lamp. ?bench=1 the garage bench · ?load=0..4 the can's colour ·
+  // ?gun=0..2 which gun · &cam=game the game's street camera (64° down, 26.7 m off: a person about 70 px tall at 1600 × 1000)
+  craft() { const Wr = 5, D = 4; ground();
+    floorVol(Wr, D, (x, z) => ((x / 5 | 0) + (z / 5 | 0)) & 1 ? 0xd9a93a : 0x8a5a33);
+    wallVol(Wr, D, 'back', () => 0xa4652f); wallVol(Wr, D, 'right', () => 0xa4652f);
+    for (let a = 0; a < 5; a++) onWall('wall-panelling', { variant: 0, seed: a + 1 }, 'back', a, Wr); for (let a = 0; a < 4; a++) if (a !== 2 && a !== 3) onWall('wall-panelling', { variant: 0, seed: a + 7 }, 'right', a, Wr);
+    door('right', Wr, 2.8, 0xe8e2d0, true); onWall('door-locks', { variant: 0 }, 'right', 2.82, Wr, .95, .04);
+    onWall('door-can', { variant: +(Q.get('load') || 0) }, 'right', 3.05, Wr, 2.29);
+    onWall('door-gun', { variant: +(Q.get('gun') || 0) }, 'right', 1.95, Wr, .95);
+    place('tool-bench', { variant: +(Q.get('bench') || 0) }, .25, .05, 0);
+    person(R(3), 2.35, 0, 1.25, -2.2, arms(-1.25, -1.1));
+    place('recliner', { variant: 0, seed: 2 }, 3.2, .4, 0); placeA('rug-rag', { variant: 0 }, 3.0, 2.2, .1);
+    // outside: the trailer's front (its siding), its door, the porch lamp beside the door, a step
+    const X = 6.3, Zf = 3.2;
+    for (let y = 0; y < 26; y++) slab(X - .45, y * .1, Zf - .1, X + 1.55, y * .1 + .1, Zf, y % 2 ? 0xe8e2d0 : 0xdcd4c0);
+    stamp(meshOf(H.byId.get('door-front'), { variant: 0 }), bank, 0, X, 0, Zf);
+    stamp(meshOf(H.byId.get('porch-lamp'), { variant: 0 }), bank, 0, X + 1.08, 1.85, Zf);
+    slab(X - .1, 0, Zf, X + 1.1, .18, Zf + .45, 0x9c9a92);
+    return { Wr: 8, D, title: 'Crafting · <em>the bench on the floor spot, the can over the door, the Knock-Knock, the porch lamp</em>' }; },
   trailer() { const Wr = 5, D = 4; ground();
     floorVol(Wr, D, (x, z) => ((x / 5 | 0) + (z / 5 | 0)) & 1 ? 0xd9a93a : 0x8a5a33);                                  // harvest-gold linoleum
     wallVol(Wr, D, 'back', () => 0xa4652f); wallVol(Wr, D, 'right', () => 0xa4652f);
@@ -233,6 +254,8 @@ const dir = roomCam ? new THREE.Vector3(-.62, .58, .9).normalize() : new THREE.V
 let dist = span * 1.2; const corners = []; for (const x of [bx0, bx1]) for (const y of [by0, by1]) for (const z of [bz0, bz1]) corners.push(new THREE.Vector3(x, y, z));
 for (let it = 0; it < 40; it++) { camera.position.copy(tgt).addScaledVector(dir, dist); camera.lookAt(tgt); camera.updateMatrixWorld(); camera.updateProjectionMatrix();
   let m = 0; for (const c of corners) { const p = c.clone().project(camera); m = Math.max(m, Math.abs(p.x), Math.abs(p.y) * 1.02); } dist *= Math.pow(m / (roomCam ? .9 : .93), .7); }
+// (2026-11-19) &cam=game: the game's own street camera (THE RUN: 64° down, 26.7 m off; a person about 70 px tall at 1600 × 1000)
+if (Q.get('cam') === 'game') { const e = 64 * Math.PI / 180; camera.fov = 50; camera.position.copy(tgt).addScaledVector(new THREE.Vector3(0, Math.sin(e), Math.cos(e)), 26.7); camera.lookAt(tgt); camera.updateProjectionMatrix(); }
 const controls = new OrbitControls(camera, renderer.domElement); controls.target.copy(tgt); controls.update();
 const LAB = document.getElementById('labels'), els = labels.map(l => { const e = document.createElement('div'); e.className = 'lab'; e.innerHTML = l.html; LAB.appendChild(e); return [e, l.p]; });
 const tmp = new THREE.Vector3();

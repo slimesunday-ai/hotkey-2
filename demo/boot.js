@@ -11,9 +11,14 @@
 //                                   &site=elm at the ELM ST stop where it began); /demo/?mode=fightlab its clips, to judge
 //   /demo/?stagetest=watch|play     a whole season on auto over the real stage; the title ends `stage-ok` or
 //                                   `stage-fail: <why>` (demo/stage/director-test.js)
+//   /demo/?mode=looks&look=zonk     (looks-1) one drug look on a named person at the night market (demo/looks/lab.js)
 //   /demo/?proof=all                the spike's proof scenes, no panels (demo/stage/proof.js)
 //   /demo/?map=1                    the set's map drawn over the city, no panels (demo/stage/mapmarks.js)
 //   plain=1 hides this page's own chrome; every other parameter goes to the city (tod=night, q=low|medium|high …)
+//   (phone-1, docs/phone.md) stats=1 a small readout of frames, the slowest frame, the preset and pixel ratio, the time
+//                                   alive and what the city holds; phone=1|0 the phone's settings forced on or off
+//                                   (demo/phone.js); fps=N a cap on frames a second (0: none); sw=1|0 the service
+//                                   worker on or off (demo/deliver.js: on by itself on an https host only)
 //
 // After it is up:  window.__demo = { city, CITY, ready, readySeconds, stage?, hud?, marks?, proof? }
 //   city    window.__city (scene, camera, controls, peds, traffic, cam, VIEWS, tick …)
@@ -21,8 +26,16 @@
 //           the city itself uses, which matters: the clip registry and the cast are shared state)
 //   ready   resolves once the first view has settled (every block in range built, shaders warm)
 
+import * as deliver from './deliver.js';
+import * as phone from './phone.js';
+
 export const CITY = new URL('../city/from-trunk/style/city/', import.meta.url).href;
 const VENDOR = new URL('../city/vendor/three/', import.meta.url).href;
+
+// (phone-1) THE PAGE'S OWN COPY: a newer version that waited from an earlier visit takes over now, before anything is
+// loaded, and the page reloads once (demo/deliver.js). Nothing happens on this machine unless ?sw=1.
+if (!(await deliver.settle())) await new Promise(() => {});
+deliver.register();
 
 const Q = new URLSearchParams(location.search);
 // (?bare=1: the city alone, for the tools that read it: demo/tools/place-table.mjs)
@@ -42,6 +55,13 @@ const SMALL = GAME && !Q.has('oldstage');
 if (SMALL && !Q.has('cars')) {
   Q.set('cars', '0');
   history.replaceState(null, '', `${location.pathname}?${Q}`);
+}
+// (phone-1) ON A PHONE: the city's light preset, read by the city from the address (?q=, unless one is given), a cap
+// on frames, and the page under a finger (demo/phone.js). A desktop gets none of it.
+{
+  const had = Q.toString();
+  phone.beforeCity(Q);
+  if (Q.toString() !== had) history.replaceState(null, '', `${location.pathname}?${Q}`);
 }
 if (Q.has('plain') || Q.has('shot')) document.body.classList.add('plain');
 if (GAME) document.body.classList.add('game');
@@ -72,8 +92,14 @@ window.fetch = async (input, init) => {
     const abs = new URL(url, location.href).href;
     if (ONCE.test(abs) && (init?.method ?? input?.method ?? 'GET').toUpperCase() === 'GET') return fetchOnce(abs, input, init);
   }
+  // (phone-1) THE CITY'S SOURCES FOR ITS WORKERS (pool.js bundleOf) are asked for with `cache: 'no-store'`, so the
+  // browser fetched all 400 of them whole on every load. Asked without it, the browser keeps them as the server says:
+  // here every file is asked again with its validator (an edit shows at once, an unchanged file is a 304 with no body);
+  // on a host that lets it keep a file a while, it is not asked at all
+  const cityJs = /\/city\/from-trunk\/[^?]*\.js(\?|$)/.test(url);
+  if (cityJs && init?.cache === 'no-store') init = { ...init, cache: 'default' };
   const res = await fetch0(input, init);
-  if (!res.ok || !/\/city\/from-trunk\/[^?]*\.js(\?|$)/.test(url)) return res;
+  if (!res.ok || !cityJs) return res;
   const text = (await res.text())
     .replace(/(\bfrom\s*)(['"])three\2/g, `$1$2${VENDOR}build/three.module.js$2`)
     .replace(/(\bfrom\s*)(['"])three\/addons\//g, `$1$2${VENDOR}examples/jsm/`);
@@ -115,6 +141,7 @@ const t0 = performance.now();
 const cityMain = await import(`${CITY}main.js`);
 const city = window.__city;
 if (!city) throw new Error('the city did not start: window.__city is missing');
+phone.afterCity(city);
 
 // ONLY THE FIRST ZONE: the city's stream is told its universe is that zone's blocks (main.js returns a couple of
 // seconds in, long before most blocks are built, so the rest are never made) and is shown it, behind the loading
@@ -203,6 +230,10 @@ if (GAME) {
     // THE FIGHT'S MOVES, to judge: each clip it plays looping on the city's own people at the fight's lot (demo/fight/lab.js)
     const { mountLab } = await import('./fight/lab.js');
     demo.hud = await mountLab(host, { stage: demo.stage, demo });
+  } else if (Q.get('mode') === 'looks') {
+    // (looks-1) THE DRUG LOOKS, one at a time on a named person among the crowd, from the game's camera (demo/looks/lab.js)
+    const { mountLooks } = await import('./looks/lab.js');
+    demo.hud = await mountLooks(host, { stage: demo.stage, demo });
   } else if (Q.get('stagetest')) {
     const { runStageTest } = await import('./stage/director-test.js');
     demo.hud = runStageTest({ demo, mountHud, host, mode: Q.get('stagetest') });
@@ -217,3 +248,6 @@ if (GAME) {
   // the panels are up: lift the veil (index.html holds it down until now)
   document.body.classList.add('up');
 }
+// (phone-1) the service worker keeps what this visit loaded before it was in charge; ?stats=1 the readout
+if (Q.get('stats') === '1') phone.mountStats(demo);
+deliver.handOver();

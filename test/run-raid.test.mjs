@@ -182,7 +182,7 @@ test('the push: the tax climbs each day in a row they stop you, a day off starts
 });
 
 test('saves: version 12; a version-11 save loads with no rounds, nothing held, no raid, and plays on', () => {
-  assert.equal(RUN_STATE_VERSION, 12);
+  assert.equal(RUN_STATE_VERSION, 14); // (pot-1: 13, reading 12; bench-1: 14)
   const s = { ...at('market', { day: 2 }), v: 11 };
   delete s.ammo;
   delete s.holdWith;

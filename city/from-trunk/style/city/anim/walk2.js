@@ -13,7 +13,7 @@
 // Standing: the idles (idle.js, unchanged) still pose the ankles, and a standing leg is solved from them exactly as in v1; the
 // walk weight blends the two sets of joint ANGLES (never positions), so starting and stopping are smooth.
 import * as THREE from 'three';
-import { IDLE_GLSL } from './idle.js';
+import { IDLE_GLSL, idleSlot } from './idle.js';
 import { WALK2, NK, LEVELS, buildGait, R2 } from './gait2.js';
 import { GRIP_GLSL, GRIP_DIV } from './grip.js';   // (held + grip: the holding arm's pose)
 export { WALK2 };
@@ -30,7 +30,7 @@ export function setAnimUniforms2(u, K = WALK2, shared = {}) {
   u.uB0.value.set(K.arm, K.arc, K.overlap, K.twist); u.uB1.value.set(K.sway, K.roll, K.lean, K.vRef); u.uB2 = u.uB2 || { value: new THREE.Vector4() }; u.uB2.value.set(shared.turnLean ?? .09, K.armOut ?? .05, 0, 0); return G; }
 export function writeGait2(data, cap, k, g) {
   let o = k * 4; data[o] = g.u; data[o + 1] = g.a; data[o + 2] = g.w; data[o + 3] = g.v;
-  o = (cap + k) * 4; data[o] = g.omega; data[o + 1] = g.hp; data[o + 2] = g.idle; data[o + 3] = g.iw;
+  o = (cap + k) * 4; data[o] = g.omega; data[o + 1] = g.hp; data[o + 2] = idleSlot(g); data[o + 3] = g.iw;   // (the idle, its seed in the fraction: idle.js)
   o = (cap * 2 + k) * 4; data[o] = g.it; data[o + 1] = g.look; data[o + 2] = g.hr; data[o + 3] = g.py; }
 
 export const ANIM2_GLSL = /* glsl */`
@@ -40,7 +40,7 @@ const float A_SHX = .25, A_SHY = .825, A_NECK = .95;
 mat3 aRX(float a) { float c = cos(a), s = sin(a); return mat3(1., 0., 0., 0., c, s, 0., -s, c); }
 mat3 aRY(float a) { float c = cos(a), s = sin(a); return mat3(c, 0., -s, 0., 1., 0., s, 0., c); }
 mat3 aRZ(float a) { float c = cos(a), s = sin(a); return mat3(c, s, 0., -s, c, 0., 0., 0., 1.); }
-struct Pose { vec4 ank; vec2 fp; float drop, bodyX, pRoll, turnRoll; vec3 torso, head; vec2 armP, armR, ayaw, atw; };   // v1's pose (the idles write it; arms: idle.js aArmRot)
+struct Pose { vec4 ank; vec2 fp; float drop, bodyX, pRoll, turnRoll; vec3 torso, head; vec2 armP, armR, ayaw, atw, elb; };   // v1's pose (the idles write it; arms: idle.js aArmRot)
 mat3 gR; vec3 gT; bool gAnimDone = false;
 void aAp(mat3 M, vec3 C) { gR = M * gR; gT = C + M * (gT - C); }
 vec2 aAnkle(float zg, float fp) { float c = cos(fp), s = sin(fp); vec2 r = fp >= 0. ? vec2(A_HEEL, A_ANK) : vec2(-A_TOE, A_ANK);
@@ -67,7 +67,7 @@ void animCompute() {
 #endif
   vec4 A0 = texelFetch(uAnim, ivec2(id, 0), 0), A1 = texelFetch(uAnim, ivec2(id, 1), 0), A2 = texelFetch(uAnim, ivec2(id, 2), 0);
   int part = int(aPart + .5), grip = int((aPart - float(part)) * ${GRIP_DIV}. + .5); aGrip = grip; float u = A0.x, a = A0.y, w = A0.z, v = A0.w, T = 2. * A_PI;
-  Pose P; P.ank = vec4(0., A_ANK, 0., A_ANK); P.fp = vec2(0.); P.drop = 0.; P.bodyX = 0.; P.pRoll = 0.; P.turnRoll = 0.; P.torso = vec3(0.); P.head = vec3(0.); P.armP = vec2(0.); P.armR = vec2(.04); P.ayaw = vec2(0.); P.atw = vec2(0.);
+  Pose P; P.ank = vec4(0., A_ANK, 0., A_ANK); P.fp = vec2(0.); P.drop = 0.; P.bodyX = 0.; P.pRoll = 0.; P.turnRoll = 0.; P.torso = vec3(0.); P.head = vec3(0.); P.armP = vec2(0.); P.armR = vec2(.04); P.ayaw = vec2(0.); P.atw = vec2(0.); P.elb = vec2(0.);
   // the walk's body (sinusoids at the stride's rhythm: pendulums; the legs are the keyed part)
   float wa = w * a, st = cos(T * (u - .27)), lag = uB0.z;
   P.bodyX -= uB1.x * st * wa;                                          // sway over the stance foot
@@ -79,7 +79,9 @@ void animCompute() {
   P.ayaw += uB0.y * fr * fr * wa; P.atw += uB0.y * (.3 + .7 * max(vec2(-fw, fw), 0.)) * wa;   // the arc: in across the front; the hand turns in, late
   P.torso.x += uB1.z * clamp(v / uB1.w, 0., 1.6) * w; P.torso.y += cYaw;
   P.head.y -= cYaw; P.head.x -= .5 * P.torso.x * w;                    // the head keeps looking ahead, and level
-  int iv = gripIdle(grip, int(A1.z + .5)); idlePose(P, iv, A2.x, A1.w * (1. - w), A2.y);
+  // (K3-IDLES: the walker's own seed rides the idle slot's fraction, idle.js idleSlot)
+  int iv0 = int(A1.z + .5); float isd = A1.z - float(iv0); aIdN = iv0 >= 0 && iv0 < 32 && isd > .02 ? int((isd - .05) * 2500. + .5) : -1;
+  int iv = gripIdle(grip, iv0); idlePose(P, iv, A2.x, A1.w * (1. - w), A2.y);
   gripPose(P, grip, u, lag, uB0.x * wa, uB2.y * w, iv, A1.w * (1. - w));   // (grip.js: the holding arm)
   P.head.x += A1.y; P.head.z += A2.z; P.head.y += clamp(.2 * A1.x, -.45, .45);   // the head's springs; it leads a turn
   P.turnRoll = clamp(-uB2.x * A1.x * v, -.3, .3);

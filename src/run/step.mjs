@@ -23,6 +23,10 @@ import {
 } from './rules.mjs';
 import { earn, lose, spend, bank, withdraw, burgle } from './ledger.mjs';
 import { raidOut, raidCrew, crewFoes, raidSize, raidAtOf, stakeOf, holdOf, holdLabel, gunHeat, shareTaken, hiddenOf, roundsOf, thingsAtRisk, thingsToKnock } from './raid.mjs';
+import { isMade, isMaking, shownAs, behind, goodLabel } from './rules.mjs';
+import { carrierOf, cookOdds, productOf, productById, productName, effectLines, smellOf, liftsAt, pickBag, goodsBehind, rowWords, bottleOn, bottleFor, floorOf, stationOf } from './make.mjs';
+import { clockOf, clockAt, rowsFor, sweepRows, rowOn } from './effects.mjs';
+import { bluesAt, blueOut, backOf, blueWho, policeAbout, crewOf, isOut } from './rules.mjs';
 
 /** A roll 0–99: the rig's next chance roll if a test set one, else the seeded dice. */
 const d100 = (state, keys) => (state.rig?.chances?.length ? state.rig.chances.shift() : Math.floor(rng(state.seed, ...keys)() * 100));
@@ -80,7 +84,7 @@ function act(cfg, state, choice, at, push) {
       for (const [g, n] of Object.entries(stashed)) state.stash[g] = goodsHome(state, g) + n;
       state.goods = {};
       const left = Object.keys(stashed).length ? { stashed, home: someGoods(state.stash) } : {};
-      const also = left.stashed ? ` You left ${goodsText(cfg, stashed)} at home.` : '';
+      const also = left.stashed ? ` You left ${goodsText(cfg, stashed, state)} at home.` : '';
       if (amount > 0) push(at({ type: 'bank', by: 'you', text: `You went inside and banked $${amount}.${also}`, money: [bank(state, amount)], ...left, scene: { action: 'stash', spot: 'pad' } }));
       else push(at({ type: 'inside', by: 'you', text: `You went inside.${also}`, ...left, scene: { action: 'walk', spot: 'door' } }));
       state.place = placeOf(cfg, state.place).door;
@@ -92,7 +96,10 @@ function act(cfg, state, choice, at, push) {
       if (state.door) refuse(cfg, state, at, push, 'past');
       const moved = take ? [withdraw(state, take)] : [];
       // goods at the crib: all of them come out with you unless the choice says how many of each (`goods`)
-      const want = choice.goods ?? Object.fromEntries(Object.keys(someGoods(state.stash)).map(g => [g, goodsHome(state, g)]));
+      // (pot-1: what you cook with stays at home unless asked for; goods asked for as they show come out of the goods behind
+      // them, a dirty batch not yet found out with its product)
+      // (bench-1: and a bottle stays home too: one goes out on your belt, never in your pockets)
+      const want = choice.goods ? goodsBehind(cfg, state, choice.goods) : Object.fromEntries(Object.keys(someGoods(state.stash)).filter(g => !isMaking(cfg, g) && cfg.goods[g]?.sold !== false).map(g => [g, goodsHome(state, g)]));
       const took = {};
       for (const [g, n] of Object.entries(want)) {
         if (!Number.isInteger(n) || n < 0 || n > goodsHome(state, g)) throw new Error(`can't take ${n} of ${g} out with ${goodsHome(state, g)} at home`);
@@ -103,7 +110,7 @@ function act(cfg, state, choice, at, push) {
         took[g] = n;
       }
       const carry = Object.keys(took).length ? { tookGoods: took, home: someGoods(state.stash) } : {};
-      const words = [take ? `$${take}` : null, carry.tookGoods ? goodsText(cfg, took) : null].filter(Boolean).join(' and ');
+      const words = [take ? `$${take}` : null, carry.tookGoods ? goodsText(cfg, took, state) : null].filter(Boolean).join(' and ');
       push(at({ type: 'out', by: 'you', text: words ? `You stepped out with ${words}.` : 'You stepped out.', money: moved, ...carry, scene: { action: 'walk', spot: 'door' } }));
       state.place = placeOf(cfg, state.place).inside;
       break;
@@ -137,6 +144,15 @@ function act(cfg, state, choice, at, push) {
     case 'tax': answerTax(cfg, state, !!choice.pay, at, push); break;
     case 'ammo': buyAmmo(cfg, state, choice.item, at, push); break;
     case 'holdWith': holdWith(cfg, state, choice.with, at, push); break;
+    // (pot-1, RUN.md "The pot (pot-1)")
+    case 'making': buyMaking(cfg, state, choice.item, at, push); break;
+    case 'cook': anHour(cfg, state, at, push, () => cook(cfg, state, choice, at, push)); break;
+    case 'lift': anHour(cfg, state, at, push, () => lift(cfg, state, choice.who, at, push)); break;
+    case 'belt': case 'unbelt': belt(cfg, state, choice, at, push); break;
+    case 'name': nameIt(cfg, state, choice, at, push); break;
+    // (bench-1, RUN.md "The bench and the bottle (bench-1)")
+    case 'floor': anHour(cfg, state, at, push, () => changeFloor(cfg, state, choice.item, at, push)); break;
+    case 'takeBack': anHour(cfg, state, at, push, () => takeBack(cfg, state, choice.who, at, push)); break;
     default: throw new Error(`unknown choice ${choice.do}`);
   }
 }
@@ -156,6 +172,13 @@ function sameChoice(a, b) {
   if (a.do === 'tax') return !!a.pay === !!b.pay;
   if (a.do === 'ammo') return a.item === b.item;
   if (a.do === 'holdWith') return a.with === b.with;
+  if (a.do === 'making') return a.item === b.item;
+  if (a.do === 'cook') return a.maker === (b.maker ?? a.maker) && a.carrier === (b.carrier ?? a.carrier) && Array.isArray(b.with) && [...new Set(b.with)].sort().join('+') === a.with.join('+');
+  if (a.do === 'lift') return a.who === b.who;
+  if (a.do === 'belt') return a.good === b.good;
+  if (a.do === 'name') return a.product === b.product;
+  if (a.do === 'floor') return a.item === b.item;
+  if (a.do === 'takeBack') return a.who === b.who;
   return true; // inside, out (any amount, checked in step), sleep, morning, rob, bins, rough, give, refuse
 }
 
@@ -200,10 +223,13 @@ function work(cfg, state, choice, at, push) {
   const who = job.who ? whoOf(job.who) : null;
   // a sale uses one of the good, win or lose (one that goes wrong is lost)
   let sold = null;
+  // (pot-1: the good as it shows; the bag it takes, a dirty one among them as their counts weigh: make.mjs pickBag)
+  const bag = job.good ? pickBag(cfg, state, job.good, [state.day, state.hour, place, job.id]) : null;
   if (job.good) {
-    state.goods[job.good] = goodsOn(state, job.good) - 1;
-    if (!state.goods[job.good]) delete state.goods[job.good];
-    sold = { good: job.good, label: cfg.goods[job.good].label, used: 1, left: goodsOn(state, job.good), home: goodsHome(state, job.good) };
+    state.goods[bag] = goodsOn(state, bag) - 1;
+    if (!state.goods[bag]) delete state.goods[bag];
+    const leftOf = where => behind(cfg, state, job.good).reduce((a, k) => a + (state[where]?.[k] ?? 0), 0);
+    sold = { good: job.good, label: goodLabel(cfg, state, job.good), used: 1, left: leftOf('goods'), home: leftOf('stash'), ...(isMade(cfg, job.good) ? { made: true, product: cfg.goods[job.good].product } : {}) };
   }
   const base = at({ type: 'job', job: job.id, label, by: 'you', with: job.with ?? null, who, roll: r.roll, chance: r.chance, ...(job.who !== dealt.who ? { picked: true } : {}), ...(sold ? { goods: sold } : {}) });
   const leftText = sold ? ` ${sold.left ? `${sold.left} left` : `No ${sold.label} left`} on you.` : '';
@@ -233,9 +259,12 @@ function work(cfg, state, choice, at, push) {
     // (memory-1: taken off them to their face, a week's mark, unless they hold one already; paid up out of fear, said)
     const mark = job.mark?.win && who ? markPerson(cfg, state, who, job.mark.win, place) : null;
     const six = sixesWork(cfg, state, place, job, pay, label);
+    // (pot-1: a made thing sold, they take it: its effects on them from the end of the hour, and a dirty one's bad thing)
+    const dose = sold?.made && who ? doseWith(cfg, state, who, bag, place) : null;
+    if (dose?.text) after += ` ${dose.text}`;
     const feared = !!odds.feared;
     const scared = feared ? ` ${cap(who.name)} fears you and paid up without a fight.` : '';
-    push({ ...base, outcome: 'win', pay, heat: job.winHeat ?? 0, placeHeat: heatNow, mood, outToday: out, ...extra, ...(trust ? { trust } : {}), ...(pressure ? { pressure } : {}), ...(mark ? { mark } : {}), ...(feared ? { fear: true } : {}), ...(six.note ? { sixes: six.note } : {}),
+    push({ ...base, outcome: 'win', pay, heat: job.winHeat ?? 0, placeHeat: dose ? placeHeat(state, place) : heatNow, mood: dose?.mood ?? mood, outToday: out, ...extra, ...(dose ? { dose: dose.note } : {}), ...(trust ? { trust } : {}), ...(pressure ? { pressure } : {}), ...(mark ? { mark } : {}), ...(feared ? { fear: true } : {}), ...(six.note ? { sixes: six.note } : {}),
       text: `${label}: +$${pay}${job.winHeat ? `, heat +${job.winHeat}` : ''}.${scared}${after}${leftText}`, money: [moved], scene: scenes.win ?? { action: 'idle' } });
     for (const e of six.then) push(at(e));
     return canHeat(job); // a job that can heat the place can be seen, whichever way it went
@@ -446,6 +475,11 @@ function takeGoods(cfg, state, band) {
     state.goods[g] = goodsOn(state, g) - n;
     if (!state.goods[g]) delete state.goods[g];
   }
+  // (pot-1: what is on your belt is on you: a bad one takes it with the rest)
+  if (band === 'clean' && state.belt) {
+    taken[state.belt.good] = (taken[state.belt.good] ?? 0) + (state.belt.n ?? 1);
+    state.belt = null;
+  }
   return taken;
 }
 
@@ -505,7 +539,7 @@ function sleepRough(cfg, state, at, push) {
     const takes = jumpTakes(cfg, state, state.carried)[outcome];
     const moved = takes ? [lose(state, takes, 'jumped')] : [];
     const goodsTaken = takeGoods(cfg, state, outcome);
-    const what = [takes ? `$${takes}` : null, Object.keys(goodsTaken).length ? goodsText(cfg, goodsTaken) : null].filter(Boolean).join(' and ');
+    const what = [takes ? `$${takes}` : null, Object.keys(goodsTaken).length ? goodsText(cfg, goodsTaken, state) : null].filter(Boolean).join(' and ');
     const text = !what && (outcome === 'clean' || outcome === 'messy') ? 'In the night somebody went through your pockets and found nothing.'
       : outcome === 'clean' ? `In the night they robbed you: they took ${what}.`
         : outcome === 'messy' ? `In the night somebody went through your pockets: ${what} gone.`
@@ -604,11 +638,13 @@ function notice(cfg, state, risk, hour, at, push) {
       // every good on you is taken; your heat after jail is higher, and whoever sold you them wants nothing to do with you
       const goodsSeized = someGoods(state.goods);
       state.goods = {};
+      // (pot-1: and what is on your belt)
+      if (state.belt) { goodsSeized[state.belt.good] = (goodsSeized[state.belt.good] ?? 0) + (state.belt.n ?? 1); state.belt = null; }
       const pinched = Object.keys(goodsSeized).length > 0;
       const trusts = pinched ? Object.keys(goodsSeized).map(g => connectFor(cfg, g).who).filter(Boolean)
         .map(who => moveTrust(cfg, state, who, cfg.connect.pinched, 'pinched', 'you were stopped with their goods on you')).filter(Boolean) : [];
       const heatAfter = cfg.heat.afterJail + (pinched ? cfg.connect.stopHeat : 0);
-      const took = [seized ? `$${seized}` : null, pinched ? goodsText(cfg, goodsSeized) : null].filter(Boolean).join(' and ');
+      const took = [seized ? `$${seized}` : null, pinched ? goodsText(cfg, goodsSeized, state) : null].filter(Boolean).join(' and ');
       push(at({ ...where, type: 'stopped', by: 'police', roll: r.roll, chance: r.chance, seized, goodsSeized, heatAfter, ...(trusts.length ? { trust: trusts[0], trusts } : {}),
         text: `The police stopped you${took ? ` and seized ${took}` : ''}.${pinched ? ` Carrying: your heat after jail is ${heatAfter}.` : ''}`, money: moved, scene: { kind: 'arrest' } }));
       state.heat = heatAfter;
@@ -626,13 +662,15 @@ function notice(cfg, state, risk, hour, at, push) {
   // the hour (the odds shown are the odds fought); the fight decides it: lost, the bad one; won only just, the
   // scuffle; won, nothing. (A test that rigs a contest roll still gets the dice: their bands are the same shares.)
   const fought = jumpsFight(cfg) && !state.rig?.rolls?.length;
-  const duel = fought ? jumpOut(cfg, state, state.place, [state.day, hour], { tired: risk.jump.tired ?? null, arm: risk.jump.fight?.arm ?? null }) : null;
+  // (bench-1: the bottle on your belt is thrown in the first second, and reaches both of them; the odds shown had it)
+  const thrown = fought ? throwBottle(cfg, state, 'jumped', state.place) : null;
+  const duel = fought ? jumpOut(cfg, state, state.place, [state.day, hour], { tired: risk.jump.tired ?? null, arm: risk.jump.fight?.arm ?? null, bottle: thrown?.b ?? null }) : null;
   const roll = fought ? null : contestRoll(state, ['run-jump-contest', state.day, hour]);
   const outcome = fought ? duel.band : jumpBand(cfg, risk.jump.strength, roll);
   const takes = jumpTakes(cfg, state, state.carried)[outcome]; // from what you carry now, this hour's pay included
   const moved = takes ? [lose(state, takes, 'jumped')] : [];
   const goodsTaken = takeGoods(cfg, state, outcome);
-  const what = [takes ? `$${takes}` : null, Object.keys(goodsTaken).length ? goodsText(cfg, goodsTaken) : null].filter(Boolean).join(' and ');
+  const what = [takes ? `$${takes}` : null, Object.keys(goodsTaken).length ? goodsText(cfg, goodsTaken, state) : null].filter(Boolean).join(' and ');
   const took = what ? `they took ${what}` : 'they found nothing to take';
   const text = fought ? (outcome === 'clean' ? `Two of them jumped you and beat you: ${took}.`
     : outcome === 'messy' ? (duel.result === 'won' ? `Two of them jumped you; you saw them off, only just: ${took}.` : `Two of them jumped you and had the better of it, but you hurt them: ${took} and ran.`)
@@ -640,7 +678,11 @@ function notice(cfg, state, risk, hour, at, push) {
     : outcome === 'clean' ? `You were jumped, a bad one: ${took}.`
       : outcome === 'messy' ? `You were jumped, a scuffle: ${took}.`
         : 'Somebody tried to jump you and got nothing.';
-  push(at({ ...where, type: 'jumped', by: 'jumpers', roll: r.roll, chance: r.chance, ...(fought ? { duel } : { contest: { P: risk.jump.strength, roll, outcome } }), outcome, taken: takes, goodsTaken, goodsLeft: someGoods(state.goods), text, money: moved, scene: { kind: `npc:robbers:${outcome === 'disaster' ? 'fail' : outcome}` } }));
+  // (bench-1: paint in it, the two of them blue for a week; the heavy has what they took)
+  const blue = thrown?.b.tags ? tagBlue(cfg, state, jumpersOf(cfg, state, duel), state.place, thrown, { cash: takes, goods: goodsTaken }) : null;
+  const threw = thrown ? `${thrown.text} ` : '';
+  push(at({ ...where, type: 'jumped', by: 'jumpers', roll: r.roll, chance: r.chance, ...(fought ? { duel } : { contest: { P: risk.jump.strength, roll, outcome } }), outcome, taken: takes, goodsTaken, goodsLeft: someGoods(state.goods), ...(thrown ? { bottle: thrown.note } : {}), ...(blue ? { blue } : {}),
+    text: `${threw}${text}${blue?.text ? ` ${blue.text}` : ''}`, money: moved, scene: { kind: `npc:robbers:${outcome === 'disaster' ? 'fail' : outcome}`, ...(thrown ? { bottle: thrown.scene } : {}) } }));
   if (outcome === 'clean') {
     endDay(cfg, state, 'clinic', at, push);
     return true;
@@ -816,6 +858,12 @@ function morning(cfg, state, night, push) {
   state.day += 1;
   state.hour = cfg.start.hour;
   state.hoursThere = 0;
+  // (pot-1: whoever was under something and is not any more; the cooks the smell no longer counts)
+  if (state.under && Object.keys(state.under).length) state.under = sweepRows(state, clockOf(state));
+  if (cfg.make?.smell && state.make) {
+    const keep = state.day - (cfg.make.smell.days ?? 2) + 1;
+    for (const m of Object.values(state.make)) if (m.cooked) m.cooked = Object.fromEntries(Object.entries(m.cooked).filter(([d]) => Number(d) >= keep));
+  }
   // a new day: everyone you dealt with yesterday is calm again and nobody is out
   const settled = Object.keys(state.people ?? {});
   state.people = {};
@@ -1358,8 +1406,11 @@ function resolveCrew(cfg, state, how, at, push, { night = true, held = false } =
   const street = homeStreet(cfg);
   const g = guardOf(cfg, state);
   let gotIn = false, by = how, duel = null, guard = null, roll = null, energyLost = 0, share = C.share, shareBy = null;
+  let thrown = null;
   if (how === 'door') {
-    duel = crewOut(cfg, state, keys);
+    // (bench-1: the bottle on your belt, thrown at them in the first second; your street is where the cloud is news)
+    thrown = throwBottle(cfg, state, 'crew', street);
+    duel = crewOut(cfg, state, keys, { bottle: thrown?.b ?? null });
     gotIn = duel.result !== 'won';
     energyLost = gotIn ? C.hurt.lost : C.hurt.won;
     if (duel.earl?.down) {
@@ -1409,7 +1460,17 @@ function resolveCrew(cfg, state, how, at, push, { night = true, held = false } =
   H.last = raid.day;
   H.raid = null;
   const name = `${cap(who.name)} and a friend`;
+  // (bench-1: paint in the bottle at your door, him and his friend blue for a week; he has what they took. Else, with no
+  // bottle, the dye pack in your safe: whoever got into it comes out blue)
+  const crewTook = { cash: taken, goods: goodsTaken };
+  const crewFoe = crewOf(cfg, state, { bottle: null }).inputs.foes;
+  const crewHome = homeOfPerson(cfg, who.id) ?? street;
+  const crewBlue = [{ id: who.id, name: who.name, role: who.role ?? null, foe: crewFoe[0], place: crewHome },
+    { id: `blue:${raid.day}:crew:friend`, name: 'his friend', role: null, says: `the one who came with ${who.name}`, foe: crewFoe[1] ?? crewFoe[0], place: crewHome }];
+  const blue = thrown?.b.tags ? tagBlue(cfg, state, crewBlue, null, thrown, crewTook)
+    : gotIn ? dyePack(cfg, state, crewBlue, crewTook) : null;
   const parts = [];
+  if (thrown) parts.push(thrown.text.replace(/\.$/, ''));
   if (duel) {
     parts.push(duel.result === 'won' ? `You met them at your door and saw them off (energy −${energyLost})` : `They beat you at your door and got in (energy −${energyLost}); they made you open ${shareFrom(cfg, state)}`);
     if (guard?.beaten) parts.push(`${cap(g.who.name)} went down in it: off tomorrow, back on your step the day after`);
@@ -1418,12 +1479,12 @@ function resolveCrew(cfg, state, how, at, push, { night = true, held = false } =
     if (guard?.beaten) parts.push(`They beat ${g.who.name} on your step (he is hurt: off ${cfg.guard.hurtDays} days${guard.lostDays ? `; the ${guard.lostDays} day${guard.lostDays > 1 ? 's' : ''} left of his stretch ${guard.lostDays > 1 ? 'are' : 'is'} lost` : ''})`);
     parts.push(gotIn ? `They kicked your door in while you were ${held ? `in ${placeOf(cfg, state.place).label}` : 'out'}` : `They kicked at your door while you were ${held ? `in ${placeOf(cfg, state.place).label}` : 'out'} and it held${roll?.kickBy ? ` (${cfg.things[roll.kickBy].label})` : ''}`);
   }
-  const gw = Object.keys(goodsTaken).length ? ` and ${goodsText(cfg, goodsTaken)}` : '';
+  const gw = Object.keys(goodsTaken).length ? ` and ${goodsText(cfg, goodsTaken, state)}` : '';
   const took = !gotIn ? 'Nothing taken.' : taken || gw ? `They took $${taken}${gw} (${share}% of the $${before} banked${shareBy ? `: the rest was in ${cfg.things[shareBy].label}` : ''}).` : 'They found nothing banked to take.';
   push(at({ type: 'raid', by: who.id, who, why: raid.why ?? null, kind: 'crew', at: street, how: by, outcome, gotIn, taken, goodsTaken, share, shareBy, banked: before, bankedAfter: state.banked, night, held,
-    guard, ...(duel ? { duel, fight: { result: duel.result, energyLost } } : { fight: null }), ...(roll ? roll : {}), energyLost,
-    text: `Last night ${who.name} and a friend came for your crib. ${parts.join('. ')}. ${took}`, money: moved,
-    scene: duel ? { kind: duel.result === 'won' ? 'fight:fail' : 'fight:clean', crew: true } : gotIn ? { kind: 'breakin:clean' } : { kind: 'breakin:fail' } }));
+    guard, ...(duel ? { duel, fight: { result: duel.result, energyLost } } : { fight: null }), ...(roll ? roll : {}), energyLost, ...(thrown ? { bottle: thrown.note } : {}), ...(blue ? { blue } : {}),
+    text: `Last night ${who.name} and a friend came for your crib. ${parts.join('. ')}. ${took}${blue?.text ? ` ${blue.text}` : ''}`, money: moved,
+    scene: { ...(duel ? { kind: duel.result === 'won' ? 'fight:fail' : 'fight:clean', crew: true } : gotIn ? { kind: 'breakin:clean' } : { kind: 'breakin:fail' }), ...(thrown ? { bottle: thrown.scene } : {}) } }));
   return how === 'door' ? energyLost : 0;
 }
 /** Where the money comes from when they make you open it: the safe if you own one, else the floorboard. */
@@ -1599,7 +1660,9 @@ function sixesJump(cfg, state, at, push) {
   const X = cfg.sixes;
   const s = state.sixes;
   const place = state.place;
-  const duel = jumpOut(cfg, state, place, ['sixes', state.day]);
+  // (bench-1: the bottle on your belt, thrown first at the two on the kerb)
+  const thrown = throwBottle(cfg, state, 'sixes', place);
+  const duel = jumpOut(cfg, state, place, ['sixes', state.day], { bottle: thrown?.b ?? null });
   const outcome = duel.band;
   const takes = jumpTakes(cfg, state, state.carried)[outcome];
   const moved = takes ? [lose(state, takes, 'jumped')] : [];
@@ -1617,11 +1680,15 @@ function sixesJump(cfg, state, at, push) {
     if (v > X.afterJump) sixesEase(cfg, state, v - X.afterJump);
   }
   const value = sixesOf(cfg, state).value;
-  const what = [takes ? `$${takes}` : null, Object.keys(goodsTaken).length ? goodsText(cfg, goodsTaken) : null].filter(Boolean).join(' and ');
-  const text = won ? `Two of the Sixes were waiting on the kerb, on your way to the subway. ${outcome === 'messy' ? `You saw them off, only just: they got $${takes} first.` : 'You saw them off and kept every dollar.'} They will keep off you for ${cfg.memory.days} days. ${note.text}`
+  const what = [takes ? `$${takes}` : null, Object.keys(goodsTaken).length ? goodsText(cfg, goodsTaken, state) : null].filter(Boolean).join(' and ');
+  // (bench-1: paint in it, the two of them blue for a week, at their market; the first has what they took)
+  const blue = thrown?.b.tags ? tagBlue(cfg, state, two.map((p, i) => ({ id: p.id, name: p.name, role: p.role, foe: duel.inputs.foes[i] ?? duel.inputs.foes[0], place })), place, thrown, { cash: takes, goods: goodsTaken }) : null;
+  const text0 = won ? `Two of the Sixes were waiting on the kerb, on your way to the subway. ${outcome === 'messy' ? `You saw them off, only just: they got $${takes} first.` : 'You saw them off and kept every dollar.'} They will keep off you for ${cfg.memory.days} days. ${note.text}`
     : `Two of the Sixes were waiting on the kerb, on your way to the subway, and beat you: they took ${what || 'nothing'}. They made their point (${value} of ${X.max}).`;
+  const text = `${thrown ? `${thrown.text} ` : ''}${text0}${blue?.text ? ` ${blue.text}` : ''}`;
   push(at({ type: 'jumped', by: 'sixes', sixes: true, who: two.map(whoOf), duel, outcome, taken: takes, goodsTaken, goodsLeft: someGoods(state.goods), value, max: X.max, ...(marks.length ? { marks } : {}), ...(note ? { note } : {}),
-    text, money: moved, scene: { kind: `npc:robbers:${outcome === 'disaster' ? 'fail' : outcome}`, sixes: true } }));
+    ...(thrown ? { bottle: thrown.note } : {}), ...(blue ? { blue } : {}),
+    text, money: moved, scene: { kind: `npc:robbers:${outcome === 'disaster' ? 'fail' : outcome}`, sixes: true, ...(thrown ? { bottle: thrown.scene } : {}) } }));
   if (outcome === 'clean') endDay(cfg, state, 'clinic', at, push);
 }
 
@@ -1757,6 +1824,11 @@ function sixesRaidNight(cfg, state, night, push) {
     }
   }
   const moved = taken ? [burgle(state, taken)] : [];
+  // (bench-1: the dye pack in your safe: whoever got into it comes out blue, at their market; never a shooter to take it
+  // back off: the first of them who fights with his hands)
+  const ground = cfg.sixes?.ground?.[0] ?? null;
+  const fists = c.foes.filter(f => !/gun/.test(f.weapon ?? ''));
+  const blue = gotIn && ground && fists.length ? dyePack(cfg, state, fists.slice(0, 2).map((f, i) => ({ id: `blue:${R.day}:sixes:${i + 1}`, name: f.name.replace(/^an? /, 'the '), role: null, says: `one of the Sixes who came for your crib (${f.name})`, foe: { id: f.id, kind: f.kind, name: f.name, weapon: f.weapon, hp: f.hp, hits: f.hits, speed: f.speed, ...(f.reel !== undefined ? { reel: f.reel } : {}), ...(f.heft !== undefined ? { heft: f.heft } : {}), ...(f.soak !== undefined ? { soak: f.soak } : {}) }, place: ground })), { cash: taken, goods: goodsTaken }) : null;
   // (held at your door: what was in the pockets of each of them you put down, banked)
   let spoils = 0;
   if (home && !gotIn && Y.spoils) {
@@ -1778,7 +1850,7 @@ function sixesRaidNight(cfg, state, night, push) {
   const to = won ? Y.afterWin : home ? Y.afterLoss : gotIn ? Y.afterTake : null;
   if (to != null && v0 > to) sixesEase(cfg, state, v0 - to);
   const value = sixesOf(cfg, state).value;
-  const gw = Object.keys(goodsTaken).length ? goodsText(cfg, goodsTaken) : null;
+  const gw = Object.keys(goodsTaken).length ? goodsText(cfg, goodsTaken, state) : null;
   const what = [taken ? `$${taken}` : null, gw, lostGun ? lostGun.label : null, ...thingsTaken.map(x => x.label)].filter(Boolean);
   const keep = [hidden.cash && gotIn ? `the $${Math.min(hidden.cash, before)} in the cereal box` : null, hidden.goods && gotIn && Object.keys(state.stash ?? {}).length ? 'the goods behind the false wall' : null,
     ...(gotIn ? hidden.things.filter(k => state.things?.[k]).map(k => `${cfg.things[k].label} behind the false wall`) : [])].filter(Boolean);
@@ -1798,8 +1870,8 @@ function sixesRaidNight(cfg, state, night, push) {
   push(at({ type: 'raid', by: 'sixes', sixes: true, kind: 'sixes', who: c.foes.map(f => ({ id: f.id, name: f.name, kind: f.kind })), crew: R.crew, size: R.size, n: c.n, says: c.says, how, outcome, gotIn,
     taken, goodsTaken, lostGun, thingsTaken, thingsOut, share, shareBy, hidden: { ...hidden, things: [...hidden.things] }, banked: before, bankedAfter: state.banked, night: true, home, guard, ...(roll ? roll : {}),
     ...(fight ? { duel: fight, fight: { result: fight.result, hurt: fight.hurt, spent: fight.spent } } : { fight: null }), energyLost: hurt, heat, value, max: X.max, truce: won ? s.truce : null,
-    spoils,
-    text: `Last night the Sixes came for your crib: ${c.text}. ${parts.join('. ')}. ${took}${pockets} ${after}${heat ? ` The shots carried: heat +${heat}.` : ''}`,
+    spoils, ...(blue ? { blue } : {}),
+    text: `Last night the Sixes came for your crib: ${c.text}. ${parts.join('. ')}. ${took}${pockets} ${after}${heat ? ` The shots carried: heat +${heat}.` : ''}${blue?.text ? ` ${blue.text}` : ''}`,
     money: moved, scene: fight ? { kind: won ? 'fight:fail' : 'fight:clean', sixesRaid: true } : gotIn ? { kind: 'breakin:clean', sixesRaid: true } : { kind: 'breakin:fail', sixesRaid: true } }));
   return { hurt, heat, clinic };
 }
@@ -1818,4 +1890,300 @@ function holdWith(cfg, state, h, at, push) {
   const was = holdOf(cfg, state);
   state.holdWith = h;
   push(at({ type: 'holdWith', by: 'you', with: h, was, label: holdLabel(cfg, h), text: `If the Sixes come, you meet them at your door with ${holdLabel(cfg, h)}.`, money: [], scene: { notice: true } }));
+}
+
+// ── (pot-1) making things (RUN.md "The pot (pot-1)"; make.mjs, effects.mjs) ──────────────────────────────────────────
+/** A maker's own state, made on first use (state.make[maker]: seen, book, known, cooked). */
+function makeOf(state, maker) {
+  state.make = state.make ?? {};
+  if (!state.make[maker]) state.make[maker] = { seen: {}, book: { tried: {}, found: {}, names: {} }, known: {}, cooked: {} };
+  const m = state.make[maker];
+  m.seen ??= {}; m.book ??= { tried: {}, found: {}, names: {} }; m.book.tried ??= {}; m.book.found ??= {}; m.book.names ??= {}; m.known ??= {}; m.cooked ??= {};
+  return m;
+}
+
+/** A making bought from its seller where you stand, from what you carry; no hour. Dealing with them: their trust moves. */
+function buyMaking(cfg, state, item, at, push) {
+  const m = cfg.make.makings[item];
+  const keeper = whoOf(personOf(cfg, m.keeper));
+  const moved = spend(state, m.price, { from: 'carried', on: 'goods' });
+  state.goods[item] = goodsOn(state, item) + 1;
+  makeOf(state, m.maker).seen[item] = true;
+  state.people[keeper.id] = { out: false, job: null, ...(state.people[keeper.id] ?? {}), mood: 'friendly' };
+  const trust = moveTrust(cfg, state, keeper, cfg.connect.buy, 'bought', 'you bought from them');
+  push(at({ type: 'making', by: 'you', who: keeper, item, maker: m.maker, label: m.label, pack: m.pack, family: m.family, effect: m.effect, price: m.price, spot: m.spot ?? null, piece: m.piece ?? null,
+    carried: goodsOn(state, item), home: goodsHome(state, item), ...(trust ? { trust } : {}),
+    text: `You bought ${m.pack} from ${keeper.name} for $${m.price}. ${goodsOn(state, item)} on you${goodsHome(state, item) ? `, ${goodsHome(state, item)} at home` : ''}.`, money: [moved], scene: { action: 'hand_off' } }));
+}
+
+/**
+ * THE COOK MOVE (an hour at your crib): the makings from the shelf into the carrier, and the batch comes out by the odds
+ * the pot showed (make.mjs cookOdds, the hour's own, tired or not): clean; dirty (one bad thing rides along, found out
+ * when the first person takes it); or something else got in (one more making, free, from anything ever on your shelf).
+ * Six bags at the crib; the book keeps the set tried and the product found; the smell goes up.
+ */
+function cook(cfg, state, choice, at, push) {
+  const X = cfg.make;
+  const maker = choice.maker;
+  const C = carrierOf(cfg, maker, choice.carrier);
+  const ins = [...new Set(choice.with)].sort();
+  // (bench-1: a made thing the carrier takes alone, a bag from the kitchen in a bottle, as it shows)
+  const bag = ins.length === 1 && isMade(cfg, ins[0]) ? ins[0] : null;
+  const odds = cookOdds(cfg, state, maker, ins);
+  const smells = X.makers[maker].smells !== false;
+  const smell0 = smells ? smellOf(cfg, state) : null;
+  const keys = ['run-cook', state.day, state.hour, maker];
+  // (bench-1: a maker with no batch odds rolls nothing: it comes out as packed)
+  const roll = odds.sure ? null : d100(state, keys);
+  const outcome = odds.sure ? 'clean' : roll < odds.clean ? 'clean' : roll < odds.clean + odds.dirty ? 'dirty' : 'extra';
+  const extra = outcome === 'extra' ? pick(rng(state.seed, 'run-cook-extra', state.day, state.hour, maker), odds.could) : null;
+  // (a bag: one of it, a dirty one not yet found out among them as their counts weigh, make.mjs goodsBehind)
+  const used = bag ? goodsBehind(cfg, state, { [bag]: 1 }) : Object.fromEntries(ins.map(k => [k, 1]));
+  for (const [k, n] of Object.entries(used)) {
+    state.stash[k] = goodsHome(state, k) - n;
+    if (!state.stash[k]) delete state.stash[k];
+  }
+  const all = extra ? [...ins, extra].sort() : ins;
+  const p = bag ? productById(cfg, bottleFor(cfg, cfg.goods[bag].product)) : productOf(cfg, all);
+  const dirtyIs = outcome === 'dirty' ? odds.dirtyIs : null;
+  const good = dirtyIs ? `${p.id}~${dirtyIs}` : p.id;
+  if (!cfg.goods[good]) throw new Error(`nothing in config make.products for ${p.key}`);
+  state.stash[good] = goodsHome(state, good) + C.n;
+  state.energy = Math.max(0, state.energy - cfg.energy.perHour);
+  const mk = makeOf(state, maker);
+  if (!bag) for (const k of ins) mk.seen[k] = true;
+  const key = ins.join('+');
+  // (a bag in a bottle is no set of makings: it is in the book as found, not as tried)
+  const firstTry = bag ? mk.book.found[p.id] == null : mk.book.tried[key] == null;
+  if (firstTry && !bag) mk.book.tried[key] = state.day;
+  if (extra && mk.book.tried[p.key] == null) mk.book.tried[p.key] = state.day;
+  const found = mk.book.found[p.id] == null;
+  if (found) mk.book.found[p.id] = state.day;
+  mk.cooked[state.day] = (mk.cooked[state.day] ?? 0) + 1;
+  const smell = smells ? smellOf(cfg, state) : null;
+  const name = productName(cfg, state, p.id);
+  const lines = effectLines(cfg, p);
+  const label = bag ? `a bag of ${goodLabel(cfg, state, bag)}` : ins.map(k => X.makings[k].label).join(' and ');
+  const said = outcome === 'extra' ? ` Something else got in: ${X.makings[extra].label}. It came out ${name}${found ? ', new in your book' : ''}.`
+    : found ? ` New in your book${p.names ? ': name it what you like' : ''}.` : '';
+  const pressure = smell && smell.level !== (smell0?.level ?? 0) ? { from: smell0?.level ?? 0, to: smell.level } : null;
+  const shown = shownAs(cfg, state, good);
+  // (bench-1: what is at home of it as it shows: a dirty batch beside clean ones counted with them, as the shelf counts)
+  const home = behind(cfg, state, shown).reduce((a, k) => a + goodsHome(state, k), 0);
+  const verb = (X.makers[maker].verb ?? 'Cook').toLowerCase();
+  const unit = X.kinds[C.gives]?.unit ?? C.gives;
+  push(at({ type: 'cook', by: 'you', maker, carrier: C.id, with: ins, extra, product: p.id, name, good: shown, n: C.n, kind: C.gives, lines, rarity: p.rarity, families: p.families,
+    outcome: outcome === 'dirty' ? 'clean' : outcome, chance: { clean: odds.clean, dirty: odds.dirty, extra: odds.extra }, tired: odds.tired, firstTry, found,
+    home, smell: smell ? { level: smell.level, raw: smell.raw, off: smell.off, until: smell.until, ...(pressure ? { was: pressure.from } : {}) } : null,
+    ...(bag ? { bag, usedGood: Object.keys(used)[0] === bag ? bag : shownAs(cfg, state, Object.keys(used)[0]) } : {}),
+    text: `You ${verb === 'cook' ? 'cooked' : `${verb}ed`} ${label}: ${C.n} ${unit}s of ${name}.${said}${smell?.level ? ` The smell: HOME +${smell.level} until day ${smell.until} is out.` : ''}`,
+    scene: { action: C.scene?.action ?? 'cook', spot: smells ? 'counter' : 'floor-spot', product: p.id, good: shown, seconds: C.scene?.seconds ?? null, piece: cfg.goods[good].piece ?? null,
+      colours: p.families.map(f => X.families?.[f] ?? null) } }));
+  // (a dirty batch says nothing yet: the event's `outcome` is the label's. Its truth rides where the page cannot show it
+  // until the first bag is taken: the goods at the crib)
+  return false;
+}
+
+/**
+ * A MADE THING TAKEN by a person (a sale that went through): its effects on them from the end of this hour, each in its
+ * turn (effects.mjs rowsFor, the row's `by` what put it there); a dirty batch's bad thing on them too, the batch found
+ * out (every bag of it shows as dirty from now), their mood and trust, and the place one hotter. → the event's note.
+ */
+function doseWith(cfg, state, who, good, place) {
+  const X = cfg.make;
+  const G = cfg.goods[good];
+  const p = productById(cfg, G.product);
+  const t = clockOf(state) + 1;
+  const by = { maker: G.maker, carrier: G.kind, product: G.product, good };
+  const rows = rowsFor(cfg, p.effects, t, place, by);
+  let bad = null;
+  let mood = null;
+  if (G.dirty) {
+    const D = X.dirty[G.dirty];
+    rows.push(...rowsFor(cfg, [{ effect: D.effect, at: 0 }], t, place, { ...by, dirty: G.dirty }));
+    makeOf(state, G.maker).known[good] = state.day;
+    mood = D.mood ?? null;
+    if (mood) state.people[who.id] = { ...(state.people[who.id] ?? { out: true, job: null }), mood };
+    const trust = D.trust ? moveTrust(cfg, state, who, D.trust, 'dirty', 'what you sold them was dirty') : null;
+    const heat = D.heat ? heatPlace(cfg, state, place, D.heat) : null;
+    bad = { is: G.dirty, effect: D.effect, label: X.effects[D.effect]?.label ?? G.dirty, heat: D.heat ?? 0, placeHeat: heat, ...(trust ? { trust } : {}), says: D.says };
+  }
+  const now = (state.under?.[who.id] ?? []).filter(r => r.until > clockOf(state));
+  state.under = { ...(state.under ?? {}), [who.id]: [...now, ...rows] };
+  const name = productName(cfg, state, G.product);
+  const pr = pronounsOf(cfg, who.id);
+  const verbs = p.effects.map((e, i) => `${i && e.at > 0 ? 'then ' : ''}${X.effects[e.effect].label} ${e.hours} hour${e.hours === 1 ? '' : 's'}`).join(', ');
+  const text = `${cap(who.name)} took the ${name}: ${verbs}.${bad ? ` ${cap(pr.they)} ${pr.they === 'they' ? 'throw' : 'throws'} up green: the batch was dirty (heat +${bad.heat} here).` : ''}`;
+  return { mood, text, note: { who: { ...who }, place, product: G.product, name, good: shownAs(cfg, state, good), rows: rows.map(r => rowWords(cfg, state, r)), lines: effectLines(cfg, p), ...(bad ? { dirty: bad } : {}) } };
+}
+
+/**
+ * A SLEEPER'S WALLET (an hour, sure): somebody asleep on what you sold them, where you stand. It pays what the place's
+ * wallet pays; he knows who sold it: a mark for the week (no sales to him), his trust, the pressure at home.
+ */
+function lift(cfg, state, whoId, at, push) {
+  const L = liftsAt(cfg, state).find(x => x.who.id === whoId);
+  const C = cfg.make.lift;
+  const place = state.place;
+  const keys = ['run-lift', state.day, state.hour, place, whoId];
+  const pay = payIn(state, L.pay, keys);
+  const moved = earn(state, pay);
+  state.energy = Math.max(0, state.energy - cfg.energy.perHour);
+  const row = (state.under[whoId] ?? []).find(r => r.effect === L.effect && r.place === place && rowOn(r, clockOf(state)) && !r.lifted);
+  if (row) row.lifted = true;
+  const who = L.who;
+  const trust = moveTrust(cfg, state, who, C.trust ?? 0, 'lifted', 'you lifted their wallet while they slept');
+  const mark = C.mark ? markPerson(cfg, state, who, C.mark, place, { force: true }) : null;
+  const pressure = press(cfg, state, place, C.pressure?.win, 'lift', `You lifted ${who.name}'s wallet while they slept (day ${state.day})`, who);
+  // (`heat`: he wakes and calls it in: the place that much hotter)
+  const heat = C.heat ? heatPlace(cfg, state, place, C.heat) : null;
+  push(at({ type: 'lift', by: 'you', who, effect: L.effect, product: L.product, pay, sure: true, ...(C.heat ? { heat: C.heat, placeHeat: heat } : {}), ...(trust ? { trust } : {}), ...(mark ? { mark } : {}), ...(pressure ? { pressure } : {}),
+    text: `You lifted ${who.name}'s wallet while ${pronounsOf(cfg, who.id).they} slept: +$${pay}. ${cap(who.name)} will know who sold it: no sales to ${pronounsOf(cfg, who.id).them} for ${cfg.memory?.days ?? 7} days.`,
+    money: [moved], scene: C.scene ? { ...C.scene } : { action: 'hand_off' } }));
+  return false; // (nobody saw: he was asleep)
+}
+
+/** The belt (at your crib, free): a made thing from the shelf onto it (on you, never offered for sale), or back. */
+function belt(cfg, state, choice, at, push) {
+  if (choice.do === 'unbelt') {
+    const b = state.belt;
+    state.stash[b.good] = goodsHome(state, b.good) + (b.n ?? 1);
+    state.belt = null;
+    const name = goodLabel(cfg, state, shownAs(cfg, state, b.good));
+    push(at({ type: 'belt', by: 'you', good: shownAs(cfg, state, b.good), on: false, text: `You took the ${name} off your belt: back on the shelf.`, scene: { notice: true } }));
+    return;
+  }
+  const [g] = Object.keys(goodsBehind(cfg, state, { [choice.good]: 1 }));
+  state.stash[g] = goodsHome(state, g) - 1;
+  if (!state.stash[g]) delete state.stash[g];
+  state.belt = { good: g, n: 1 };
+  const name = goodLabel(cfg, state, choice.good);
+  push(at({ type: 'belt', by: 'you', good: choice.good, on: true, text: `You put a ${cfg.goods[g].unit} of ${name} on your belt: on you wherever you go, never sold.`, scene: { notice: true } }));
+}
+
+/** A name for a product you found (two or more makings in it): free, any time. People say it back. */
+function nameIt(cfg, state, choice, at, push) {
+  const p = productById(cfg, choice.product);
+  const max = cfg.make.names?.max ?? 24;
+  const name = String(choice.name ?? '').replace(/\s+/g, ' ').trim();
+  if (!name || name.length > max || !/^[\p{L}\p{N} '&!.,?-]+$/u.test(name)) throw new Error(`a name is 1 to ${max} letters, numbers, spaces and ' & ! . , ? -`);
+  const mk = makeOf(state, p.maker);
+  const was = productName(cfg, state, p.id);
+  if (name === p.name) delete mk.book.names[p.id];
+  else mk.book.names[p.id] = name;
+  push(at({ type: 'name', by: 'you', product: p.id, maker: p.maker, name, was, text: `You call it ${name} now${was !== name ? ` (it was ${was})` : ''}.`, scene: { notice: true } }));
+}
+
+// ── (bench-1) the bench and the bottle (RUN.md "The bench and the bottle (bench-1)") ─────────────────────────────────
+/**
+ * THE BOTTLE THROWN, in the first second of a fight of several (`fight`: one of config make.bottle.fights): it leaves your
+ * belt and reaches all of them. Where the police are about, a cloud is news: the place one hotter. → null (no bottle on
+ * your belt), or { b: the bottle as it was (make.mjs bottleOn), note: the event's `bottle`, scene, text }.
+ */
+function throwBottle(cfg, state, fight, place) {
+  const B = cfg.make?.bottle;
+  if (!B || !(B.fights ?? []).includes(fight)) return null;
+  const b = bottleOn(cfg, state);
+  if (!b) return null;
+  state.belt = null;
+  // (only a cloud that changes the fight is news: dog spray, a bag; a splash of paint alone is not)
+  const news = b.inFight && !!place && policeAbout(cfg, state, place) && (B.heat ?? 0) > 0;
+  const heat = news ? heatPlace(cfg, state, place, B.heat) : null;
+  const F = b.fight;
+  const what = [F.blind ? `blind ${F.blind} seconds` : null, F.slow ? `dancing ${F.slow.s} seconds` : null, F.asleep ? `the first of them asleep ${F.asleep.s} seconds` : null, b.tags ? 'blue for a week' : null].filter(Boolean);
+  const text = `You threw a bottle of ${b.name}: ${what.join(', ') || 'it burst over them'}.${news ? ` A cloud with the police about is news: heat +${B.heat} ${placeOf(cfg, place).where ?? `at ${placeOf(cfg, place).label}`}.` : ''}`;
+  const note = { good: b.good, product: b.product, name: b.name, lines: [...b.lines], fight: JSON.parse(JSON.stringify(F)), tags: b.tags, cloud: b.cloud, colours: [...b.colours], at: fight, place: place ?? null,
+    ...(news ? { heat: B.heat, placeHeat: heat } : { heat: 0 }) };
+  // (what the page plays: you throw in the first second, a cloud in the filling's colour lands on all of them, then the
+  // blind stumble and the dance as long as the fight's own fields say)
+  const scene = { action: 'throw', at: 0, cloud: b.cloud, colours: [...b.colours], ...(F.blind ? { blind: F.blind } : {}), ...(F.asleep ? { asleep: { ...F.asleep } } : {}), ...(F.slow ? { dance: { ...F.slow } } : {}), ...(b.tags ? { blue: true } : {}) };
+  return { b, note, scene, text };
+}
+
+/** What taking it back gets, in words: "all of", "half of", "a quarter of". */
+const backWords = cfg => ({ 100: 'all of', 50: 'half of', 25: 'a quarter of' }[cfg.make.bottle.blue.back ?? 100] ?? `${cfg.make.bottle.blue.back}% of`);
+
+/** The two who jumped you, as blue men to be: unnamed, each as he fought you (the jumped fight's foe). */
+function jumpersOf(cfg, state, duel) {
+  const foes = duel?.inputs?.foes ?? [];
+  return foes.map((f, i) => ({ id: `blue:${state.day}:${state.hour}:${f.id ?? `j${i + 1}`}`, name: i === 0 ? 'the blue man' : 'the other blue man', role: null,
+    says: `the ${f.kind === 'runner' ? 'runner' : 'heavy'} who jumped you`, foe: { id: f.id, kind: f.kind, name: f.name, weapon: f.weapon, hp: f.hp, hits: f.hits, speed: f.speed, ...(f.reel !== undefined ? { reel: f.reel } : {}) }, place: state.place }));
+}
+
+/**
+ * THEY ARE BLUE FOR A WEEK (config make.bottle.blue.days): a row of who is under what for each of them (effects.mjs; a
+ * named person under their id, one of them nobody knows under one of their own, with `who`), at their usual place (each
+ * one's `place`, or `place`). The first of them has what they took (`took`: the cash and the goods), if anything: he is a
+ * card there, "Take it back off the blue man". `by`: the bottle (`thrown`) or the dye pack. → the event's `blue`.
+ */
+function tagBlue(cfg, state, people, place, thrown, took, by = null) {
+  const X = cfg.make;
+  const Bl = X.bottle.blue;
+  const t = clockOf(state);
+  const until = (state.day + (Bl.days ?? 7)) * 24 + cfg.start.hour;
+  const tookAny = (took?.cash ?? 0) > 0 || Object.values(took?.goods ?? {}).some(n => n > 0);
+  const rows = [];
+  people.forEach((q, i) => {
+    const row = { effect: 'tagged', from: t, until, place: q.place ?? place, by: by ?? { maker: 'bench', carrier: 'bottle', product: thrown?.b.product ?? null, good: thrown?.b.good ?? null },
+      ...(personOf(cfg, q.id) ? {} : { who: { name: q.name, role: q.role ?? null, says: q.says ?? null } }),
+      foe: { ...q.foe }, took: i === 0 && tookAny ? { cash: took.cash ?? 0, goods: someGoods(took.goods) } : null, back: null };
+    const now = (state.under?.[q.id] ?? []).filter(r => r.until > t && r.effect !== 'tagged');
+    state.under = { ...(state.under ?? {}), [q.id]: [...now, row] };
+    rows.push({ id: q.id, who: blueWho(cfg, q.id, row), place: row.place, until, untilDay: clockAt(until).day, untilClock: clockAt(until).clock, took: row.took, back: row.took ? backOf(cfg, row.took) : null, row: rowWords(cfg, state, row) });
+  });
+  const first = rows[0];
+  const at = first ? placeOf(cfg, first.place) : null;
+  const text = first ? `${people.length > 1 ? 'They are' : `${cap(first.who.name)} is`} bright blue for a week${at ? `, ${at.where ?? `at ${at.label}`} all week` : ''}.${first.took ? ` Take it back off ${first.who.name} there: ${backWords(cfg)} what ${people.length > 1 ? 'they' : 'he'} took.` : ''}` : null;
+  return { rows, by: by ? { ...by } : { bottle: thrown?.b.product ?? null }, until, text };
+}
+
+/**
+ * THE DYE PACK in your floor safe (config things with `tags` and `needs`): whoever got into the safe comes out blue; it
+ * goes off once and is spent. null: you own no dye pack, or not the safe it needs.
+ */
+function dyePack(cfg, state, people, took) {
+  const item = Object.keys(cfg.things ?? {}).find(k => cfg.things[k].tags && state.things?.[k] && (!cfg.things[k].needs || (state.things?.[cfg.things[k].needs] && !isOut(state, cfg.things[k].needs))));
+  if (!item || !cfg.make?.bottle?.blue) return null;
+  state.things = { ...state.things };
+  delete state.things[item];
+  const blue = tagBlue(cfg, state, people, null, null, took, { thing: item });
+  return { ...blue, item, text: `The dye pack in your safe went off in their hands. ${blue.text ?? ''}`.trim() };
+}
+
+/**
+ * TAKE IT BACK OFF THE BLUE MAN (an hour where he is, a fight you start): won, you get back what config
+ * make.bottle.blue.back says of what he took (all of it since the orchestrator's call: the cash, and the goods; never more); lost, he keeps it and you pay the fight's cost.
+ * Either way the place is that much hotter (a fight in the street) and it is tried once: he is still blue all week.
+ */
+function takeBack(cfg, state, id, at, push) {
+  const Bl = cfg.make.bottle.blue;
+  const place = state.place;
+  const x = bluesAt(cfg, state).find(q => q.id === id);
+  const keys = [state.day, state.hour, place, id];
+  const duel = blueOut(cfg, state, x.row, keys);
+  const won = duel.result === 'won';
+  state.energy = Math.max(0, state.energy - cfg.energy.perHour - cfg.duel.cost[won ? 'win' : 'lose']);
+  const row = (state.under[id] ?? []).find(r => r.effect === 'tagged' && r.place === place && !r.back && r.took);
+  if (row) row.back = { day: state.day, result: duel.result };
+  let moved = [];
+  if (won) {
+    if (x.back.cash) moved = [earn(state, x.back.cash)];
+    for (const [g, n] of Object.entries(x.back.goods)) state.goods[g] = goodsOn(state, g) + n;
+  }
+  const heatNow = Bl.heat ? heatPlace(cfg, state, place, Bl.heat) : null;
+  const got = [x.back.cash ? `$${x.back.cash}` : null, Object.keys(x.back.goods).length ? goodsText(cfg, x.back.goods, state) : null].filter(Boolean).join(' and ') || 'nothing';
+  push(at({ type: 'takeBack', by: 'you', who: x.who, place, duel, result: duel.result, took: { cash: x.took.cash, goods: { ...x.took.goods } }, back: won ? { cash: x.back.cash, goods: { ...x.back.goods } } : null,
+    energyLost: cfg.duel.cost[won ? 'win' : 'lose'], heat: Bl.heat ?? 0, placeHeat: heatNow,
+    text: won ? `You went for ${x.who.name}, still bright blue, and took it back: ${got}.` : `You went for ${x.who.name}, still bright blue, and he beat you: he keeps it.`,
+    money: moved, scene: { kind: `fight:${won ? 'fail' : 'clean'}`, blue: true } }));
+  return true; // (a fight in the street: it can be seen)
+}
+
+/** CHANGE WHAT STANDS ON THE FLOOR SPOT (an hour at your crib): another piece you own that stands there. */
+function changeFloor(cfg, state, item, at, push) {
+  const was = floorOf(cfg, state).standing;
+  state.floor = item;
+  state.energy = Math.max(0, state.energy - cfg.energy.perHour);
+  push(at({ type: 'floor', by: 'you', item, was, label: cfg.things[item].label, text: `You moved ${cfg.things[was]?.label?.replace(/^an? /, 'the ') ?? 'it'} aside and set up ${cfg.things[item].label.replace(/^an? /, 'the ')} on the floor spot.`, scene: { action: 'carry', spot: 'floor-spot' } }));
+  return false;
 }

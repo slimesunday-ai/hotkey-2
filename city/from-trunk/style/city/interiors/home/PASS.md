@@ -209,3 +209,14 @@ The owner's shortlist of the pieces that looked janky, redrawn shape first, and 
 
 ### After the third pass (2026-11-18)
 - **The owner's calls:** the original tiger rug was better, and the bust with the chain goes altogether. `rug-tiger` is back to its drawing from before the third pass (the 5 cm block, a flat hide and a low head; its gold variant now takes `gild` like every other gold). The bust is gone from the catalogue, from `city/builder.js`, and from the two rooms that showed it in a slot (apartment-collector's grail slot, house-come-up's table slot: those slots are taken out, nothing put in their place).
+
+## Crafting pieces (2026-11-19)
+THE RUN's approved crafting plan names four things that stand in a home or are fixed to its door. They are in `craft.js`, on the preview's sheet `?view=v2&k=craft` and in a room of their own, `?view=craft` (add `&cam=game` for the game's street camera, `&tod=night`, `&bench=1`, `&load=0..4`, `&gun=0..2`). `craft-shots.mjs` pictures them headless, with nothing fetched off the machine (`--three` answers the page's three from a local copy).
+
+- **`tool-bench`, the bench:** carried over from the crafter game (`game/src/base/station.js` benchCells, tiers 1 and 2) by its own code: the knocked-together bench and the steel one off a closing garage. The tier's number plate is left off (its "Workbench 1/2/3" names stay out); the metal layer is drawn as gloss; the vise sits one cell back so its T-handle is inside the footprint. Foot [7, 4], 1.95 m, a top at 0.85 m.
+- **`door-can`, the can over the door, loaded:** the pepper fogger's own build (`traps.js` now takes `{ can }`, the fogger as bought unchanged), its can in the load's family colour (blue, red, violet, green, black) under a strip of tape with a scrawl.
+- **`door-gun`, the Knock-Knock:** the run's own gun (six-shot, junk pistol, Doorman) by its own build, turned onto the wall in profile on a pine board, two clamp straps, a yellow cord from the trigger to the door's edge. Half grain, `shaped`.
+- **`porch-lamp`:** a jelly-jar lamp in a wire cage on a round plate, its globe wider than its cap so the glass shows from above; lit at night. Black or brass.
+- **Checks:** `check.mjs` (all 22 layouts pass) and `fine-check.mjs` pass. None of the four is in a layout.
+- **The game blocks are proposals with no buff.** The bench is bought (`store`); the loaded can and the Knock-Knock are made (`craft`). When the game's library is regenerated from this kit, those two should be kept off the shelves.
+

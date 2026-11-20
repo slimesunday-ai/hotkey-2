@@ -421,7 +421,7 @@ test('home: the deadbolt and the floor safe are bought on the street like the th
   const park = view(cfg, { ...at('park'), carried: 30, books: { ...at('park').books, earned: 30 } });
   const bolt = park.choices.find(c => c.choice.do === 'get' && c.choice.item === 'deadbolt');
   assert.ok(bolt.available);
-  assert.equal(bolt.key, String(park.choices.filter(c => !c.shelf && !(c.choice.do === 'subway' && cfg.places.park.links[c.choice.to]?.late) && c.choice.do !== 'learn' && c.choice.do !== 'fightWith' && !(c.choice.do === 'get' && cfg.things[c.choice.item]?.late)).length)); // last of all but today's shelves (lib-1), the rides added after (batch-1) and the lessons and fight-with (styles-1)
+  assert.equal(bolt.key, String(park.choices.filter(c => !c.shelf && !(c.choice.do === 'subway' && cfg.places.park.links[c.choice.to]?.late) && c.choice.do !== 'learn' && c.choice.do !== 'fightWith' && c.choice.do !== 'making' && !(c.choice.do === 'get' && cfg.things[c.choice.item]?.late)).length)); // (pot-1: and the makings sold here) last of all but today's shelves (lib-1), the rides added after (batch-1) and the lessons and fight-with (styles-1)
   // (sixes-1: and its job against a crew kicking the door while you are out, `kick`)
   assert.deepEqual(bolt.defends, { pct: cfg.things.deadbolt.defends.pct, kick: cfg.things.deadbolt.defends.kick });
   const got = step(cfg, { ...at('park'), carried: 30, books: { ...at('park').books, earned: 30 } }, bolt.choice);
@@ -456,7 +456,7 @@ test('condition 3: waves: never two days running, and two quiet days at least af
 });
 
 test('home: an older saved state (version 6) loads calm, with nothing due and nobody on the step, and plays on', () => {
-  assert.equal(RUN_STATE_VERSION, 12);
+  assert.equal(RUN_STATE_VERSION, 14); // (pot-1: 13, reading 12; bench-1: 14)
   const v6 = { ...at('park'), v: 6 };
   delete v6.home;
   delete v6.books.burgled;

@@ -22,7 +22,8 @@ function expected(c) {
     ...Object.keys(c.styles).map(k => `style:${k}`),
     ...Object.keys(c.shop).map(k => `shop:${k}`),
     ...Object.entries(c.things).filter(([, t]) => t.does).map(([k]) => `thing:${k}`),
-    ...Object.keys(c.goods).map(k => `good:${k}`),
+    // (pot-1: the goods bought from a connect; what you make and make it with is the Make tree's, the screens' next job)
+    ...Object.keys(c.goods).filter(k => !c.goods[k].made && !c.goods[k].making).map(k => `good:${k}`),
     'guard',
     ...Object.entries(c.places).filter(([, p]) => p.jobs).map(([k]) => `place:${k}`),
     ...Object.keys(c.routes).map(k => `route:${k}`),

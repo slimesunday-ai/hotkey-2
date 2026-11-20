@@ -7,6 +7,9 @@ import { bandOf, chances } from '../contest.mjs';
 import { runDuel } from '../fight/duel.mjs';
 import { tallied, bandOfJump } from './odds.mjs';
 import { RIVALS, rivalFoe, EARL_WAYS } from '../fight/data.mjs';
+import { heatFromRows, placeEffects, smellLevel, clockOf, rowOn } from './effects.mjs';
+// (bench-1: the bottle on your belt, thrown first in a fight of several: make.mjs; the two import each other, functions only)
+import { bottleOn, withBottle } from './make.mjs';
 
 export const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 export const ITEMS = Object.freeze(['pocket', 'cutter', 'bed']);
@@ -37,7 +40,17 @@ export const fullEnergy = (cfg, state) => (state.owned.bed ? cfg.energy.bed : cf
 
 // ── heat ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 /** What you did at a place: its heat (0 for a place nobody has heated, or a version-2 state). */
-export const placeHeat = (state, id) => state.placeHeat?.[id] ?? 0;
+export const storedHeat = (state, id) => state.placeHeat?.[id] ?? 0;
+/**
+ * A place's heat now: what was done there, and (pot-1) one hotter while anyone there is under an effect that heats a
+ * place (Disco Rash: "the place is one hotter" while they dance), never over the top (effects.mjs heatFromRows).
+ */
+export function placeHeat(state, id) {
+  const h = storedHeat(state, id);
+  if (!state.under) return h;
+  const e = heatFromRows(state, id);
+  return e.n ? Math.min(h + e.n, Math.max(h, e.top)) : h;
+}
 
 /**
  * The heat on you where you stand: the higher of your own and the place's (the police there know you, or know the
@@ -69,8 +82,8 @@ export function stopChance(cfg, state, place = state.place) {
 /** Add heat to a place (capped), and say how hot it is now. */
 export function heatPlace(cfg, state, id, n) {
   if (!n) return placeHeat(state, id);
-  state.placeHeat = { ...(state.placeHeat ?? {}), [id]: clamp(placeHeat(state, id) + n, 0, cfg.heat.max) };
-  return state.placeHeat[id];
+  state.placeHeat = { ...(state.placeHeat ?? {}), [id]: clamp(storedHeat(state, id) + n, 0, cfg.heat.max) };
+  return placeHeat(state, id);
 }
 
 // ── supply: what a place has to use up today ────────────────────────────────────────────────────────────────────────
@@ -96,25 +109,64 @@ export const fullSupply = cfg => Object.fromEntries(Object.entries(cfg.places).f
 /** Sales of a good on you, and at the crib (0 for a good you have none of, or an older saved state). */
 export const goodsOn = (state, g) => state.goods?.[g] ?? 0;
 export const goodsHome = (state, g) => state.stash?.[g] ?? 0;
-/** What one sale of a good cost you: the pack's price over its sales (whole dollars). */
-export const perSale = (cfg, g) => Math.round(cfg.goods[g].price / cfg.goods[g].sales);
+/** What one sale of a good cost you: the pack's price over its sales (whole dollars; pot-1: a made good or a making, exact). */
+export const perSale = (cfg, g) => (cfg.goods[g].made || cfg.goods[g].making ? cfg.goods[g].price / cfg.goods[g].sales : Math.round(cfg.goods[g].price / cfg.goods[g].sales));
 /** What goods are worth, at their price a sale: a map of good → sales. */
 export const goodsWorth = (cfg, goods = {}) => Object.entries(goods).reduce((a, [g, n]) => a + n * (cfg.goods[g] ? perSale(cfg, g) : 0), 0);
 /** Only the goods with something in them: { good: sales }. */
 export const someGoods = goods => Object.fromEntries(Object.entries(goods ?? {}).filter(([, n]) => n > 0));
-/** "3 sales of loose cigarettes and 1 of bootleg films on disc" */
-export function goodsText(cfg, goods) {
-  const parts = Object.entries(someGoods(goods)).map(([g, n]) => `${n} sale${n > 1 ? 's' : ''} of ${cfg.goods[g]?.label ?? g}`);
+
+// ── (pot-1) goods that were made (RUN.md "The pot (pot-1)"; config.mjs madeGoods) ─────────────────────────────────────
+/** A product's bags (`made`), a making that goes in (`making`), or a good bought from a connect. */
+export const isMade = (cfg, g) => !!cfg.goods?.[g]?.made;
+export const isMaking = (cfg, g) => !!cfg.goods?.[g]?.making;
+export const isBought = (cfg, g) => !!cfg.goods?.[g] && !cfg.goods[g].made && !cfg.goods[g].making;
+/** A dirty batch found out (its first bag taken, state.make[maker].known): from then it shows as itself. */
+export const knownDirty = (cfg, state, g) => !!cfg.goods?.[g]?.dirty && !!state?.make?.[cfg.goods[g].maker]?.known?.[g];
+/** The good a good shows as: a dirty batch not yet found out shows as its product (nobody can tell them apart). */
+export const shownAs = (cfg, state, g) => (cfg.goods?.[g]?.dirty && !knownDirty(cfg, state, g) ? cfg.goods[g].clean : g);
+/** The goods behind a good as it shows: itself, and every dirty batch of it not yet found out. */
+export const behind = (cfg, state, g) => [g, ...Object.keys(cfg.goods ?? {}).filter(k => cfg.goods[k].clean === g && !knownDirty(cfg, state, k))];
+/** A map of goods as it shows: { good as it shows: how many }. */
+export function shownGoods(cfg, state, goods) {
+  const out = {};
+  for (const [g, n] of Object.entries(someGoods(goods))) out[shownAs(cfg, state, g)] = (out[shownAs(cfg, state, g)] ?? 0) + n;
+  return out;
+}
+/** A good's name for the player: a product by the name the player gave it, a dirty batch found out said so. */
+export function goodLabel(cfg, state, g) {
+  const G = cfg.goods?.[g];
+  if (!G) return g;
+  // (bench-1: a bag from the kitchen in a bottle, by the bag's name: "Swamp Bedtime in a bottle")
+  if (G.bag && cfg.goods[G.bag]) return `${goodLabel(cfg, state, G.bag)} in a ${G.unit ?? 'bottle'}`;
+  const named = G.product ? state?.make?.[G.maker]?.book?.names?.[G.product] : null;
+  const base = named ?? G.label;
+  return G.dirty && knownDirty(cfg, state, g) ? `${base}, dirty` : base;
+}
+const plural = u => (/(x|s|ch|sh)$/.test(u) ? `${u}es` : `${u}s`);
+/** "3 sales of loose cigarettes and 1 of bootleg films on disc"; (pot-1) "2 bags of Zonked", "1 tin of night tea" */
+export function goodsText(cfg, goods, state = null) {
+  const sums = new Map();
+  for (const [g, n] of Object.entries(someGoods(goods))) {
+    const G = cfg.goods[g];
+    const label = state && G ? goodLabel(cfg, state, shownAs(cfg, state, g)) : G?.label ?? g;
+    const unit = G?.unit ?? 'sale';
+    const k = `${unit}|${label}`;
+    sums.set(k, { unit, label, n: (sums.get(k)?.n ?? 0) + n });
+  }
+  const parts = [...sums.values()].map(x => `${x.n} ${x.n > 1 ? plural(x.unit) : x.unit} of ${x.label}`);
   return parts.length ? parts.join(' and ') : 'nothing';
 }
 /**
  * The goods a selling job takes that you carry, each with what it pays there and what a sale of it cost you, the
  * best margin first (pay less its cost a sale). Empty: the job takes no goods, or you carry none it takes.
+ * (pot-1: as they show: a dirty batch not yet found out is counted in its product's, named as the player named it)
  */
 export function goodsFor(cfg, state, job) {
   if (!job.goods) return [];
-  return Object.keys(job.goods).filter(g => cfg.goods[g] && goodsOn(state, g) > 0)
-    .map(g => ({ good: g, label: cfg.goods[g].label, pay: job.goodsPay?.[g] ?? job.pay, cost: perSale(cfg, g), carried: goodsOn(state, g) }))
+  return Object.keys(job.goods).filter(g => cfg.goods[g] && shownAs(cfg, state, g) === g)
+    .map(g => [g, behind(cfg, state, g).reduce((a, k) => a + goodsOn(state, k), 0)]).filter(([, n]) => n > 0)
+    .map(([g, n]) => ({ good: g, label: goodLabel(cfg, state, g), pay: job.goodsPay?.[g] ?? job.pay, cost: perSale(cfg, g), carried: n, ...(isMade(cfg, g) ? { made: true } : {}) }))
     .sort((a, b) => (b.pay[0] + b.pay[1]) / 2 - b.cost - ((a.pay[0] + a.pay[1]) / 2 - a.cost));
 }
 /** The good a place's connect sells (null: none, or no connect). */
@@ -170,7 +222,8 @@ export function withGood(cfg, state, job, name = null) {
   if (!job.goods) return job;
   const all = goodsFor(cfg, state, job);
   const use = (name ? all.find(x => x.good === name) : null) ?? all[0];
-  return use ? { ...job, good: use.good, pay: use.pay, goodsHere: all } : job;
+  // (pot-1: a made thing sold: its name, for a job that says it, `madeNamed`)
+  return use ? { ...job, good: use.good, pay: use.pay, goodsHere: all, ...(use.made ? { madeLabel: use.label } : {}) } : job;
 }
 
 /** The place a person belongs to (each person belongs to one). */
@@ -277,6 +330,9 @@ export function peopleOf(cfg, state, place, { around = false } = {}) {
  */
 export function tellRisk(cfg, state, place = state.place) {
   const T = cfg.trust;
+  // (pot-1: while anyone there is under an effect that says so, Disco Rash's dancing, nobody there tells on you)
+  const quiet = state.under ? placeEffects(cfg, state, place).noTell : [];
+  if (quiet.length) return { pct: 0, by: [], heat: 0, quietBy: quiet };
   // (memory-1: whoever fears you does not tell)
   const by = peopleOf(cfg, state, place).filter(p => p.band === 'against' && !p.quiet && isAround(cfg, state, p.id));
   const pct = by.length ? clamp(Math.round(100 * (1 - (1 - T.tellPct / 100) ** by.length)), 0, 100) : 0;
@@ -357,7 +413,11 @@ export const jobTrust = job => ({ win: job.trust?.win ?? 0, fail: job.trust?.fai
 export const canHeat = job => (job.winHeat ?? 0) > 0 || (job.failHeat ?? 0) > 0;
 
 /** A job's label with its person in it. */
-export const namedLabel = job => (job.who && job.named ? job.named.replace('{who}', job.who.name) : job.label);
+export function namedLabel(job) {
+  // (pot-1: selling a made thing, the job's `madeNamed`, with what it is: "Sell Zonked to Shaky Dee at the bus stop")
+  const named = job.madeLabel && job.madeNamed ? job.madeNamed.replace('{what}', job.madeLabel) : job.named;
+  return job.who && named ? named.replace('{who}', job.who.name) : job.madeLabel && job.madeNamed ? job.madeNamed.replace('{what}', job.madeLabel).replace(' to {who}', '') : job.label;
+}
 
 /** A job's odds this hour, with the reasons. A sure job stays sure when you are tired. */
 export function jobOdds(cfg, state, job) {
@@ -470,12 +530,17 @@ export function danger(cfg, state, { hoursThere = state.hoursThere, carried = st
   // (goods on you do not make you likelier to be jumped: what is at stake is what a jump takes, `takesGoods` below)
   const steps = Math.floor(carried / j.perDollars);
   const raw = tier.jump ? Math.round((j.basePct + j.perHourPct * hoursThere + j.perStepPct * steps) * tier.jump) : 0;
-  const chance = clamp(raw, 0, j.capPct);
+  // (pot-1: while anyone there dances, the jumpers watch the show: an effect's `place.jumpPct`, Disco Rash's quarter (bench-1))
+  const fx = state.under && raw ? placeEffects(cfg, state, place) : null;
+  const shown = fx && fx.jumpPct < 100 ? Math.round((Math.min(raw, j.capPct) * fx.jumpPct) / 100) : null;
+  const chance = shown ?? clamp(raw, 0, j.capPct);
   const why = tier.jump ? [`${j.basePct}% anyone`] : ['nobody jumps anyone here'];
   if (tier.jump && hoursThere) why.push(`${hoursThere} hour${hoursThere > 1 ? 's' : ''} here +${j.perHourPct * hoursThere}%`);
   if (tier.jump && steps) why.push(`$${carried} on you +${j.perStepPct * steps}%`);
   if (tier.jump && tier.jump !== 1) why.push(`a ${placeOf(cfg, place).tier} place ×${tier.jump}`);
   if (raw > j.capPct) why.push(`at most ${j.capPct}%`);
+  // (bench-1: the dance's cover is a quarter now, "a quarter less often")
+  if (shown != null) why.push(`somebody is ${cfg.make.effects[fx.by[0]?.effect]?.label ?? 'under something'} here: ${{ 50: 'half as often', 75: 'a quarter less often' }[fx.jumpPct] ?? `${fx.jumpPct}% as often`}`);
   const contest = jumpContest(cfg, state, place);
   // (styles-1: getting jumped is a fight you watch, two at once: its bands are a sample of that very fight, as a card's
   // odds are; `fight` says who brings what. The dice's numbers stay for a test that rigs a roll, and for sleeping rough)
@@ -497,6 +562,8 @@ export function danger(cfg, state, { hoursThere = state.hoursThere, carried = st
     ...(jf ? { fight: { you: jf.you.text, them: jf.them.text, arm: jf.you.arm, with: jf.you.label, seeOff: bands.fail, bad: bands.clean, scuffle: bands.messy,
       // (the same jump with each other thing you own to fight with: the share you see them off)
       byArm: Object.fromEntries(armsOf(cfg, state).map(a => [a, a === jf.you.arm ? bands.fail : jumpChances(cfg, state, place, { arm: a }).fail])),
+      // (bench-1: a bottle on your belt, thrown first: what it is, and the share you see them off with it and without it)
+      ...(jf.you.bottle ? { bottle: { ...jf.you.bottle, seeOff: bands.fail, without: jf.you.bottle.inFight ? jumpChances(cfg, state, place, { bottle: null }).fail : bands.fail } } : {}),
       text: `two at once: you see them off about ${Math.round(bands.fail / 10)} in 10 (${jf.you.text})` } } : {}),
     why: [...why, ...(jf ? [jf.them.text, `you: ${jf.you.text}`] : contest.why)],
   };
@@ -643,6 +710,9 @@ export function pressureOf(cfg, state) {
     else if (p.band === 'with' && P.with && !p.regular) reasons.push({ kind: 'person', why: 'with', n: P.with, who: whoOf(p), text: `${cap(p.name)} is with you and looks out for your door` });
   }
   if (P.hot && isHot(cfg, state, street)) reasons.push({ kind: 'place', why: 'hot', n: P.hot, who: null, text: `${cap(placeOf(cfg, street).label)} is hot (heat ${placeHeat(state, street)}): the police are about ${where}` });
+  // (pot-1: the smell of your cooking, a level, not a pile: effects.mjs smellLevel)
+  const sm = cfg.make?.smell ? smellLevel(cfg, state) : null;
+  if (sm?.level) reasons.push({ kind: 'smell', why: 'smell', n: sm.level, who: null, text: `The smell of your cooking hangs over ${placeOf(cfg, street).label}${sm.off ? ' (the fan takes the edge off)' : ''}` });
   const raw = reasons.reduce((a, r) => a + r.n, 0);
   return { value: clamp(raw, 0, P.max), raw, max: P.max, warnAt: P.warnAt, place: street, reasons };
 }
@@ -893,8 +963,10 @@ export const jumpsFight = cfg => !!cfg.jumped?.fight && !!cfg.duel;
  * with (armOf, or `arm`), fresh or tired (`jumped.you`: an ambush gives you no time to be anything else). `inputs` is
  * the fight's own (src/fight/duel.mjs, `foes`).
  */
-export function jumpOf(cfg, state, place = state.place, { arm = null, tired = null } = {}) {
+export function jumpOf(cfg, state, place = state.place, { arm = null, tired = null, bottle } = {}) {
   const J = cfg.jumped;
+  // (bench-1: the bottle on your belt, thrown in the first second: `bottle` another, or null for none)
+  const b = bottle === undefined ? bottleOn(cfg, state) : bottle;
   const D = cfg.duel;
   const a = arm ?? armOf(cfg, state);
   const A = D.you[a];
@@ -907,15 +979,19 @@ export function jumpOf(cfg, state, place = state.place, { arm = null, tired = nu
   const tough = extra ? `a ${placeOf(cfg, place).tier} place: tougher (+${extra})` : null;
   const says = J.says;
   return {
-    you: { arm: a, weapon: A.weapon, label: weapon, hp, max: D.hp.max, pct: Math.round((hp / D.hp.max) * 100), tired: t, why: [weapon, health], text: `${weapon}; ${health}` },
+    you: { arm: a, weapon: A.weapon, label: weapon, hp, max: D.hp.max, pct: Math.round((hp / D.hp.max) * 100), tired: t, why: [weapon, health, ...bottleWhy(b)], text: [`${weapon}; ${health}`, ...bottleWhy(b)].join('; '), ...(b ? { bottle: bottleNote(b) } : {}) },
     them: { name: J.name, says, foes: foes.map(f => ({ id: f.id, kind: f.kind, name: f.name, hp: f.hp })), why: [says, ...(tough ? [tough] : [])], text: `${says}${tough ? `; ${tough}` : ''}` },
-    inputs: {
+    inputs: withBottle({
       you: { weapon: A.weapon, hp, max: D.hp.max, hits: A.hits },
       foe: foes[0], foes,
       cap: J.cap ?? D.cap, hit: D.hit / 100, brawl: { ...D.brawl }, arena: { ...D.arena, around: J.around.map(x => [...x]) },
-    },
+    }, b),
   };
 }
+/** (bench-1) A bottle in a fight's words: "a bottle of Dog Spray first: all of them blind 3 seconds…" (none: nothing). */
+const bottleWhy = b => (b ? [`a bottle of ${b.name} thrown first: ${b.lines.map(l => l[0].toLowerCase() + l.slice(1)).join(', ')}`] : []);
+/** (bench-1) The bottle as a fight's `you` carries it: what it is and what it does there. */
+const bottleNote = b => ({ good: b.good, product: b.product, name: b.name, lines: [...b.lines], cloud: b.cloud, fight: JSON.parse(JSON.stringify(b.fight)), tags: b.tags, inFight: b.inFight });
 
 /**
  * How a jump that was a fight ends, as the contest's band: lost, the bad one ('clean'), unless they are left with
@@ -1077,8 +1153,10 @@ export const earlWayWords = way => ({ way, name: EARL_WAYS[way]?.name ?? way, wo
  * false), told his way (`way`), and the door bar's head start (`bar`: unset, what you own) against the crew's two
  * (config `crew`). `inputs` is the fight's own (src/fight/duel.mjs: `foes`, `ally`, `firstHurt`).
  */
-export function crewOf(cfg, state, { arm = null, way = null, energy = null, earl = null, bar = null } = {}) {
+export function crewOf(cfg, state, { arm = null, way = null, energy = null, earl = null, bar = null, bottle } = {}) {
   const C = cfg.crew;
+  // (bench-1: the bottle on your belt, thrown at them in the first second: `bottle` another, or null for none)
+  const b = bottle === undefined ? bottleOn(cfg, state) : bottle;
   const D = cfg.duel;
   const a = arm ?? armOf(cfg, state);
   const A = D.you[a];
@@ -1092,19 +1170,19 @@ export function crewOf(cfg, state, { arm = null, way = null, energy = null, earl
   const foes = C.foes.map(f => ({ id: f.id, kind: f.kind, name: f.name, weapon: f.weapon, hp: f.hp, hits: f.hits, speed: f.speed, ...(f.reel !== undefined ? { reel: f.reel } : {}) }));
   const pct = Math.round((hp / D.hp.max) * 100);
   const health = hp >= D.hp.max ? 'rested: you start at full health' : `after a night's sleep: you start at ${pct}%`;
-  const why = [A.label ?? a, health, ...(head ? [`the door bar: the first one through is ${head} down`] : []), ...(withEarl ? [`Cousin Earl beside you, ${EARL_WAYS[w]?.name ?? w}`] : [])];
+  const why = [A.label ?? a, health, ...(head ? [`the door bar: the first one through is ${head} down`] : []), ...(withEarl ? [`Cousin Earl beside you, ${EARL_WAYS[w]?.name ?? w}`] : []), ...bottleWhy(b)];
   return {
-    you: { arm: a, weapon: A.weapon, label: A.label ?? a, hp, max: D.hp.max, pct, energy: e, why, text: why.join('; ') },
+    you: { arm: a, weapon: A.weapon, label: A.label ?? a, hp, max: D.hp.max, pct, energy: e, why, text: why.join('; '), ...(b ? { bottle: bottleNote(b) } : {}) },
     them: { name: C.name, says: C.says, foes: foes.map(f => ({ id: f.id, kind: f.kind, name: f.name, hp: f.hp })), why: [C.says], text: C.says },
     earl: withEarl ? { ...earlWayWords(w), hp: G.hp } : null,
     bar: head,
-    inputs: {
+    inputs: withBottle({
       you: { weapon: A.weapon, hp, max: D.hp.max, hits: A.hits },
       foe: foes[0], foes,
       ...(withEarl ? { ally: { hp: G.hp, weapon: G.weapon, hits: G.hits, way: w } } : {}),
       ...(head ? { firstHurt: head } : {}),
       cap: C.cap ?? D.cap, hit: D.hit / 100, brawl: { ...D.brawl }, arena: { ...D.arena, around: C.around.map(x => [...x]), ...(withEarl ? { ally: [...C.ally] } : {}) },
-    },
+    }, b),
   };
 }
 /** The chance you win the door fight at these inputs: { pct, in10, earlDown, n } from crew.sample fights, kept by the inputs. */
@@ -1161,7 +1239,77 @@ export function crewOdds(cfg, state) {
   const barThing = Object.keys(cfg.things).find(k => cfg.things[k].defends?.bar != null) ?? null;
   const withBar = !d.bar && barThing ? crewChance(cfg, state, { bar: cfg.things[barThing].defends.bar }).pct : null;
   const withEarl = !d.earl && guardOf(cfg, state) ? crewChance(cfg, state, { earl: true }).pct : null;
-  return { ...now, you: d.you, them: d.them, earl: d.earl, bar: d.bar, byArm, byWay, withBar, withEarl };
+  // (bench-1: with a bottle on your belt that does something in the fight, the same fight without it)
+  const b = d.you.bottle ?? null;
+  const bottle = b ? { ...b, win: now.pct, without: b.inFight ? crewChance(cfg, state, { bottle: null }).pct : now.pct } : null;
+  return { ...now, you: d.you, them: d.them, earl: d.earl, bar: d.bar, byArm, byWay, withBar, withEarl, ...(bottle ? { bottle } : {}) };
+}
+
+// ── (bench-1) the blue man (RUN.md "The bench and the bottle (bench-1)") ────────────────────────────────────────────
+/** What taking it back gets you: `back` percent of the cash he took and of each good, rounded down. */
+export function backOf(cfg, took) {
+  const pct = cfg.make?.bottle?.blue?.back ?? 50;
+  const goods = Object.fromEntries(Object.entries(took?.goods ?? {}).map(([g, n]) => [g, Math.floor((n * pct) / 100)]).filter(([, n]) => n > 0));
+  return { cash: Math.floor(((took?.cash ?? 0) * pct) / 100), goods, pct };
+}
+/** Who a blue man is, for the page: a named person, or the one of them it says (`row.who`). */
+export function blueWho(cfg, id, row) {
+  const p = personOf(cfg, id);
+  return p ? whoOf(p) : { id, name: row?.who?.name ?? 'the blue man', role: row?.who?.role ?? null };
+}
+/**
+ * THE BLUE MEN AT A PLACE WHO TOOK SOMETHING FROM YOU (tagged, on now, `took`, not yet tried): each is a card there,
+ * "Take it back off the blue man", a fight you start for what he took (config make.bottle.blue.back: all of it). [{ id, who, row, took, back }]
+ */
+export function bluesAt(cfg, state, place = state.place) {
+  if (!cfg.make?.bottle?.blue) return [];
+  const t = clockOf(state);
+  const out = [];
+  for (const [id, rows] of Object.entries(state.under ?? {})) {
+    for (const r of rows) {
+      if (r.effect !== 'tagged' || r.place !== place || !rowOn(r, t) || !r.took || r.back) continue;
+      out.push({ id, who: blueWho(cfg, id, r), row: r, took: { cash: r.took.cash ?? 0, goods: { ...(r.took.goods ?? {}) } }, back: backOf(cfg, r.took) });
+    }
+  }
+  return out;
+}
+/**
+ * THE FIGHT TO TAKE IT BACK: a one-on-one you start, you with what you fight with at your energy's health (as a card's
+ * fight), him as he fought you (`row.foe`: the fight he was in). `inputs` is the fight's own (src/fight/duel.mjs).
+ */
+export function blueOf(cfg, state, row, { arm = null } = {}) {
+  const D = cfg.duel;
+  const a = arm ?? armOf(cfg, state);
+  const A = D.you[a];
+  const hp = duelHealth(cfg, state.energy);
+  const pct = Math.round((hp / D.hp.max) * 100);
+  const health = hp >= D.hp.max ? 'rested: you start at full health' : `${state.energy <= cfg.energy.tiredAt ? 'tired' : `energy ${state.energy}`}: you start at ${pct}%`;
+  const foe = { ...row.foe, id: 'them' };
+  return {
+    you: { arm: a, weapon: A.weapon, label: A.label ?? a, hp, max: D.hp.max, pct, why: [A.label ?? a, health], text: `${A.label ?? a}; ${health}` },
+    them: { name: row.who?.name ?? 'the blue man', says: row.who?.says ?? null, hp: foe.hp, text: row.who?.says ?? 'he fights as he fought you' },
+    inputs: { you: { weapon: A.weapon, hp, max: D.hp.max, hits: A.hits }, foe, cap: D.cap, hit: D.hit / 100, brawl: { ...D.brawl }, arena: { ...D.arena } },
+  };
+}
+/** The chance you win it: { pct, in10, n, byArm, text } from duel.sample fights (the background path on the page: NaN until kept). */
+export function blueChance(cfg, state, row) {
+  const n = cfg.duel.sample;
+  const one = arm => {
+    const t = tallied(blueOf(cfg, state, row, { arm }).inputs, n);
+    return t ? Math.round((100 * t.won) / n) : NaN;
+  };
+  const pct = one(armOf(cfg, state));
+  return { pct, in10: Math.round(pct / 10), n, byArm: Object.fromEntries(armsOf(cfg, state).map(a => [a, a === armOf(cfg, state) ? pct : one(a)])), text: `you win about ${Math.round(pct / 10)} in 10`, ...(Number.isNaN(pct) ? { pending: true } : {}) };
+}
+/** The fight itself: one run, its seed from the run's dice (`keys`); the event's `duel`. */
+export function blueOut(cfg, state, row, keys) {
+  const d = blueOf(cfg, state, row);
+  const seed = Math.floor(rng(state.seed, 'run-blue-fight', ...keys)() * 2147483647);
+  const F = runDuel(d.inputs, seed);
+  const [me, foe] = F.people;
+  const c = blueChance(cfg, state, row);
+  return { blue: true, result: F.over.result, seed, seconds: F.over.t, capped: !!F.capped, inputs: d.inputs,
+    you: { ...d.you, left: me.hp }, them: { ...d.them, left: foe.hp, leftPct: Math.round((foe.hp / foe.max) * 100) }, chance: { pct: c.pct, in10: c.in10, n: c.n, text: c.text } };
 }
 
 /** The Sixes' own state (an older saved state: nothing done on their ground). */

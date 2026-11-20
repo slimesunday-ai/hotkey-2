@@ -246,9 +246,14 @@ export function createCribs({ city, HOMES, PLAN, GPU, roomOf, entry, lotOf, keys
       const mounts = [S0 && starter.shows().door ? locksOn(leaf, -1) : null].filter(Boolean);
       // (notes-1: THE DOOR BAR IS LIFTED OFF TO OPEN THE DOOR. The kit's bar is 1.25 m across, wider than the leaf, and
       // braced 0.3 m out to a plate on the floor: on a leaf swung open it went into the doorway's end or across the
-      // way through, whichever way the leaf swung. While the door stands open it stands as the kit builds it, its back
-      // to the low wall's inside face beside the doorway, on the latch side where the floor is clear (else the hinge
-      // side; else it is put away and not seen). Outside it is inside the trailer, off the door, and not drawn.)
+      // way through, whichever way the leaf swung. It stands as the kit builds it, its back to the low wall's inside
+      // face beside the doorway, on the latch side where the floor is clear (else the hinge side; else it is put away
+      // and not seen). Outside it is inside the trailer, off the door, and not drawn.)
+      // (notes-2: ALWAYS THERE, ONE PLACE. It stood there only while the door was open: it came into being as he made
+      // for the door and was gone after. The room's leaf is drawn only while somebody comes or goes (the room is seen
+      // from its open front, and a shut leaf there would stand in the camera's look into it), so there is no shut door
+      // in this view for it to lie across; across the bare doorway it would hang in the air at the leaf's height. So
+      // it stands by the doorway all the time it is owned, door shut or open, where a bar is kept to hand.)
       let bar = null;
       if (S0 && starter.shows().bar && barGeo) {
         const w = barGeo.box.max.x - barGeo.box.min.x;
@@ -269,7 +274,6 @@ export function createCribs({ city, HOMES, PLAN, GPU, roomOf, entry, lotOf, keys
           // (on a stand where a leaf's middle would be, so barOn sets it at the kit's own height and 0.01 m off the wall)
           const stand = new T.Group();
           stand.position.set(x0 + w / 2, 1.1, -STUB.t + 0.03);
-          stand.visible = false;
           if (barOn(stand, -1)) g.add((bar = stand));
         }
       }
@@ -452,8 +456,6 @@ export function createCribs({ city, HOMES, PLAN, GPU, roomOf, entry, lotOf, keys
         innerM.opacity = Math.min(1, k / 0.35) * alpha;
         // (what is mounted on it goes with it as it goes: it cannot be seen through, so at half)
         for (const m of I.mounts) m.visible = innerM.opacity > 0.5;
-        // (the door bar stands by the doorway while the door is open)
-        if (I.bar) I.bar.visible = k > 0.001;
       },
       /**
        * For doorway.js: a leaf's hinge in the world ([x, z], and the floor's y) and its reach from it (m); and, while it

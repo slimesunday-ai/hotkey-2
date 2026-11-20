@@ -136,7 +136,7 @@ test('cosmetic: owning and wearing library pieces changes no number of the game 
 });
 
 test('save: owning library pieces needs no new field; version 8 as before (9 since memory-1), a save from before loads and keeps what it owned', () => {
-  assert.equal(RUN_STATE_VERSION, 12); // (sixes-1: 11; raid-1: 12)
+  assert.equal(RUN_STATE_VERSION, 14); // (sixes-1: 11; raid-1: 12; pot-1: 13; bench-1: 14)
   const key = lib.pieces.find(p => p.kind === 'wear' && !p.named).key;
   const s = { ...at('crib'), things: { visor: true, [key]: true, 'kit:boombox': true }, worn: { head: key } };
   const r = loadRun(saveRun(s));

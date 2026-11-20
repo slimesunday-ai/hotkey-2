@@ -311,8 +311,15 @@ export function createCamera({ city, actors, map, director, rooms = null, home =
     beat = null;
   };
   let press = null;
+  // the fingers on the picture now (touch-1): pointer id → where it was last, and whether it is the city's move stick
+  const fingers = new Map();
   canvas.addEventListener('pointerdown', e => {
     press = [e.clientX, e.clientY];
+    if (e.pointerType !== 'touch') return;
+    // (the city's input, camera/input.js touchDown, makes the first finger on the left 40 % a move stick while the
+    // rig's input is on: the same test, read here after it)
+    const stick = !!rig?.input?.active && fingers.size === 0 && e.clientX < innerWidth * 0.4;
+    fingers.set(e.pointerId, { x: e.clientX, y: e.clientY, stick });
   });
   // when the person at the screen last pressed anything (a key, a button of the panels, the city)
   let handAt = -1e9;
@@ -334,11 +341,51 @@ export function createCamera({ city, actors, map, director, rooms = null, home =
     if (press && e.buttons && Math.hypot(e.clientX - press[0], e.clientY - press[1]) > 6) {
       press = null;
       took();
+      // A FINGER'S DRAG ON A ROOM (touch-1). The inside view tells a hand on the camera from its own slide by the
+      // target moving more than 6 cm in a frame (inside.js followLead), and the map's controls hand a drag over a
+      // twentieth a frame (their damping): a finger's drag on a phone's close room never showed 6 cm and was undone
+      // frame by frame, while the wheel's zoom was kept. One finger is a drag: the view is told so. (Two are a pinch,
+      // which it reads as the zoom it is. The mouse is left to the 6 cm, as it was.)
+      if (e.pointerType === 'touch' && fingers.size === 1) inside?.hand?.();
     }
+    const f = fingers.get(e.pointerId);
+    if (!f) return;
+    // THE LEFT 40 % IN THE LOCK (touch-1). The city's input takes a lone finger that landed there as a move stick
+    // (for its fly and photo cameras), which the Lock never reads: a drag there did nothing. While the Lock has the
+    // camera, that finger turns it as a finger anywhere else does (camera/input.js touchMove's look, its multiplier
+    // too), handed to the Lock with the rest of the frame's intent (below). Two fingers are the city's pinch.
+    if (f.stick && fingers.size === 1 && rig?.mode === 'lock' && rig.input.active) {
+      const k = rig.config?.touch?.look ?? 1;
+      stickLook.x += (e.clientX - f.x) * k;
+      stickLook.y += (e.clientY - f.y) * k;
+    }
+    f.x = e.clientX;
+    f.y = e.clientY;
   }, true);
-  addEventListener('pointerup', () => {
+  // (on the window, on the way down: the city's rig stops a release at the canvas when it takes it as a click)
+  const lift = e => {
     press = null;
-  }, true);
+    fingers.delete(e.pointerId);
+  };
+  addEventListener('pointerup', lift, true);
+  addEventListener('pointercancel', lift, true);
+  addEventListener('blur', () => fingers.clear());
+  // the stick finger's turn, onto the intent the rig takes once a frame (camera/rig.js step: input.take())
+  const stickLook = { x: 0, y: 0 };
+  if (rig?.input?.take) {
+    const take0 = rig.input.take;
+    rig.input.take = () => {
+      const I = take0();
+      if (stickLook.x || stickLook.y) {
+        if (rig.mode === 'lock') {
+          I.look.x += stickLook.x;
+          I.look.y += stickLook.y;
+        }
+        stickLook.x = stickLook.y = 0;
+      }
+      return I;
+    };
+  }
   canvas.addEventListener('wheel', took, { passive: true });
   // Esc gives the camera back to the mode's own picture: the wide shot when watching, the player when playing.
   // (On the way down, at the window: demo/boot.js stops every key there on the way up, before the city hears it.)

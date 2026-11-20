@@ -2,7 +2,7 @@
 <meta charset="utf-8">
 <title>hotkey 2</title>
 <link rel="icon" href="data:,">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <!--
   hotkey 2 in the 3D city (SPEC section 24): the city, the stage in it, the panels over it.
   The city is the pinned copy in city/from-trunk/ and is never edited: this page gives it the few elements it looks
@@ -42,6 +42,12 @@
      real click on a person landed on the root, not on the canvas). Every panel takes the mouse back for itself. */
   #hud #k, #hud .hk { pointer-events: none; }
   #hud .hk-top, #hud .hk-left > *, #hud .hk-right, #hud .hk-ticker, #hud .hk-guide > *, #hud .hk-flyout, #hud .hk-toasts > * { pointer-events: auto; }
+  /* (phone-1) ON A PHONE (demo/phone.js puts .touch on the page there only): no zoom on a double tap, no bounce, no
+     scrolling the page away, no selecting text or calling up the press-and-hold menu under a finger. The canvas takes
+     every touch for the camera (three.js sets touch-action: none on it); a panel that scrolls still scrolls. */
+  html.touch, html.touch body { touch-action: manipulation; overscroll-behavior: none; -webkit-text-size-adjust: 100%; }
+  html.touch body { position: fixed; inset: 0; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+  html.touch input, html.touch textarea { -webkit-user-select: text; user-select: text; }
   .hint { position: fixed; right: 14px; bottom: 12px; z-index: 10; font: 600 12px/1.3 "Arial Black", sans-serif; color: #fff;
     background: rgba(23, 23, 27, .88); padding: 4px 8px 3px; text-transform: uppercase; }
 </style>
@@ -56,6 +62,9 @@
      fetched once by demo/tools/vendor-three.mjs): the page needs no network. Keep it in step when the pin moves. -->
 <script type="importmap">{ "imports": { "three": "../city/vendor/three/build/three.module.js", "three/addons/": "../city/vendor/three/examples/jsm/" } }</script>
 <script>
+  // (phone-1) every file this visit loads is listed for the service worker to keep (demo/deliver.js): the browser's
+  // list holds 250 by default, the page loads about a thousand
+  try { performance.setResourceTimingBufferSize(5000); } catch {}
   addEventListener('error', e => { document.getElementById('err').textContent += (e.message || e) + '\n'; });
   addEventListener('unhandledrejection', e => { document.getElementById('err').textContent += (e.reason && e.reason.stack || e.reason) + '\n'; });
 </script>

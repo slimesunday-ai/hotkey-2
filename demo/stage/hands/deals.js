@@ -134,6 +134,24 @@ export const DEALS = {
     things: { wallet: { kind: 'wallet', in: 'seller:pocket' } },
     moves: [['dip', 'buyer', 'seller', 'wallet', { felt }], ['&', ['settle', 'buyer', 0.25], 0.05], ['settle', 'seller', 0.25]],
   }),
+  // (pot-3) A SLEEPER'S WALLET: he is asleep on the ground (what you sold him), so nothing of the street's dip: down on
+  // your heels beside him, a hand into the pocket of the hip that is up (`pocket`, a point of the world), up with it
+  // and a look at it, a look over your shoulder, and it is in your own pocket. He never stirs: he is not one of the
+  // deal's bodies (the look has his)
+  liftSleeper: ({ pocket }) => ({
+    things: { wallet: { kind: 'wallet', in: 'bin:in', at: pocket } },
+    moves: [['stoopDip', 'you', pocket, 'wallet'], ['glance', 'you', 0.4], ['pocket', 'you', 'wallet'], ['settle', 'you', 0.25]],
+  }),
+  // (pot-3) A BAG SOLD (the pot's): he asks, his money over, the bag out of your pocket into his hand; and HE TAKES IT
+  // there and then, tipped up to his mouth with the head back, the empty bag tucked away. What it does to him is the
+  // look's (stage/looks/under.js), from the moment this ends. Not paid (`paid: false`, a sale gone wrong): he just takes
+  // it, you throw up your hands, and he puts it away unopened: nobody is dosed. `goods`: the bag's own drawn piece
+  sellBag: ({ goods = 'bag', paid = true }) => ({
+    things: { goods: { kind: goods, in: 'seller:pocket' }, cash: { kind: 'cash', in: 'buyer:pocket' } },
+    moves: paid
+      ? [['ask', 'buyer', 'seller', 'outer'], ['&', ['answer', 'seller', 'buyer', 'yes'], 0.22], ['@', 0, ['fetch', 'buyer', 'cash']], ['wait', 0.06], ['give', 'buyer', 'seller', 'cash', { lead: 0.24 }], ['pocket', 'seller', 'cash'], ['&', ['fetch', 'seller', 'goods'], 0.16], ['wait', 0.2], ['give', 'seller', 'buyer', 'goods', { lead: 0.24 }], ['&', ['nod', 'seller'], 0.1], ['&', ['settle', 'seller', 0.2], 0.05], ['look', 'buyer', 'goods', 0.35], ['bite', 'buyer', 'goods', { n: 1, by: 0 }], ['tuck', 'buyer', 'goods'], ['settle', 'buyer', 0.2]]
+      : [['ask', 'buyer', 'seller', 'outer'], ['@', 0, ['fetch', 'seller', 'goods']], ['give', 'seller', 'buyer', 'goods', { lead: 0.22 }], ['&', ['holdOut', 'seller', 'buyer'], 0.2], ['snub', 'buyer', 'seller'], ['&', ['throwUp', 'seller'], 0.12], ['settle', 'seller', 0.2], ['back', 'seller'], ['look', 'buyer', 'goods', 0.4], ['tuck', 'buyer', 'goods'], ['settle', 'buyer']],
+  }),
   // A STICK-UP WITH THE BOX CUTTER: out of your pocket and up at her, jabbed; her hands up, then her near hand into her
   // apron and the money held out; into your hand and your pocket, and the cutter away. Gone wrong (`win: false`): she
   // shoves you off, and you put it away

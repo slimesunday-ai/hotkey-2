@@ -221,6 +221,8 @@ export function aheadOf(cfg, state, choices = [], odds = null) {
   }
   const goods = [];
   for (const [g, G] of Object.entries(cfg.goods ?? {})) {
+    // (pot-1: the goods bought from a connect; what you make is the view's `make`, the Make tree's for the screens)
+    if (G.made || G.making) continue;
     const c = connectFor(cfg, g);
     const cn = connectOf(cfg, state, c.place);
     const opens = sellsOf(cfg, g);

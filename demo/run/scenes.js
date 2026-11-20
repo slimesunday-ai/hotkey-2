@@ -6,6 +6,7 @@
 // extras that walk on for a scene and off again, the keepers who stay at their counter) with no rules of their own.
 
 import { RUN_CONFIG } from '../../src/run/index.mjs';
+import { clockAt } from '../../src/run/effects.mjs';
 
 /** The player's seat on the stage. a1's pad is a trailer of Sunny Acres (places.json pads): the crib. */
 export const YOU = 'a1';
@@ -429,11 +430,21 @@ export function stageGame() {
  * at the block of their scene. `people`: the view's (mood, out today); `busy`: who is in this hour's scenes (they
  * play them where they are, and leave after).
  */
-function presence(locals, people = [], busy = new Set(), hour = 12) {
+function presence(locals, people = [], busy = new Set(), hour = 12, under = []) {
   const out = {};
   const now = new Map(people.map(p => [p.id, p]));
+  // (pot-3) UNDER SOMETHING THE RULES PUT ON THEM (`v.under`: asleep, dancing): they stay at the place it took them, at
+  // the spot of the hour it began (the sale is played where they are), not walked off for the day nor about their day;
+  // the stage keeps them there for as long as it lasts (stage/looks/under.js)
+  const held = new Map(under.filter(u => u.rows?.length && BLOCK[u.place]).map(u => [u.id, u]));
   for (const n of LOCALS) {
     if (!keeps(n) || !n.block) continue;
+    const u = held.get(n.id);
+    if (u) {
+      const began = clockAt(Math.min(...u.rows.map(r => r.from)) - 1).hour;
+      (out[BLOCK[u.place]] ??= []).push({ id: n.id, role: n.role, spot: (n.days ? dayOf(n.id, began)?.spot : null) ?? n.spot ?? 'street', action: 'idle', under: true });
+      continue;
+    }
     const p = now.get(n.id);
     if (p && gone(p, n) && !busy.has(n.id)) (out[GONE] ??= []).push({ id: n.id, role: n.role, spot: 'street', action: 'idle' });
     // (whoever is in this hour's scene stays at the place their day had them: the scene is played where they are)
@@ -448,12 +459,17 @@ function presence(locals, people = [], busy = new Set(), hour = 12) {
   return out;
 }
 
+/** (pot-3) The view's `under` (src/run make.mjs underView) as the stage takes it: each named person's rows on now. */
+function onNow(under = []) {
+  return under.filter(u => u.who?.id && u.now?.length).map(u => ({ id: u.who.id, place: u.place, rows: u.now.map(r => ({ effect: r.effect, look: r.look ? { ...r.look } : null, from: r.from, until: r.until, bad: !!r.bad, lifted: !!r.lifted })) }));
+}
+
 /**
  * THE HOUR AS THE STAGE TAKES IT (director-plan.js planHour): where the player ends, the scenes, and the locals on
  * stage. `place` is where the run's state now has them; `taken` the block they were taken from (jail, clinic);
  * `staged`: the step's scenes ({ events, locals: [[id, block]] }, demo/run/acted.js) or null for a placement only.
  */
-export function lineOf({ t, day, hour, place, taken = null, staged = null, verb = 'move', people = [] }) {
+export function lineOf({ t, day, hour, place, taken = null, staged = null, verb = 'move', people = [], under = [] }) {
   const end = endOf(place, taken);
   const held = end.held;
   const events = [...(staged?.events ?? [])];
@@ -473,8 +489,11 @@ export function lineOf({ t, day, hour, place, taken = null, staged = null, verb 
   return {
     type: 'hour', t, day, hour,
     agents: { [YOU]: { block: held ?? end.block, state: held ?? 'free', move: { verb } } },
-    npcs: presence(staged?.locals ?? [], people, new Set((staged?.events ?? []).flatMap(e => e.stage?.steps?.flatMap(q => [q.actor, q.target]) ?? [])), hour),
+    npcs: presence(staged?.locals ?? [], people, new Set((staged?.events ?? []).flatMap(e => e.stage?.steps?.flatMap(q => [q.actor, q.target]) ?? [])), hour, onNow(under)),
     events,
     police: [],
+    // (pot-3) who the rules say is under what now, for the stage to put on their bodies (stage/looks/under.js): each
+    // person's rows that are on, with each row's `look` channels, its place and until when
+    under: onNow(under),
   };
 }

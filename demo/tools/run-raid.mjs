@@ -499,9 +499,11 @@ try {
   }
 
   {
-    const a = await ev('(a => a && { overlaps: a.overlaps, vanish: a.vanish, feet: a.feet, heads: a.heads, furniture: a.furniture, examples: a.examples.slice(0, 8) })(window.__demo.stage.actors.audit())').catch(() => null);
+    const a = await ev('(a => a && { overlaps: a.overlaps, vanish: a.vanish, feet: a.feet, heads: a.heads, furniture: a.furniture, stretch: a.stretch, examples: a.examples.slice(0, 8) })(window.__demo.stage.actors.audit())').catch(() => null);
     report.audit = a;
     console.log(`the stage's audit: ${JSON.stringify(a)}`);
+    // (streak-1: a body posed by hand drawn with a part of it past a body's reach, demo/fight/puppet/reach.js)
+    if (a?.stretch) fail(`the stage's audit: ${a.stretch} bodies drawn stretched past their reach`);
   }
   // 6. A VERSION-11 SAVE, LOADED
   console.log('6. a version-11 save');

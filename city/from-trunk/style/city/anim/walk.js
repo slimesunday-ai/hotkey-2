@@ -74,7 +74,7 @@ const float A_SHX = .25, A_SHY = .825, A_NECK = .95;
 mat3 aRX(float a) { float c = cos(a), s = sin(a); return mat3(1., 0., 0., 0., c, s, 0., -s, c); }
 mat3 aRY(float a) { float c = cos(a), s = sin(a); return mat3(c, 0., -s, 0., 1., 0., s, 0., c); }
 mat3 aRZ(float a) { float c = cos(a), s = sin(a); return mat3(c, s, 0., -s, c, 0., 0., 0., 1.); }
-struct Pose { vec4 ank; vec2 fp; float drop, bodyX, pRoll, turnRoll; vec3 torso, head; vec2 armP, armR, ayaw, atw; };   // (arms: idle.js aArmRot) ank: L (z, y), R (z, y), ankle targets rel. the hip's rest place
+struct Pose { vec4 ank; vec2 fp; float drop, bodyX, pRoll, turnRoll; vec3 torso, head; vec2 armP, armR, ayaw, atw, elb; };   // (arms: idle.js aArmRot) ank: L (z, y), R (z, y), ankle targets rel. the hip's rest place
 mat3 gR; vec3 gT; bool gAnimDone = false;
 void aAp(mat3 M, vec3 C) { gR = M * gR; gT = C + M * (gT - C); }   // rotate what is posed so far about C
 vec2 aAnkle(float zg, float fp) {   // the ankle of a foot whose flat ground point is zg, pitched fp (toe up +): it rolls on the heel or the toe
@@ -115,7 +115,7 @@ void animCompute() {
   float an = op == 1 ? s * .6 : op == 2 ? -s * .6 : op == 3 ? -s * .45 : s * .45; vec3 pv = op <= 2 ? vec3(0., .5, .025) : vec3(0., .825, 0.);
   mat3 M = aRX(an); gR = M; gT = pv - M * pv + vec3(0., A2.z, 0.);
 #else
-  Pose P; P.ank = vec4(0., A_ANK, 0., A_ANK); P.fp = vec2(0.); P.drop = 0.; P.bodyX = 0.; P.pRoll = 0.; P.turnRoll = 0.; P.torso = vec3(0.); P.head = vec3(0.); P.armP = vec2(0.); P.armR = vec2(.04); P.ayaw = vec2(0.); P.atw = vec2(0.);
+  Pose P; P.ank = vec4(0., A_ANK, 0., A_ANK); P.fp = vec2(0.); P.drop = 0.; P.bodyX = 0.; P.pRoll = 0.; P.turnRoll = 0.; P.torso = vec3(0.); P.head = vec3(0.); P.armP = vec2(0.); P.armR = vec2(.04); P.ayaw = vec2(0.); P.atw = vec2(0.); P.elb = vec2(0.);
   walkPose(P, A0, A1);
   idlePose(P, int(A1.z + .5), A2.x, A1.w * (1. - A0.z), A2.y);
   P.head.x += A1.y; P.head.y += clamp(.2 * A1.x, -.45, .45);   // the head's spring; it leads a turn

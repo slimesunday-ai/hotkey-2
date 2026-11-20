@@ -237,9 +237,66 @@ export function chestTarget(P, p) {
   return add([0, RIG.hipY, RIG.hipZ], d);
 }
 
+// ── (streak-1) THE LEGS AS THE SHADER CAN DRAW THEM ─────────────────────────────────────────────────────────────────
+// The walk shader (walk2.js) solves each leg from the hip joint to the pose's ankle target in the plane across the
+// body (its roll: atan(across, down) of hip joint to ankle) and lays the seat between the two thighs on a plane tilted by
+// the legs' MEAN roll, dividing by its cosine. An ankle as high as its hip joint makes that roll a quarter turn (or
+// leaves it to chance: the across and the down both nought), and one over its hip a half turn, so the mean of the two
+// can be a quarter turn: the seat's middle vertices are then thrown off without bound, the trousers drawn as a streak
+// across the picture (reach.js measures it). A real leg never has its ankle level with or over its own hip joint while
+// the body stands on it; a body lying or thrown is turned whole by the root, its legs still under its hips in its own
+// frame. So every pose is handed over with each ankle target under its hip joint, by at least UNDER and enough for
+// the hips' sway: the hips raised out of a drop first (a crouch a few centimetres less deep), then a lifted foot
+// lowered, and a foot reaching further ahead or behind than the leg is long (the hips come down to it) drawn in. A
+// pose already so is handed over as it is, number for number.
+/** How far under its hip joint each ankle target is kept (m), at the least, and per metre of the hips' sway across. */
+export const UNDER = 0.05;
+const UNDER_PER = 0.6;
+const SAFE = pose0();
+const REST = pose0();
+export function legsInReach(P, out = SAFE) {
+  copyPose(P, out);
+  // (a number that is not one: the stand's, never NaN to the shader)
+  for (const k of SCALARS) if (!Number.isFinite(out[k])) out[k] = REST[k];
+  for (const k of LISTS) for (let i = 0; i < 3; i++) if (!Number.isFinite(out[k][i])) out[k][i] = REST[k][i];
+  for (const k of ['aL', 'aR']) for (let i = 0; i < 5; i++) if (!Number.isFinite(out[k][i])) out[k][i] = ARM0[i];
+  const R2 = RIG.leg * RIG.leg;
+  for (let pass = 0; pass < 8; pass++) {
+    const hip = hipOf(out);
+    const sr = Math.sin(out.pr) * RIG.hipX;
+    let moved = false;
+    for (const sx of [-1, 1]) {
+      const f = sx < 0 ? out.fL : out.fR;
+      const need = Math.max(UNDER, UNDER_PER * Math.abs(sx * RIG.hipX * (1 - Math.cos(out.pr)) - out.bx));
+      // (along the ground: no further from under the hip than leaves the leg `need` of height)
+      const zl = Math.sqrt(Math.max(R2 - out.bx * out.bx - need * need, 0));
+      const a = ankle(f);
+      if (Math.abs(a[0]) > zl + 1e-9) {
+        f[0] += Math.sign(a[0]) * zl - a[0];
+        moved = true;
+      }
+      const gap = hip + sx * sr - ankle(f)[1];
+      if (gap >= need - 1e-9) continue;
+      moved = true;
+      if (out.drop > 0 && hip >= RIG.hipY - out.drop - 1e-9) out.drop = Math.max(0, out.drop - (need - gap));
+      else f[1] -= need - gap;
+    }
+    if (!moved) break;
+  }
+  return out;
+}
+
 // ── the pose, as the shader reads it (clip.js: ten texels a body) ───────────────────────────────────────────────────
 export const TEXELS = 10;
-export function packPose(P, out, at = 0) {
+/**
+ * (streak-1) Who hears of every pose handed to the walkers' shader: reach.js listens, once it is loaded (the stage's
+ * audit `stretch`, the fight's frame faults): listen(P, out, at, whole), P the numbers as written, `whole` false when
+ * the legs are the walk's (a steered body's upper half: clip.js writeRow).
+ */
+export const HANDED = { listen: null };
+export function packPose(P0, out, at = 0, whole = true) {
+  // (streak-1: what the shader is handed has its ankles under its hips, whatever the pose asked: legsInReach)
+  const P = legsInReach(P0);
   const o = at;
   out[o] = P.fL[0]; out[o + 1] = P.fL[1]; out[o + 2] = P.fL[2]; out[o + 3] = P.fR[0];
   out[o + 4] = P.fR[1]; out[o + 5] = P.fR[2]; out[o + 6] = P.drop; out[o + 7] = P.bx;
@@ -251,5 +308,6 @@ export function packPose(P, out, at = 0) {
   out[o + 28] = P.rx; out[o + 29] = P.ry; out[o + 30] = P.rz; out[o + 31] = 0;
   out[o + 32] = P.px; out[o + 33] = P.py; out[o + 34] = P.pz; out[o + 35] = 0;
   out[o + 36] = P.mx; out[o + 37] = P.my; out[o + 38] = P.mz; out[o + 39] = 0;
+  HANDED.listen?.(P, out, at, whole);
   return out;
 }

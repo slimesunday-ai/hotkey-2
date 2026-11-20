@@ -10,8 +10,12 @@
 //          role 'job' (a dealt option) · 'card' (a stop's hand) · 'out' (stepping out) · 'goal' (one of the three things
 //          to own) · 'guard' (Cousin Earl) · 'give' · 'refuse' (a regular at your door) · 'morning' · 'pay' ·
 //          'refuseTax' (sixes-1: Dutch waiting by the steps for the tax) · null (empty)
-//   verbs: [six] each { id, key, label, keys: [rules' choice keys], list: whether it opens a list, why: when none }
+//   verbs: [seven] each { id, key, label, keys: [rules' choice keys], list: whether it opens a list, sheet: the panel it
+//          opens instead (Cook: the pot's screen), why: when none }
 // }
+// (pot-2: the seventh verb, Cook P, opens the pot's screen: what is on your shelf, what goes in the pot, the label; and at
+// the crib, the belt. Its keys are the rules' cook, belt and name moves. What you cook with is bought with Shop, as any
+// thing sold where you stand; a sleeper's wallet is Rob's, first while there is one)
 
 /** The six verbs, in the order they stand on the dock. */
 export const VERBS = [
@@ -21,6 +25,7 @@ export const VERBS = [
   { id: 'travel', key: 'T', label: 'Travel', list: true },
   { id: 'home', key: 'H', label: 'Home' },
   { id: 'sleep', key: 'Z', label: 'Sleep' },
+  { id: 'cook', key: 'P', label: 'Cook', sheet: 'pot' },
 ];
 /** The page's keys for the three things in front of you. */
 export const CARD_KEYS = ['1', '2', '3'];
@@ -36,12 +41,17 @@ function verbKeys(id, { v }) {
     // (styles-1: and a punch style taught here, from what you carry)
     // (and a shop on the walk, beside the stop's hand: the barber, whenever you have heat to cool)
     // (raid-1: and a box of rounds for a gun of yours, where its seller stands)
-    return byDo(v, 'shop', 'pack', 'get', 'learn', 'ammo').map(m => m.key)
+    // (pot-2: and what you cook with, night tea and rave sticks, where its seller stands)
+    return byDo(v, 'shop', 'pack', 'get', 'learn', 'ammo', 'making').map(m => m.key)
       .concat((v.hand ?? []).filter(c => c.beside).map(c => c.key))
       .concat(v.place === 'crib' ? (v.shop ?? []).filter(s => s.key && !s.owned).map(s => s.key) : [])
       .concat(byDo(v, 'guard').map(m => m.key));
   }
-  if (id === 'rob') return byDo(v, 'rob').map(m => m.key);
+  // (pot-2: a sleeper's wallet first, while there is one: sure, and it is somebody you sold to)
+  if (id === 'rob') return [...byDo(v, 'lift'), ...byDo(v, 'rob')].map(m => m.key);
+  // (pot-2: the pot's screen: a cook for every set the pot could take, the belt, a name for a mix)
+  // (a name is a setting, not a move: it is in the choices, not the moves)
+  if (id === 'cook') return (v.choices ?? []).filter(c => ['cook', 'belt', 'unbelt', 'name'].includes(c.choice.do)).map(c => c.key);
   if (id === 'bins') return byDo(v, 'bins').map(m => m.key);
   if (id === 'travel') {
     // every way from here: the subway (paid or hopped, out or home), on foot and on the board, the way on from a stop.
@@ -79,6 +89,13 @@ function verbWhy(id, { cfg, v }) {
   if (id === 'travel') return crib ? 'step out first' : 'no way on from here';
   if (id === 'home') return crib ? 'you are home' : stop ? `on the way to ${cfg.places[v.route?.to]?.label ?? 'somewhere'}: T goes on` : 'no way home from here';
   if (id === 'sleep') return stop ? 'not on the way: go on' : cfg.places[v.place]?.door ? 'go inside to sleep (H)' : 'not here';
+  if (id === 'cook') {
+    const st = v.pot?.station;
+    if (!st?.owned) return st ? `no hot plate: $${st.price}, ${cfg.places[st.at]?.label ?? 'the trailer park'}` : 'nothing to cook with';
+    if (!crib) return 'cook at home (H)';
+    if (st.out) return 'the hot plate is smashed';
+    return 'nothing at home to cook';
+  }
   return 'not here';
 }
 
@@ -159,6 +176,8 @@ export function arrowsTo({ sheet = null, phase, hold = false }) {
   if (sheet === 'library' && !hold) return 'library';
   // (tree-1: the Ahead panel's arrows walk its trees)
   if (sheet === 'ahead' && !hold) return 'ahead';
+  // (pot-2: the pot's screen's ↑ ↓ walk what the pot could take; its ← → are the dock's: index.js keyOf)
+  if (sheet === 'pot' && !hold) return 'pot';
   return 'dock';
 }
 

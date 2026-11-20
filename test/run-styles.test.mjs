@@ -246,7 +246,7 @@ test('styles: after a loss, one line of what would have helped, from the simulat
 });
 
 test('styles: a version-9 save loads: no style learned, what you fight with unset, and plays on', () => {
-  assert.equal(RUN_STATE_VERSION, 12); // (sixes-1: read through 10; raid-1: 12, through 11)
+  assert.equal(RUN_STATE_VERSION, 14); // (sixes-1: read through 10; raid-1: 12, through 11; pot-1: 13; bench-1: 14)
   const s = { ...at('market', { day: 2 }), v: 9 };
   delete s.styles;
   delete s.fightWith;

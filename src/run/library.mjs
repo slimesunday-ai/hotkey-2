@@ -24,8 +24,11 @@ import { WEAR, HOME, NOFIT } from './library-data.mjs';
 
 /** Home pieces that cannot work in the trailer, by rule (the rest of the kit's floor and table pieces can). */
 const STRUCTURE = new Set(['door-front', 'window', 'ac-window', 'radiator', 'wall-panelling']);
+/** The home pieces the city drew for crafting (trunk 9cfd6788, interiors/home/craft.js): their rules are not built yet. */
+const CRAFTED = new Set(['tool-bench', 'door-can', 'door-gun', 'porch-lamp']);
 /** Why a home piece is left out by rule (null: it may stand in the trailer, if it fits: NOFIT, measured). */
 export function homeRuleOut(o) {
+  if (CRAFTED.has(o.id)) return 'drawn for crafting: its rule (how it is made and what it does) is not built yet';
   // (part D: wall pieces hang on the trailer's three walls, demo/stage/set/walls.js; the ceiling stays bare: with the
   // roof cut away for the view, a ceiling piece would hang in front of the room)
   if (o.place === 'ceiling') return 'a ceiling piece: with the roof cut away for the view, it would hang in front of the room';

@@ -38,6 +38,11 @@ const PATHS = {
   tree: '<circle cx="6" cy="5" r="2.2"/><circle cx="6" cy="19" r="2.2"/><circle cx="18" cy="12" r="2.2"/><path d="M6 7.2v9.6M6 12h9.8"/>',
   fight: '<path d="M7 12V8.2a1.6 1.6 0 0 1 3.2 0V11M10.2 10.5V6.8a1.6 1.6 0 0 1 3.2 0v3.7M13.4 10.5V7.6a1.6 1.6 0 0 1 3.2 0v3.2M16.6 11V9.6a1.6 1.6 0 0 1 3.2 0v4.6c0 4.2-2.8 7.3-6.8 7.3-3.6 0-6.4-2.6-6.6-6.2L6 12.6"/>',
   lock: '<rect x="5" y="10.5" width="14" height="10.5" rx="1.6"/><path d="M8.2 10.5V7.8a3.8 3.8 0 0 1 7.6 0v2.7"/>',
+  // (pot-2: the pot on its ring, steam over it; a bag tied at the neck; asleep (z's); a belt with its buckle)
+  pot: '<path d="M4.5 11h15v5.5a3.5 3.5 0 0 1-3.5 3.5H8a3.5 3.5 0 0 1-3.5-3.5z"/><path d="M2.5 11h19M9 3.5c-1 1.2 1 2.3 0 3.5M13 3.5c-1 1.2 1 2.3 0 3.5"/>',
+  bag: '<path d="M8 8.5h8l2.5 11.5h-13z"/><path d="M9.5 8.5 8 4.5h8l-1.5 4"/><path d="M8.5 6.5h7"/>',
+  zzz: '<path d="M4 9h5l-5 6h5M13 5h4l-4 5h4M17.5 14h3l-3 4h3"/>',
+  belt: '<path d="M2 10h20v4H2z"/><rect x="9" y="8.5" width="6" height="7" rx="1"/><path d="M12 10.5v3"/>',
   fold: '<path d="m6 15 6-6 6 6"/>',
   unfold: '<path d="m6 9 6 6 6-6"/>',
 };

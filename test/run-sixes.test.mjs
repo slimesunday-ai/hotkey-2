@@ -291,7 +291,7 @@ test('a day with nothing done on their ground eases them a step the next morning
 });
 
 test('saves: version 11 (12 since raid-1); a version-10 save loads as nobody known to the Sixes, Earl told nothing, and plays on', () => {
-  assert.equal(RUN_STATE_VERSION, 12);
+  assert.equal(RUN_STATE_VERSION, 14); // (pot-1: 13, reading 12; bench-1: 14)
   const s = { ...at('market', { day: 2 }), v: 10 };
   delete s.sixes;
   delete s.earlWay;

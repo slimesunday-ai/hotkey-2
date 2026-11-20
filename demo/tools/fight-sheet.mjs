@@ -45,8 +45,8 @@ try {
   await page.waitFor('window.__demo.hud.phase === "choose"', 120000);
   await page.sleep(3500);
   const cast = await ev(`(async () => {
-    const { createStudio } = await import('/demo/fight/puppet/studio.js');
-    const { scriptOf, stageFight } = await import('/demo/fight/puppet/choreo.js');
+    const { createStudio } = await import(new URL('fight/puppet/studio.js', new URL('./', location.href)).href);
+    const { scriptOf, stageFight } = await import(new URL('fight/puppet/choreo.js', new URL('./', location.href)).href);
     const st = window.__demo.stage, city = window.__city;
     const S = (window.__studio = await createStudio({ stage: st, city }));
     const c = S.cast(${jump ? 3 : 2});
